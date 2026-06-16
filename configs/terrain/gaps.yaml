@@ -1,0 +1,7 @@
+terrain:
+  name: gaps
+  type: sparse_footholds
+  curriculum: true
+  height_samples: true
+  gap_width_range: [0.10, 0.80]
+

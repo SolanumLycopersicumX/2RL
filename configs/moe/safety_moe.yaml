@@ -1,0 +1,14 @@
+moe:
+  name: safety_moe
+  routing: soft_with_recovery_bias
+  num_experts: 5
+  recovery_expert_id: 4
+  gate_hidden_dim: 256
+  risk:
+    threshold: 0.65
+    recovery_bias_alpha: 2.0
+  regularization:
+    entropy_weight: 0.0
+    load_balance_weight: 0.01
+    temporal_smoothness_weight: 0.01
+

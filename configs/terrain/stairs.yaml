@@ -1,0 +1,8 @@
+terrain:
+  name: stairs
+  type: stairs
+  curriculum: true
+  height_samples: true
+  step_height_range: [0.05, 0.20]
+  step_depth_range: [0.20, 0.45]
+

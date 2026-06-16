@@ -1,0 +1,15 @@
+experiment:
+  name: stair_expert
+  group: expert_locomotion
+  seed: 3
+backend: isaac_lab
+robot_config: configs/robot/anymal.yaml
+terrain_config: configs/terrain/stairs.yaml
+training:
+  algorithm: ppo
+  max_iterations: 3000
+  num_envs: 4096
+  checkpoint_interval: 100
+  reward_profile: locomotion
+output:
+  directory: experiments/stair_expert

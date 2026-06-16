@@ -1,0 +1,27 @@
+# 单篇论文笔记
+
+这些中文笔记根据 `docs/references/papers/papers_manifest.csv` 和英文版单篇笔记生成。
+
+- [Learning to Walk in Minutes Using Massively Parallel Deep Reinforcement Learning](../../docs/paper_notes/individual/2109.11978_learning_to_walk_in_minutes_using_massively_parallel_deep_reinforcement_learning_zh.md)
+- [Sim-to-Real: Learning Agile Locomotion For Quadruped Robots](../../docs/paper_notes/individual/1804.10332_sim_to_real_learning_agile_locomotion_for_quadruped_robots_zh.md)
+- [Learning agile and dynamic motor skills for legged robots](../../docs/paper_notes/individual/1901.08652_learning_agile_and_dynamic_motor_skills_for_legged_robots_zh.md)
+- [Learning Quadrupedal Locomotion over Challenging Terrain](../../docs/paper_notes/individual/2010.11251_learning_quadrupedal_locomotion_over_challenging_terrain_zh.md)
+- [RMA: Rapid Motor Adaptation for Legged Robots](../../docs/paper_notes/individual/2107.04034_rma_rapid_motor_adaptation_for_legged_robots_zh.md)
+- [Advanced Skills by Learning Locomotion and Local Navigation End-to-End](../../docs/paper_notes/individual/2209.12827_advanced_skills_by_learning_locomotion_and_local_navigation_end_to_end_zh.md)
+- [Robot Parkour Learning](../../docs/paper_notes/individual/2309.05665_robot_parkour_learning_zh.md)
+- [Extreme Parkour with Legged Robots](../../docs/paper_notes/individual/2309.14341_extreme_parkour_with_legged_robots_zh.md)
+- [Learning Agile Locomotion on Risky Terrains](../../docs/paper_notes/individual/2311.10484_learning_agile_locomotion_on_risky_terrains_zh.md)
+- [Resilient Legged Local Navigation: Learning to Traverse with Compromised Perception End-to-End](../../docs/paper_notes/individual/2310.03581_resilient_legged_local_navigation_learning_to_traverse_with_compromised_percepti_zh.md)
+- [Agile But Safe: Learning Collision-Free High-Speed Legged Locomotion](../../docs/paper_notes/individual/2401.17583_agile_but_safe_learning_collision_free_high_speed_legged_locomotion_zh.md)
+- [Real-World Humanoid Locomotion with Reinforcement Learning](../../docs/paper_notes/individual/2303.03381_real_world_humanoid_locomotion_with_reinforcement_learning_zh.md)
+- [Humanoid-Gym: Reinforcement Learning for Humanoid Robot with Zero-Shot Sim2Real Transfer](../../docs/paper_notes/individual/2404.05695_humanoid_gym_reinforcement_learning_for_humanoid_robot_with_zero_shot_sim2real_t_zh.md)
+- [Learning Human-to-Humanoid Real-Time Whole-Body Teleoperation](../../docs/paper_notes/individual/2403.04436_learning_human_to_humanoid_real_time_whole_body_teleoperation_zh.md)
+- [OmniH2O: Universal and Dexterous Human-to-Humanoid Whole-Body Teleoperation and Learning](../../docs/paper_notes/individual/2406.08858_omnih2o_universal_and_dexterous_human_to_humanoid_whole_body_teleoperation_and_l_zh.md)
+- [WoCoCo: Learning Whole-Body Humanoid Control with Sequential Contacts](../../docs/paper_notes/individual/2406.06005_wococo_learning_whole_body_humanoid_control_with_sequential_contacts_zh.md)
+- [BeamDojo: Learning Agile Humanoid Locomotion on Sparse Footholds](../../docs/paper_notes/individual/2502.10363_beamdojo_learning_agile_humanoid_locomotion_on_sparse_footholds_zh.md)
+- [MoE-Loco: Mixture of Experts for Multitask Locomotion](../../docs/paper_notes/individual/2503.08564_moe_loco_mixture_of_experts_for_multitask_locomotion_zh.md)
+- [CMoE: Contrastive Mixture of Experts for Motion Control and Terrain Adaptation of Humanoid Robots](../../docs/paper_notes/individual/2603.03067_cmoe_contrastive_mixture_of_experts_for_motion_control_and_terrain_adaptation_of_zh.md)
+- [MoRE: Mixture of Residual Experts for Humanoid Lifelike Gaits Learning on Complex Terrains](../../docs/paper_notes/individual/2506.08840_more_mixture_of_residual_experts_for_humanoid_lifelike_gaits_learning_on_complex_zh.md)
+- [Parkour in the Wild: Learning a General and Extensible Agile Locomotion Policy Using Multi-expert Distillation and RL Fine-tuning](../../docs/paper_notes/individual/2505.11164_parkour_in_the_wild_learning_a_general_and_extensible_agile_locomotion_policy_us_zh.md)
+- [Toward Reliable Sim-to-Real Predictability for MoE-based Robust Quadrupedal Locomotion](../../docs/paper_notes/individual/2602.00678_toward_reliable_sim_to_real_predictability_for_moe_based_robust_quadrupedal_loco_zh.md)
+- [Quadruped Parkour Learning: Sparsely Gated Mixture of Experts with Visual Input](../../docs/paper_notes/individual/2604.19344_quadruped_parkour_learning_sparsely_gated_mixture_of_experts_with_visual_input_zh.md)

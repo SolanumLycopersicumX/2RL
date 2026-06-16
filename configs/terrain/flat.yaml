@@ -1,0 +1,6 @@
+terrain:
+  name: flat
+  type: plane
+  curriculum: false
+  height_samples: false
+

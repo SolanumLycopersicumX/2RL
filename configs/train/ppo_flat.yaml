@@ -1,0 +1,15 @@
+experiment:
+  name: flat_expert
+  group: baseline_locomotion
+  seed: 1
+backend: isaac_lab
+robot_config: configs/robot/anymal.yaml
+terrain_config: configs/terrain/flat.yaml
+training:
+  algorithm: ppo
+  max_iterations: 1500
+  num_envs: 4096
+  checkpoint_interval: 100
+  reward_profile: locomotion
+output:
+  directory: experiments/flat_expert

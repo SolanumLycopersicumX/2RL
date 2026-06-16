@@ -1,0 +1,12 @@
+moe:
+  name: contrastive_moe
+  routing: soft_with_contrastive_regularization
+  num_experts: 5
+  gate_hidden_dim: 256
+  regularization:
+    entropy_weight: 0.0
+    load_balance_weight: 0.01
+    temporal_smoothness_weight: 0.01
+    contrastive_weight: 0.05
+    contrastive_margin: 0.5
+

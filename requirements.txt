@@ -1,0 +1,9 @@
+# Core lightweight dependencies for local utilities and analysis.
+# Heavy robotics dependencies are documented in docs/setup/ENVIRONMENT.md.
+numpy>=1.26
+PyYAML>=6.0
+matplotlib>=3.8
+tqdm>=4.66
+tensorboard>=2.16
+gymnasium>=0.29
+

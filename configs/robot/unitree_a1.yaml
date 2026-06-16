@@ -1,0 +1,15 @@
+robot:
+  name: unitree_a1
+  family: quadruped
+  action_type: joint_position_offset
+  action_dim: 12
+  observation:
+    proprioception_dim: 45
+    command_dim: 3
+    history_steps: 10
+  control:
+    control_frequency_hz: 50
+    action_scale: 0.25
+    stiffness: 20.0
+    damping: 0.5
+

@@ -1,0 +1,15 @@
+robot:
+  name: unitree_g1
+  family: humanoid
+  action_type: joint_position_offset
+  action_dim: 29
+  observation:
+    proprioception_dim: 96
+    command_dim: 3
+    history_steps: 10
+  control:
+    control_frequency_hz: 50
+    action_scale: 0.25
+    stiffness: null
+    damping: null
+

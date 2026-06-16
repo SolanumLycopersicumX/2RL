@@ -1,0 +1,19 @@
+experiment:
+  name: vanilla_gate
+  group: vanilla_moe
+  seed: 6
+backend: isaac_lab
+robot_config: configs/robot/anymal.yaml
+terrain_config: configs/terrain/mixed.yaml
+training:
+  algorithm: ppo_gate
+  max_iterations: 1500
+  num_envs: 4096
+  frozen_experts:
+    - models/flat_expert.pt
+    - models/rough_expert.pt
+    - models/stair_expert.pt
+    - models/gap_expert.pt
+    - models/recovery_expert.pt
+output:
+  directory: experiments/vanilla_gate

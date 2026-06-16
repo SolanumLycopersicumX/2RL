@@ -1,0 +1,7 @@
+terrain:
+  name: rough
+  type: random_heightfield
+  curriculum: true
+  height_samples: true
+  roughness_range: [0.02, 0.18]
+

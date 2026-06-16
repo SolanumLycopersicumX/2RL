@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "safe-moe-locomotion"
+version = "0.1.0"
+description = "Safety-aware mixture-of-experts locomotion research scaffold."
+readme = "README.md"
+requires-python = ">=3.10,<3.12"
+license = { text = "MIT" }
+authors = [{ name = "Zheng Xu" }]
+dependencies = [
+  "numpy>=1.26",
+  "PyYAML>=6.0",
+  "matplotlib>=3.8",
+  "tqdm>=4.66",
+  "tensorboard>=2.16",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "ruff>=0.6",
+  "mypy>=1.10",
+]
+rl = [
+  "gymnasium>=0.29",
+  "wandb>=0.17",
+]
+
+[tool.setuptools.packages.find]
+include = ["safe_moe_locomotion*"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+

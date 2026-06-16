@@ -1,0 +1,10 @@
+moe:
+  name: vanilla_moe
+  routing: soft
+  num_experts: 5
+  gate_hidden_dim: 256
+  regularization:
+    entropy_weight: 0.0
+    load_balance_weight: 0.01
+    temporal_smoothness_weight: 0.01
+

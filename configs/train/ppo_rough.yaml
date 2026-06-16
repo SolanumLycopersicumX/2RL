@@ -1,0 +1,15 @@
+experiment:
+  name: rough_expert
+  group: expert_locomotion
+  seed: 2
+backend: isaac_lab
+robot_config: configs/robot/anymal.yaml
+terrain_config: configs/terrain/rough.yaml
+training:
+  algorithm: ppo
+  max_iterations: 2500
+  num_envs: 4096
+  checkpoint_interval: 100
+  reward_profile: locomotion
+output:
+  directory: experiments/rough_expert

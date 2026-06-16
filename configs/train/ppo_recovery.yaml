@@ -1,0 +1,18 @@
+experiment:
+  name: recovery_expert
+  group: recovery
+  seed: 5
+backend: isaac_lab
+robot_config: configs/robot/anymal.yaml
+terrain_config: configs/terrain/mixed.yaml
+training:
+  algorithm: ppo
+  max_iterations: 2500
+  num_envs: 4096
+  checkpoint_interval: 100
+  reward_profile: recovery
+  perturbations:
+    random_pushes: true
+    high_tilt_initialization: true
+output:
+  directory: experiments/recovery_expert

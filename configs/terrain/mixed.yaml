@@ -1,0 +1,11 @@
+terrain:
+  name: mixed
+  type: mixed_curriculum
+  curriculum: true
+  height_samples: true
+  components:
+    - flat
+    - rough
+    - stairs
+    - gaps
+

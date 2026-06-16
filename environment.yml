@@ -1,0 +1,21 @@
+name: 2rl
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  # Isaac Lab with Isaac Sim 5.x requires Python 3.11.
+  # If reproducing legacy Isaac Gym / legged_gym exactly, create a separate
+  # Python 3.8 environment following docs/setup/ENVIRONMENT.md.
+  - python=3.11
+  - pip
+  - numpy
+  - pyyaml
+  - matplotlib
+  - tqdm
+  - tensorboard
+  - pip:
+      - gymnasium>=0.29
+      - pytest>=8.0
+      - ruff>=0.6
+      - mypy>=1.10
+

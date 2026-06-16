@@ -1,0 +1,61 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
+
+# Environments
+.venv/
+venv/
+env/
+.env
+.env.*
+
+# Fallback git-dir used because .git is mounted read-only in this workspace.
+.git-local/
+
+# Robotics / RL outputs
+logs/
+runs/
+wandb/
+tensorboard/
+checkpoints/
+*.pt
+*.pth
+*.onnx
+*.engine
+
+# Large local assets
+data/**
+models/**
+external/**
+assets/videos/**
+assets/gifs/**
+*.mp4
+*.webm
+*.avi
+*.mov
+
+# Keep directory placeholders
+!data/.gitkeep
+!models/.gitkeep
+!external/.gitkeep
+!assets/videos/.gitkeep
+!assets/gifs/.gitkeep
+
+# Keep downloaded papers local by default. The manifest and notes are tracked.
+docs/references/papers/*.pdf
+docs/paper_notes/extracted_text/*.txt
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
