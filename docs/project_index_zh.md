@@ -12,6 +12,7 @@
 - `docs/setup/ENVIRONMENT_zh.md`：中文环境部署指南。
 - `docs/setup/PACKAGE_INVENTORY_zh.md`：依赖包和外部框架清单。
 - `docs/references/paper_index_zh.md`：论文清单。
+- `docs/references/recommended_reading_order_zh.md`：23 篇论文推荐阅读顺序。
 - `docs/paper_notes/integrated_literature_review_zh.md`：所有论文的整合笔记。
 - `experiments/README_zh.md`：实验输出规范。
 

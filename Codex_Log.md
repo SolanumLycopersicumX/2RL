@@ -300,3 +300,31 @@ overwriting the existing English or mixed-language files.
   - 40 `*_zh.md` files.
   - 23 individual Chinese paper notes.
 - Cleaned generated `.pytest_cache` and `__pycache__`.
+
+## 2026-06-17 Recommended Reading Order
+
+### Objective
+
+Create a complete Chinese recommended reading order covering all 23 papers.
+
+### Completed
+
+- Added `docs/references/recommended_reading_order_zh.md`.
+- The guide covers all 23 papers in a project-driven sequence:
+  baseline locomotion -> robustness/sim-to-real -> terrain/navigation/safety
+  -> MoE routing -> humanoid extension.
+- Linked the guide from:
+  - `README_zh.md`
+  - `docs/project_index_zh.md`
+  - `docs/references/README_zh.md`
+  - `docs/references/reading_queue_zh.md`
+- Added a test to verify the reading order contains 23 paper sections.
+
+### Verification
+
+- `python3 scripts/validate_project.py` passed.
+- `python3 -m compileall scripts safe_moe_locomotion tests` passed.
+- `sh scripts/run_tests.sh` passed:
+  - 10 tests passed.
+- `rg -n "^### " docs/references/recommended_reading_order_zh.md | wc -l`
+  returned 23.

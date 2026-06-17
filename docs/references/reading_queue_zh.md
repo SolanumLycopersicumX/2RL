@@ -1,5 +1,7 @@
 # 推荐阅读顺序
 
+详细版阅读路线见：[recommended_reading_order_zh.md](recommended_reading_order_zh.md)
+
 ## 第一批：马上服务 baseline 复现
 
 1. Learning to Walk in Minutes Using Massively Parallel Deep Reinforcement Learning

@@ -18,6 +18,7 @@ def test_required_scaffold_files_exist() -> None:
         root / "docs" / "project_index_zh.md",
         root / "docs" / "references" / "paper_index.md",
         root / "docs" / "references" / "paper_index_zh.md",
+        root / "docs" / "references" / "recommended_reading_order_zh.md",
         root / "docs" / "references" / "papers" / "papers_manifest.csv",
         root / "experiments" / "README.md",
         root / "experiments" / "README_zh.md",
@@ -63,6 +64,15 @@ def test_chinese_integrated_review_exists() -> None:
     text = review.read_text(encoding="utf-8")
     assert "整合文献综述" in text
     assert "Safety" in text or "safety" in text
+
+
+def test_recommended_reading_order_covers_all_papers() -> None:
+    root = Path(__file__).resolve().parents[1]
+    text = (root / "docs" / "references" / "recommended_reading_order_zh.md").read_text(
+        encoding="utf-8"
+    )
+    assert text.count("### ") == 23
+    assert "最短可执行路线" in text
 
 
 def test_config_loader_reads_training_config() -> None:

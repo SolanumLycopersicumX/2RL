@@ -6,6 +6,7 @@
 
 - `paper_index.md` / `paper_index_zh.md`：论文清单。
 - `reading_queue.md` / `reading_queue_zh.md`：推荐阅读顺序。
+- `recommended_reading_order_zh.md`：覆盖 23 篇论文的详细中文阅读顺序。
 - `external_repos.md` / `external_repos_zh.md`：外部代码仓库、用途和建议克隆位置。
 - `papers/`：已下载的 arXiv PDF 和 `papers_manifest.csv`。
 
