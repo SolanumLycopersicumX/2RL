@@ -328,3 +328,15 @@ Create a complete Chinese recommended reading order covering all 23 papers.
   - 10 tests passed.
 - `rg -n "^### " docs/references/recommended_reading_order_zh.md | wc -l`
   returned 23.
+
+### GitHub Sync
+
+- Committed reading-order updates:
+  `c8ce8b1 docs: add complete paper reading order`.
+- Pushed `main` to:
+  `https://github.com/SolanumLycopersicumX/2RL.git`.
+- Verified local `HEAD` and `origin/main` both resolve to:
+  `c8ce8b156901d047732b20d4afe4532c952fe01a`.
+- Note: PDF files and extracted full-text files remain local by `.gitignore`
+  policy. GitHub contains manifests, scripts, project docs, and paper notes so
+  the local paper archive can be reproduced without republishing full papers.
