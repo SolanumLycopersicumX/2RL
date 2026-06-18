@@ -396,7 +396,8 @@ tracked metadata/docs to GitHub.
   (`docs: add vla literature expansion`).
 - Pushed `main` to:
   `https://github.com/SolanumLycopersicumX/2RL.git`.
-- Verified local `HEAD` and `origin/main` both resolve to:
-  `9caa789912c13c1f4104d1219a30930176064d3c`.
+- Verified after that content push that local `HEAD` and `origin/main`
+  resolved to the same content commit. Later log-only commits may advance the
+  repository head without changing the VLA literature content.
 - PDF files and extracted full-text files remain local and ignored by Git;
   GitHub contains reproducible manifests and notes.
