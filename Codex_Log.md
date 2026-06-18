@@ -388,3 +388,15 @@ tracked metadata/docs to GitHub.
   passed.
 - `sh scripts/git_local.sh status --ignored --short docs/references/papers docs/paper_notes/extracted_text`
   confirmed PDFs and extracted text remain ignored while manifests are tracked.
+
+### GitHub Sync
+
+- Committed VLA literature expansion:
+  `9caa789912c13c1f4104d1219a30930176064d3c`
+  (`docs: add vla literature expansion`).
+- Pushed `main` to:
+  `https://github.com/SolanumLycopersicumX/2RL.git`.
+- Verified local `HEAD` and `origin/main` both resolve to:
+  `9caa789912c13c1f4104d1219a30930176064d3c`.
+- PDF files and extracted full-text files remain local and ignored by Git;
+  GitHub contains reproducible manifests and notes.
