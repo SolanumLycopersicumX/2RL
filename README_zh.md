@@ -37,8 +37,8 @@
 - [项目索引](docs/project_index_zh.md)
 - [目录结构规则](docs/project_structure_zh.md)
 - [环境部署指南](docs/setup/ENVIRONMENT_zh.md)
+- [26 篇论文推荐阅读顺序](docs/references/recommended_reading_order_zh.md)
 - [整合文献综述](docs/paper_notes/integrated_literature_review_zh.md)
-- [23 篇论文推荐阅读顺序](docs/references/recommended_reading_order_zh.md)
 - [单篇论文笔记索引](docs/paper_notes/individual/README_zh.md)
 
 ## 快速验证

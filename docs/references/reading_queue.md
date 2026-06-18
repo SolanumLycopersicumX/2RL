@@ -33,4 +33,10 @@
 20. MoRE
 21. Parkour in the Wild
 22. Reliable Sim-to-Real Predictability for MoE-based Robust Quadrupedal Locomotion
+23. Quadruped Parkour Learning: Sparsely Gated Mixture of Experts with Visual Input
 
+## VLA Expansion
+
+24. Learning Fine-Grained Bimanual Manipulation with Low-Cost Hardware
+25. Diffusion Policy: Visuomotor Policy Learning via Action Diffusion
+26. pi0: A Vision-Language-Action Flow Model for General Robot Control

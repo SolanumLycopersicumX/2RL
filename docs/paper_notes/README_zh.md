@@ -12,4 +12,4 @@
 1. 先读 `integrated_literature_review_zh.md`，理解整体路线。
 2. 再读前 5 篇单篇笔记：baseline、RMA、复杂地形、Agile But Safe、MoE-Loco。
 3. 每读一篇论文，把 observation、action、reward、simulator、evaluation metrics 记录到自己的实验计划里。
-4. 不要等 23 篇全部读完再开始环境复现。
+4. 不要等 26 篇全部读完再开始环境复现。

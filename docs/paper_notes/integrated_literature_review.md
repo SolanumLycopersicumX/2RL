@@ -2,7 +2,7 @@
 
 ## Scope
 
-This synthesis covers the 23 papers downloaded under `docs/references/papers/`.
+This synthesis covers the 26 papers downloaded under `docs/references/papers/`.
 The goal is not to summarize every result equally, but to convert the literature
 into a concrete development path for **Safety-Aware MoE-Gated Locomotion for
 Legged Local Navigation**.
@@ -141,6 +141,25 @@ For now, keep humanoid support as config/interface readiness:
 - later Humanoid-Gym external path;
 - claim boundary that humanoid results are future work.
 
+## 8. VLA Papers Broaden The Action-Generation View
+
+ACT, Diffusion Policy, and pi0 extend the reading set beyond locomotion into
+vision-language-action and visuomotor manipulation. Their direct training
+pipelines are not the first 2RL implementation target, but they are useful for
+understanding how modern robot policies generate action sequences instead of
+single-step commands.
+
+The useful progression is:
+
+1. ACT: transformer-based action chunking for imitation learning;
+2. Diffusion Policy: conditional diffusion over continuous action sequences;
+3. pi0: VLM-conditioned flow matching for general robot control.
+
+For 2RL, the near-term takeaway is architectural rather than implementation
+heavy: a high-level language or vision-conditioned policy can eventually
+produce goals, skills, or short action horizons, while the safety-aware
+locomotion controller remains the low-level execution layer.
+
 ## Recommended Reading Order
 
 1. `2109.11978` Learning to Walk in Minutes.
@@ -152,6 +171,7 @@ For now, keep humanoid support as config/interface readiness:
 7. `2603.03067` CMoE.
 8. Parkour and risky-terrain papers.
 9. Humanoid papers.
+10. VLA expansion: ACT, Diffusion Policy, pi0.
 
 ## Direct Implementation Plan Derived From The Literature
 
@@ -187,6 +207,14 @@ For now, keep humanoid support as config/interface readiness:
 - Add load balancing and temporal smoothness.
 - Add contrastive routing only after baseline gate is diagnosable.
 - Try residual experts if action mixture is unstable.
+
+### Stage F: Optional VLA Expansion
+
+- Read ACT to understand action chunking.
+- Read Diffusion Policy to understand generative continuous action heads.
+- Read pi0 to connect VLM conditioning, flow matching, and robot foundation
+  policies.
+- Keep VLA experiments separate from the first locomotion MoE milestone.
 
 ## Claim Boundary
 

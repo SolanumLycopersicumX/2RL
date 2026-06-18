@@ -22,16 +22,18 @@
 
 ### 论文与资料
 
-- 已下载 23 篇 arXiv PDF 到：
+- 已下载 26 篇 arXiv PDF 到：
   `docs/references/papers/`
 - 已生成 PDF manifest：
   `docs/references/papers/papers_manifest.csv`
-- 已提取 23 篇论文文本到：
+- 已提取 26 篇论文文本到：
   `docs/paper_notes/extracted_text/`
-- 已生成 23 篇单篇中文论文笔记：
+- 已生成 26 篇单篇中文论文笔记：
   [docs/paper_notes/individual/README_zh.md](docs/paper_notes/individual/README_zh.md)
 - 已生成所有论文整合中文综述：
   [docs/paper_notes/integrated_literature_review_zh.md](docs/paper_notes/integrated_literature_review_zh.md)
+- 已加入 VLA 拓展阅读：
+  ACT、Diffusion Policy、pi0。
 
 ### 环境与依赖
 

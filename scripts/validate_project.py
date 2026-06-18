@@ -47,8 +47,8 @@ def main() -> int:
 
     paper_index = (root / "docs/references/paper_index.md").read_text(encoding="utf-8")
     arxiv_count = paper_index.count("https://arxiv.org/abs/")
-    if arxiv_count < 22:
-        print(f"Expected at least 22 arXiv paper links, found {arxiv_count}")
+    if arxiv_count < 26:
+        print(f"Expected at least 26 arXiv paper links, found {arxiv_count}")
         return 1
 
     print("Project scaffold validation passed.")

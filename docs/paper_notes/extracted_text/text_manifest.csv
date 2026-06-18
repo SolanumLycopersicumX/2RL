@@ -6,6 +6,8 @@ docs/references/papers/2107.04034_rma_rapid_motor_adaptation_for_legged_robots.p
 docs/references/papers/2109.11978_learning_to_walk_in_minutes_using_massively_parallel_deep_reinforcement_learning.pdf,docs/paper_notes/extracted_text/2109.11978_learning_to_walk_in_minutes_using_massively_parallel_deep_reinforcement_learning.txt,extracted,
 docs/references/papers/2209.12827_advanced_skills_by_learning_locomotion_and_local_navigation_end_to_end.pdf,docs/paper_notes/extracted_text/2209.12827_advanced_skills_by_learning_locomotion_and_local_navigation_end_to_end.txt,extracted,
 docs/references/papers/2303.03381_real_world_humanoid_locomotion_with_reinforcement_learning.pdf,docs/paper_notes/extracted_text/2303.03381_real_world_humanoid_locomotion_with_reinforcement_learning.txt,extracted,
+docs/references/papers/2303.04137_diffusion_policy_visuomotor_policy_learning_via_action_diffusion.pdf,docs/paper_notes/extracted_text/2303.04137_diffusion_policy_visuomotor_policy_learning_via_action_diffusion.txt,extracted,Syntax Warning (537123): Badly formatted number
+docs/references/papers/2304.13705_learning_fine_grained_bimanual_manipulation_with_low_cost_hardware.pdf,docs/paper_notes/extracted_text/2304.13705_learning_fine_grained_bimanual_manipulation_with_low_cost_hardware.txt,extracted,
 docs/references/papers/2309.05665_robot_parkour_learning.pdf,docs/paper_notes/extracted_text/2309.05665_robot_parkour_learning.txt,extracted,
 docs/references/papers/2309.14341_extreme_parkour_with_legged_robots.pdf,docs/paper_notes/extracted_text/2309.14341_extreme_parkour_with_legged_robots.txt,extracted,
 docs/references/papers/2310.03581_resilient_legged_local_navigation_learning_to_traverse_with_compromised_perception_end_to_.pdf,docs/paper_notes/extracted_text/2310.03581_resilient_legged_local_navigation_learning_to_traverse_with_compromised_perception_end_to_.txt,extracted,
@@ -15,6 +17,67 @@ docs/references/papers/2403.04436_learning_human_to_humanoid_real_time_whole_bod
 docs/references/papers/2404.05695_humanoid_gym_reinforcement_learning_for_humanoid_robot_with_zero_shot_sim2real_transfer.pdf,docs/paper_notes/extracted_text/2404.05695_humanoid_gym_reinforcement_learning_for_humanoid_robot_with_zero_shot_sim2real_transfer.txt,extracted,
 docs/references/papers/2406.06005_wococo_learning_whole_body_humanoid_control_with_sequential_contacts.pdf,docs/paper_notes/extracted_text/2406.06005_wococo_learning_whole_body_humanoid_control_with_sequential_contacts.txt,extracted,
 docs/references/papers/2406.08858_omnih2o_universal_and_dexterous_human_to_humanoid_whole_body_teleoperation_and_learning.pdf,docs/paper_notes/extracted_text/2406.08858_omnih2o_universal_and_dexterous_human_to_humanoid_whole_body_teleoperation_and_learning.txt,extracted,
+docs/references/papers/2410.24164_pi0_a_vision_language_action_flow_model_for_general_robot_control.pdf,docs/paper_notes/extracted_text/2410.24164_pi0_a_vision_language_action_flow_model_for_general_robot_control.txt,extracted,"Syntax Error (22102): No current point in closepath
+Syntax Error (25609): No current point in closepath
+Syntax Error (34041): No current point in closepath
+Syntax Error (39122): No current point in closepath
+Syntax Error (51688): No current point in closepath
+Syntax Error (54728): No current point in closepath
+Syntax Error (66906): No current point in closepath
+Syntax Error (83179): No current point in closepath
+Syntax Error (96660): No current point in closepath
+Syntax Error (103037): No current point in closepath
+Syntax Error (111720): No current point in closepath
+Syntax Error (117200): No current point in closepath
+Syntax Error (127981): No current point in closepath
+Syntax Error (139591): No current point in closepath
+Syntax Error (145751): No current point in closepath
+Syntax Error (150448): No current point in closepath
+Syntax Error (156040): No current point in closepath
+Syntax Error (163498): No current point in closepath
+Syntax Error (169022): No current point in closepath
+Syntax Error (174375): No current point in closepath
+Syntax Error (179318): No current point in closepath
+Syntax Error (184248): No current point in closepath
+Syntax Error (189364): No current point in closepath
+Syntax Error (193612): No current point in closepath
+Syntax Error (197888): No current point in closepath
+Syntax Error (202370): No current point in closepath
+Syntax Error (207660): No current point in closepath
+Syntax Error (220674): No current point in closepath
+Syntax Error (229166): No current point in closepath
+Syntax Error (235983): No current point in closepath
+Syntax Error (240678): No current point in closepath
+Syntax Error (249208): No current point in closepath
+Syntax Error (256324): No current point in closepath
+Syntax Error (264105): No current point in closepath
+Syntax Error (1891675): No current point in closepath
+Syntax Error (1896663): No current point in closepath
+Syntax Error (1907374): No current point in closepath
+Syntax Error (1908781): No current point in closepath
+Syntax Error (1909920): No current point in closepath
+Syntax Error (1912763): No current point in closepath
+Syntax Error (1914030): No current point in closepath
+Syntax Error (1914421): No current point in closepath
+Syntax Error (1915664): No current point in closepath
+Syntax Error (1920323): No current point in closepath
+Syntax Error (1921112): No current point in closepath
+Syntax Error (1921864): No current point in closepath
+Syntax Error (1922585): No current point in closepath
+Syntax Error (1928074): No current point in closepath
+Syntax Error (1948370): No current point in closepath
+Syntax Error (1953353): No current point in closepath
+Syntax Error (1965442): No current point in closepath
+Syntax Error (1966241): No current point in closepath
+Syntax Error (1966987): No current point in closepath
+Syntax Error (1971823): No current point in closepath
+Syntax Error (1977413): No current point in closepath
+Syntax Error (1981670): No current point in closepath
+Syntax Error (1991896): No current point in closepath
+Syntax Error (2000252): No current point in closepath
+Syntax Error (2014690): No current point in closepath
+Syntax Error (2020137): No current point in closepath
+Syntax Error (2021914): No current point in closepath"
 docs/references/papers/2502.10363_beamdojo_learning_agile_humanoid_locomotion_on_sparse_footholds.pdf,docs/paper_notes/extracted_text/2502.10363_beamdojo_learning_agile_humanoid_locomotion_on_sparse_footholds.txt,extracted,
 docs/references/papers/2503.08564_moe_loco_mixture_of_experts_for_multitask_locomotion.pdf,docs/paper_notes/extracted_text/2503.08564_moe_loco_mixture_of_experts_for_multitask_locomotion.txt,extracted,
 docs/references/papers/2505.11164_parkour_in_the_wild_learning_a_general_and_extensible_agile_locomotion_policy_using_multi_.pdf,docs/paper_notes/extracted_text/2505.11164_parkour_in_the_wild_learning_a_general_and_extensible_agile_locomotion_policy_using_multi_.txt,extracted,"Internal Error: xref num 289 not found but needed, try to reconstruct"

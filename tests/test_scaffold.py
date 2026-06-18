@@ -35,7 +35,7 @@ def test_required_scaffold_files_exist() -> None:
 def test_paper_index_has_expected_minimum() -> None:
     root = Path(__file__).resolve().parents[1]
     paper_index = (root / "docs" / "references" / "paper_index.md").read_text(encoding="utf-8")
-    assert paper_index.count("https://arxiv.org/abs/") >= 22
+    assert paper_index.count("https://arxiv.org/abs/") >= 26
 
 
 def test_paper_index_covers_expected_categories() -> None:
@@ -46,16 +46,23 @@ def test_paper_index_covers_expected_categories() -> None:
         "Perceptive Navigation, Parkour, and Risky Terrain",
         "Humanoid Locomotion and Whole-Body Control",
         "MoE, Expert Composition, and Routing",
+        "VLA, Action Sequence Modeling, and Diffusion Policy",
     ]
     for heading in expected:
         assert heading in paper_index
+    for title in [
+        "Learning Fine-Grained Bimanual Manipulation with Low-Cost Hardware",
+        "Diffusion Policy: Visuomotor Policy Learning via Action Diffusion",
+        "pi0: A Vision-Language-Action Flow Model for General Robot Control",
+    ]:
+        assert title in paper_index
 
 
 def test_chinese_paper_notes_have_expected_count() -> None:
     root = Path(__file__).resolve().parents[1]
     notes = list((root / "docs" / "paper_notes" / "individual").glob("*_zh.md"))
     notes = [path for path in notes if path.name != "README_zh.md"]
-    assert len(notes) == 23
+    assert len(notes) == 26
 
 
 def test_chinese_integrated_review_exists() -> None:
@@ -71,8 +78,9 @@ def test_recommended_reading_order_covers_all_papers() -> None:
     text = (root / "docs" / "references" / "recommended_reading_order_zh.md").read_text(
         encoding="utf-8"
     )
-    assert text.count("### ") == 23
+    assert text.count("### ") == 26
     assert "最短可执行路线" in text
+    assert "VLA 拓展阅读" in text
 
 
 def test_config_loader_reads_training_config() -> None:

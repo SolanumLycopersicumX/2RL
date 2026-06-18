@@ -45,6 +45,14 @@
 | Reliable Sim-to-Real Predictability for MoE-based Robust Quadrupedal Locomotion | MoE sim-to-real 可靠性评估。 |
 | Quadruped Parkour Learning: Sparsely Gated Mixture of Experts with Visual Input | sparse-gated visual MoE parkour 进阶参考。 |
 
+## VLA、动作序列建模与 Diffusion Policy
+
+| 论文 | 用途 |
+|---|---|
+| Learning Fine-Grained Bimanual Manipulation with Low-Cost Hardware | ACT / action chunking，理解机器人动作序列模仿学习。 |
+| Diffusion Policy: Visuomotor Policy Learning via Action Diffusion | 用 diffusion 生成连续动作序列，理解现代 visuomotor policy。 |
+| pi0: A Vision-Language-Action Flow Model for General Robot Control | VLM + flow matching 的通用 VLA robot policy。 |
+
 ## 本地资料入口
 
 - PDF manifest: `docs/references/papers/papers_manifest.csv`

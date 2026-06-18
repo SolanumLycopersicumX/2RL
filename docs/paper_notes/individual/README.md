@@ -25,3 +25,6 @@ Generated from `docs/references/papers/papers_manifest.csv`.
 - [Parkour in the Wild: Learning a General and Extensible Agile Locomotion Policy Using Multi-expert Distillation and RL Fine-tuning](../../docs/paper_notes/individual/2505.11164_parkour_in_the_wild_learning_a_general_and_extensible_agile_locomotion_policy_us.md)
 - [Toward Reliable Sim-to-Real Predictability for MoE-based Robust Quadrupedal Locomotion](../../docs/paper_notes/individual/2602.00678_toward_reliable_sim_to_real_predictability_for_moe_based_robust_quadrupedal_loco.md)
 - [Quadruped Parkour Learning: Sparsely Gated Mixture of Experts with Visual Input](../../docs/paper_notes/individual/2604.19344_quadruped_parkour_learning_sparsely_gated_mixture_of_experts_with_visual_input.md)
+- [Learning Fine-Grained Bimanual Manipulation with Low-Cost Hardware](../../docs/paper_notes/individual/2304.13705_learning_fine_grained_bimanual_manipulation_with_low_cost_hardware.md)
+- [Diffusion Policy: Visuomotor Policy Learning via Action Diffusion](../../docs/paper_notes/individual/2303.04137_diffusion_policy_visuomotor_policy_learning_via_action_diffusion.md)
+- [pi0: A Vision-Language-Action Flow Model for General Robot Control](../../docs/paper_notes/individual/2410.24164_pi0_a_vision_language_action_flow_model_for_general_robot_control.md)

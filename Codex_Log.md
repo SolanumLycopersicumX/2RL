@@ -340,3 +340,51 @@ Create a complete Chinese recommended reading order covering all 23 papers.
 - Note: PDF files and extracted full-text files remain local by `.gitignore`
   policy. GitHub contains manifests, scripts, project docs, and paper notes so
   the local paper archive can be reproduced without republishing full papers.
+
+## 2026-06-18 VLA Literature Expansion
+
+### Objective
+
+Add ACT, Diffusion Policy, and pi0 as a VLA/action-sequence expansion to the
+2RL literature workspace, download their PDFs locally, generate notes, and sync
+tracked metadata/docs to GitHub.
+
+### Completed So Far
+
+- Added a new paper-index section:
+  `VLA, Action Sequence Modeling, and Diffusion Policy`.
+- Added three arXiv papers:
+  - `2304.13705` Learning Fine-Grained Bimanual Manipulation with Low-Cost Hardware.
+  - `2303.04137` Diffusion Policy: Visuomotor Policy Learning via Action Diffusion.
+  - `2410.24164` pi0: A Vision-Language-Action Flow Model for General Robot Control.
+- Downloaded the three new PDFs to:
+  `docs/references/papers/`.
+- Rebuilt:
+  - `docs/references/papers/papers_manifest.csv`
+  - `docs/paper_notes/extracted_text/text_manifest.csv`
+  - English and Chinese individual paper notes.
+  - English and Chinese integrated literature reviews.
+  - Chinese reading queues and project entry links.
+- Updated the detailed reading order to cover 26 papers with VLA as Phase 5.
+
+### Verification
+
+- `python3 scripts/download_papers.py` completed:
+  - 26 entries in `papers_manifest.csv`.
+  - 3 new PDFs downloaded.
+- `python3 scripts/extract_paper_text.py` completed:
+  - 26 extracted-text entries in `text_manifest.csv`.
+- `python3 scripts/generate_paper_notes.py` completed:
+  - 26 English individual notes.
+- `python3 scripts/generate_chinese_docs.py` completed:
+  - 26 Chinese individual notes and updated Chinese entry docs.
+- `python3 scripts/validate_project.py` passed:
+  - 26 required paths.
+  - 26 arXiv links.
+- `sh scripts/run_tests.sh` passed:
+  - 10 tests passed.
+- `python3 -m compileall scripts safe_moe_locomotion tests` passed.
+- `python3 -m safe_moe_locomotion.training.run_experiment --config configs/train/ppo_gate.yaml --dry-run`
+  passed.
+- `sh scripts/git_local.sh status --ignored --short docs/references/papers docs/paper_notes/extracted_text`
+  confirmed PDFs and extracted text remain ignored while manifests are tracked.

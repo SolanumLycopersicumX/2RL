@@ -1,6 +1,6 @@
 # 推荐论文阅读顺序
 
-本文档给出 2RL 项目的完整论文阅读顺序，覆盖当前已下载和已做笔记的 **23 篇论文**。
+本文档给出 2RL 项目的完整论文阅读顺序，覆盖当前已下载和已做笔记的 **26 篇论文**。
 
 目标不是按年份读完所有论文，而是按项目开发依赖关系阅读：
 
@@ -10,6 +10,7 @@ baseline locomotion
 → terrain / navigation / safety
 → MoE expert composition
 → humanoid extension
+→ VLA extension
 ```
 
 开始前先读：
@@ -269,6 +270,39 @@ baseline locomotion
 
 ---
 
+## Phase 5：VLA 拓展阅读
+
+这一阶段用于拓展 vision-language-action、动作序列建模和 imitation-heavy manipulation 的视野。它不是当前 2RL 第一复现目标，但能帮助你理解 ACT、Diffusion Policy、pi0 之间的技术关系。
+
+### 24. Learning Fine-Grained Bimanual Manipulation with Low-Cost Hardware
+
+- 笔记：[中文笔记](../paper_notes/individual/2304.13705_learning_fine_grained_bimanual_manipulation_with_low_cost_hardware_zh.md)
+- PDF: [local PDF](papers/2304.13705_learning_fine_grained_bimanual_manipulation_with_low_cost_hardware.pdf)
+- 重点：ACT、action chunking、transformer imitation learning。
+- 读完应能回答：为什么预测一段未来动作可以缓解单步 behavioral cloning 的误差累积？
+
+### 25. Diffusion Policy: Visuomotor Policy Learning via Action Diffusion
+
+- 笔记：[中文笔记](../paper_notes/individual/2303.04137_diffusion_policy_visuomotor_policy_learning_via_action_diffusion_zh.md)
+- PDF: [local PDF](papers/2303.04137_diffusion_policy_visuomotor_policy_learning_via_action_diffusion.pdf)
+- 重点：条件扩散模型、连续动作序列、receding horizon control。
+- 读完应能回答：diffusion action head 为什么比单峰回归更适合多模态示范动作？
+
+### 26. pi0: A Vision-Language-Action Flow Model for General Robot Control
+
+- 笔记：[中文笔记](../paper_notes/individual/2410.24164_pi0_a_vision_language_action_flow_model_for_general_robot_control_zh.md)
+- PDF: [local PDF](papers/2410.24164_pi0_a_vision_language_action_flow_model_for_general_robot_control.pdf)
+- 重点：VLM backbone、flow matching action expert、generalist robot policy。
+- 读完应能回答：pi0 如何把视觉语言理解和连续机器人动作生成连接起来？
+
+**Phase 5 读完后的动作：**
+
+- 把 ACT / Diffusion Policy / pi0 作为 VLA 拓展笔记，不要混入第一阶段 PPO locomotion 实验。
+- 记录它们对 action representation 的启发：action chunk、diffusion sequence、flow-matching continuous action。
+- 如果未来做 mobile manipulation 或语言条件导航，再考虑把 VLA 作为高层任务接口。
+
+---
+
 ## 总结版顺序
 
 ```text
@@ -296,11 +330,14 @@ baseline locomotion
 21. OmniH2O
 22. WoCoCo
 23. BeamDojo
+24. ACT / Learning Fine-Grained Bimanual Manipulation
+25. Diffusion Policy
+26. pi0
 ```
 
 ## 最短可执行路线
 
-如果你现在想尽快开始复现，不需要等 23 篇全读完。最短路线是：
+如果你现在想尽快开始复现，不需要等 26 篇全读完。最短路线是：
 
 ```text
 整合综述
@@ -311,4 +348,3 @@ baseline locomotion
 → MoE-Loco
 → 开始配置 Isaac Lab / legged_gym 环境
 ```
-

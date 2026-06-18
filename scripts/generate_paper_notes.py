@@ -239,6 +239,36 @@ NOTES: dict[str, dict[str, object]] = {
         "reuse": "2RL 在 vanilla MoE 稳定后可以尝试 top-k routing 和 terrain/depth encoder。它也支持本项目把 perception 放到后期，而非第一阶段。",
         "cautions": "视觉 MoE 是高复杂度组合，不应在 baseline 未稳定时引入。",
     },
+    "2304.13705": {
+        "category": "VLA / imitation learning / action chunking",
+        "priority": "拓展阅读，VLA 第一篇",
+        "summary": "ACT 不是 locomotion 论文，但它是理解机器人动作序列建模的关键入口。它把 imitation policy 建模为 action chunk generator，用 transformer 一次预测未来一段动作，缓解长时序模仿学习中的误差累积。",
+        "problem": "高精度双臂操作需要连续闭环控制，普通 behavioral cloning 容易因为单步误差累积而偏离示范轨迹，尤其是在低成本、不精确硬件上更明显。",
+        "method": "Action Chunking with Transformers 使用图像和机器人状态作为条件，预测一段未来动作序列，并在执行时通过 temporal ensembling 平滑多个 chunk 的重叠预测。",
+        "robot_env": "ALOHA 低成本双臂平台；真实机器人示范；精细双臂 manipulation 任务。",
+        "reuse": "2RL 可借鉴 action chunking 的思想来理解高层策略输出短时 horizon 动作序列，而不是每步独立动作。它也为后续阅读 Diffusion Policy 和 pi0 的 action decoder 打基础。",
+        "cautions": "ACT 偏真实机器人 imitation learning，不是 PPO locomotion baseline。不要把它的训练流程直接套到当前四足 RL 主线；应作为 VLA/动作序列建模拓展阅读。",
+    },
+    "2303.04137": {
+        "category": "VLA / diffusion policy / visuomotor control",
+        "priority": "拓展阅读，VLA 第二篇",
+        "summary": "Diffusion Policy 把机器人策略看成条件扩散模型，生成一段连续动作序列。它是理解后续 diffusion/flow action head 的基础，也是 pi0 这类连续动作 VLA 的重要前置概念。",
+        "problem": "机器人示范数据常有多模态动作分布，单峰回归会平均掉不同可行轨迹，导致动作不稳定或不可执行。",
+        "method": "把观测条件输入扩散模型，通过去噪过程生成未来动作序列，并用 receding horizon control 执行前几个动作后重新规划。",
+        "robot_env": "多种仿真和真实机器人 manipulation benchmark；视觉输入和机器人状态条件。",
+        "reuse": "2RL 可把它作为“连续动作生成器”的参考：如果未来做 mobile manipulation 或 VLA locomotion-command interface，diffusion/flow decoder 比离散动作 token 更适合高维连续控制。",
+        "cautions": "扩散推理计算成本高，且论文重点是 manipulation imitation，不是腿式 locomotion RL。读它时关注 action representation，不要过早迁移到 2RL 主训练代码。",
+    },
+    "2410.24164": {
+        "category": "VLA / robot foundation model / flow matching",
+        "priority": "拓展阅读，VLA 第三篇",
+        "summary": "pi0 是通用 VLA robot policy 的代表：用预训练 VLM 提供视觉语言理解，再用 flow matching 风格的 action expert 输出连续机器人动作。",
+        "problem": "传统单任务机器人策略难以跨任务、跨机器人和跨语言指令泛化；离散动作 token 又可能限制高频、精细、连续控制。",
+        "method": "在视觉语言模型基础上加入动作生成模块，用大规模多机器人轨迹训练 generalist policy，并通过 flow matching 生成连续动作序列。",
+        "robot_env": "多种真实机器人平台，包括单臂、双臂和移动操作任务；语言指令、视觉观测和连续动作。",
+        "reuse": "2RL 可用它拓展研究视野：locomotion MoE 解决地形/技能 routing，VLA 解决语言和视觉条件下的通用动作生成。未来可以把 VLA 作为高层任务指令接口，低层仍由安全 locomotion policy 执行。",
+        "cautions": "pi0 是大规模 foundation model 方向，复现成本远高于当前 2RL。当前目标应是理解架构和 action head，不应把训练 pi0 作为近期里程碑。",
+    },
 }
 
 
@@ -335,7 +365,7 @@ def write_integrated_review(root: Path) -> None:
 
 ## Scope
 
-This synthesis covers the 23 papers downloaded under `docs/references/papers/`.
+This synthesis covers the 26 papers downloaded under `docs/references/papers/`.
 The goal is not to summarize every result equally, but to convert the literature
 into a concrete development path for **Safety-Aware MoE-Gated Locomotion for
 Legged Local Navigation**.
@@ -474,6 +504,25 @@ For now, keep humanoid support as config/interface readiness:
 - later Humanoid-Gym external path;
 - claim boundary that humanoid results are future work.
 
+## 8. VLA Papers Broaden The Action-Generation View
+
+ACT, Diffusion Policy, and pi0 extend the reading set beyond locomotion into
+vision-language-action and visuomotor manipulation. Their direct training
+pipelines are not the first 2RL implementation target, but they are useful for
+understanding how modern robot policies generate action sequences instead of
+single-step commands.
+
+The useful progression is:
+
+1. ACT: transformer-based action chunking for imitation learning;
+2. Diffusion Policy: conditional diffusion over continuous action sequences;
+3. pi0: VLM-conditioned flow matching for general robot control.
+
+For 2RL, the near-term takeaway is architectural rather than implementation
+heavy: a high-level language or vision-conditioned policy can eventually
+produce goals, skills, or short action horizons, while the safety-aware
+locomotion controller remains the low-level execution layer.
+
 ## Recommended Reading Order
 
 1. `2109.11978` Learning to Walk in Minutes.
@@ -485,6 +534,7 @@ For now, keep humanoid support as config/interface readiness:
 7. `2603.03067` CMoE.
 8. Parkour and risky-terrain papers.
 9. Humanoid papers.
+10. VLA expansion: ACT, Diffusion Policy, pi0.
 
 ## Direct Implementation Plan Derived From The Literature
 
@@ -520,6 +570,14 @@ For now, keep humanoid support as config/interface readiness:
 - Add load balancing and temporal smoothness.
 - Add contrastive routing only after baseline gate is diagnosable.
 - Try residual experts if action mixture is unstable.
+
+### Stage F: Optional VLA Expansion
+
+- Read ACT to understand action chunking.
+- Read Diffusion Policy to understand generative continuous action heads.
+- Read pi0 to connect VLM conditioning, flow matching, and robot foundation
+  policies.
+- Keep VLA experiments separate from the first locomotion MoE milestone.
 
 ## Claim Boundary
 

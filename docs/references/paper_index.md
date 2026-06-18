@@ -1,6 +1,6 @@
 # Paper Index
 
-Last updated: 2026-06-15.
+Last updated: 2026-06-18.
 
 This index collects the papers mentioned or recommended in
 `rl_locomotion_moe_research_plan.md`. Links point to arXiv or project pages
@@ -54,6 +54,19 @@ where available. Use `docs/paper_notes/README.md` for note templates.
 |---:|---|---|---|
 | 2 | Quadruped Parkour Learning: Sparsely Gated Mixture of Experts with Visual Input | https://arxiv.org/abs/2604.19344 | Recent 2026 visual MoE parkour reference; useful after baseline MoE is working. |
 
+## VLA, Action Sequence Modeling, and Diffusion Policy
+
+These papers are an adjacent expansion beyond locomotion. They should be read
+after the main RL/MoE route is clear, and are useful for understanding
+vision-language-action policies, action sequence decoders, and imitation-heavy
+robot manipulation systems.
+
+| Priority | Paper | Link | Use in 2RL |
+|---:|---|---|---|
+| 3 | Learning Fine-Grained Bimanual Manipulation with Low-Cost Hardware | https://arxiv.org/abs/2304.13705 | ACT / action chunking, transformer imitation learning, low-cost bimanual manipulation. |
+| 3 | Diffusion Policy: Visuomotor Policy Learning via Action Diffusion | https://arxiv.org/abs/2303.04137 | Diffusion-based continuous action sequence generation and receding-horizon visuomotor control. |
+| 3 | pi0: A Vision-Language-Action Flow Model for General Robot Control | https://arxiv.org/abs/2410.24164 | Generalist VLA policy, VLM backbone plus flow-matching action generation. |
+
 ## Reading Deliverables
 
 For each priority-1 paper, create a note under `docs/paper_notes/` that records:
@@ -65,4 +78,3 @@ For each priority-1 paper, create a note under `docs/paper_notes/` that records:
 - training algorithm,
 - sim-to-real assumptions,
 - exact ideas to reuse in this project.
-
