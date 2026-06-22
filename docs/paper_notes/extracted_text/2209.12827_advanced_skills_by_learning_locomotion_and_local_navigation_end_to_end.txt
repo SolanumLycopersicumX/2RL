@@ -1,0 +1,417 @@
+                                                 Advanced Skills by Learning Locomotion and Local Navigation
+                                                                         End-to-End
+                                                                  Nikita Rudin1,2 , David Hoeller1,2 , Marko Bjelonic1 and Marco Hutter1
+
+
+                                            Abstract— The common approach for local navigation
+                                         on challenging environments with legged robots requires
+                                         path planning, path following and locomotion, which usually
+                                         requires a locomotion control policy that accurately tracks
+                                         a commanded velocity. However, by breaking down the
+
+
+
+
+arXiv:2209.12827v1 [cs.RO] 26 Sep 2022
+                                         navigation problem into these sub-tasks, we limit the robot’s
+                                         capabilities since the individual tasks do not consider the
+                                         full solution space. In this work, we propose to solve the
+                                         complete problem by training an end-to-end policy with deep
+                                         reinforcement learning. Instead of continuously tracking a
+                                         precomputed path, the robot needs to reach a target position
+                                         within a provided time. The task’s success is only evaluated at
+                                         the end of an episode, meaning that the policy does not need to
+                                         reach the target as fast as possible. It is free to select its path
+                                         and the locomotion gait. Training a policy in this way opens up
+                                         a larger set of possible solutions, which allows the robot to learn     Fig. 1: The legged robot ANYmal navigating around obsta-
+                                         more complex behaviors. We compare our approach to velocity             cles, climbing stairs, and jumping over a gap.
+                                         tracking and additionally show that the time dependence of
+                                         the task reward is critical to successfully learn these new
+                                         behaviors. Finally, we demonstrate the successful deployment
+                                                                                                                 joints. In contrast, animals can switch gaits, plan a series of
+                                         of policies on a real quadrupedal robot. The robot is able to           consecutive steps, perform jumps, and use contacts on other
+                                         cross challenging terrains, which were not possible previously,         parts of their body when necessary. If we want our policies to
+                                         while using a more energy-efficient gait and achieving a                achieve the same level of dexterity, they need to explore the
+                                         higher success rate. Supplementary videos can be found                  entire solution space by removing assumptions and implicit
+                                         on the project website: https://sites.google.com/
+                                         leggedrobotics.com/end-to-end-loco-navigation
+                                                                                                                 constraints that limit the possible behaviors.
+
+                                                                                                                 A. Related Work
+                                                              I. INTRODUCTION
+                                                                                                                    Most of the related work splits the local navigation task
+                                            Legged robots have the potential to navigate challenging             of legged robots into multiple sub-parts. For example, a
+                                         environments, such as in Fig. 1, much better than wheeled               planing module generates a trajectory that the robot can
+                                         robots, but they require complex motions to do so. Multi-               follow to reach its target. Then a path-following controller
+                                         ple control methods have been proposed including Model                  steers the robot towards that path by providing velocity
+                                         Predictive Control [1], [2], trajectory optimization [3], [4],          commands to the locomotion controller, which tries to match
+                                         imitation learning [5], [6], and fully learned approaches [7],          those commands by moving the legs of the robot [10], [11].
+                                         [8]. Recently, deep reinforcement learning has proven to                Similarly, when operators manually guide the robot through
+                                         be a powerful tool to achieve robust locomotion. It has                 a local environment with a joystick, they send velocity
+                                         brought the robots out of a controlled lab environment and              commands to the locomotion controller. As such, velocity
+                                         allowed them to evolve in the real world, using perceptive              tracking is commonly used as the task for both model-based
+                                         and proprioceptive information to walk on obstacles such as             [1], [2], [12] and learned locomotion controllers [7], [8], [9],
+                                         stairs, rocks, or roots [9].                                            [13].
+                                            To achieve a robust execution in the real world, the con-               This is a natural way to split the locomotion and navigation
+                                         troller must be capable of dynamic motions while handling               problems. Unfortunately, it imposes unintended restrictions
+                                         model mismatches, noisy sensors, reacting to external distur-           on the behavior of the low-level policy and thus limits
+                                         bances, missteps, and slippage. Nonetheless, these policies             the possibilities of the overall system. For example, when
+                                         still fail to exhibit the level of agility and precision of             jumping over a gap, the robot needs to be free to modulate
+                                         animals or humans. In all of these cases, the control policy            its velocity before and after the jump. Furthermore, the
+                                         only needs to slightly modulate a periodic motion of the                locomotion policy must be allowed to slow down or even
+                                                                                                                 stop in dangerous situations. These cases would result in
+                                           1 Robotic Systems Lab, ETH Zurich. 2 NVIDIA, contact:
+                                                                                                                 higher velocity tracking costs making the desired behaviors
+                                         rudinn@ethz.ch.
+                                         This work is supported in part by the EU Horizon 2020 programme grant   harder to achieve. Finally, keeping the base at a constant
+                                         agreement No.852044                                                     velocity encourages the policy to learn a gait, which is not
+necessarily the most energy-efficient. In the case of four-        from these costs. As long as the robot reaches the target
+legged locomotion, this results in the trotting gait seen in all   position, it is free to optimize its path and gait to minimize
+learning approaches mentioned above. Even a policy trained         the additional penalties without influencing the main task
+specifically to generate gaits, only learns to output different    reward. This creates a hierarchical reward structure where
+versions of trotting [14].                                         the policy first learns to solve the task before optimizing the
+   Trajectory optimization methods can directly produce joint      quality of motion needed to do so.
+commands based only on a target state and a cost to minimize          Using the velocity tracking and continuous position ap-
+[3], [15]. Unfortunately, these methods are computationally        proaches as baselines for our experiments, we show that
+expensive and lack the robustness of reinforcement learning        our method allows the policy to succeeds on common
+policies. A simple position tracking task would penalize the       terrains such as stairs and slopes with increased difficulty.
+distance between the robot and the target location contin-         Furthermore, it enables the training complex behaviors such
+uously. However, the optimal solution would be to reach            as jumping over gaps, climbing on boxes, and avoiding
+the goal as fast as possible, resulting in a behavior close to     obstacles. Additionally, the policy learns a novel locomotion
+the ”bang-bang” solution of optimal control problems [16].         gait resulting in lower failure rates and energy consumption.
+This is not the desired behavior for a real-world robot as it      Finally, our approach removes the need for a local planner
+would result in needlessly aggressive and dangerous motions.       since the locomotion policy directly learns this capability.
+This problem can be mitigated by penalizing velocities and         The policies are deployed on the real robot and run in real-
+torques, but the final behavior depends on the relative scale      time on the onboard computer.
+of these penalties, which must be tuned individually for                                    II. METHOD
+each case. Additionally, this set-up also penalizes trajectories
+where the robot slows down or deviates from the shortest              We train a neural network policy to solve various loco-
+path.                                                              motion tasks for a quadrupedal robot. The policy receives
+   Previous works have explored the agile locomotion of            measurements provided by the robot’s sensors, and outputs
+legged robots. Trajectory optimization has been shown to           commands that are directly sent to the motors. The neural
+produce agile motions, including jumping and climbing              network is trained in simulation using Deep RL, after which
+behavior [15]. However, this approach requires costly opti-        it is transferred to the real robot without any further training
+mizations for each trajectory, assumes the model to be con-        or adaptation. We build upon the massively parallel set-up of
+tinuously differentiable, and the authors only show hardware       [26], with Isaac Gym [27] simulation and Proximal Policy
+experiments on simple cases. Learning approaches, splitting        Optimization (PPO) [28] as the Deep RL algorithm.
+the locomotion problem into a foothold planner and a tracker       A. Observation and Action Space
+[17], [18], achieved locomotion over challenging terrains,            The observations include joint positions, joint velocities,
+including gaps and stepping stones. Despite impressive re-         base linear and angular velocity, commands, previous ac-
+sults, this approach requires a multi-stage training approach,     tions, and terrain measurements sampled around the robot.
+assumes contact patterns that would fail on our climbing task,     The commands are defined as the three-dimensional location
+and was again not shown to transfer to the real world. For         of the target expressed in the base frame and the remaining
+selected tasks, multiple approaches resulted in dynamic and        time to reach that location. Noise is added to the observations
+agile motions on real robots. These include: jumping over          based on the noise level of the robot’s sensors. The actions
+obstacles with a model-based planer [19], jumping onto a           are interpreted as target joint positions given to the motors
+table with trajectory optimization [20], exhibiting cat-like       where a PD controller transforms them into joint torques.
+landing capabilities with a model-based approach [21], a
+learned policy [22], as well as a combination of both [23].        B. Rewards
+   Learning approaches have been applied to local navigation          The rewards are split into two parts: task rewards only
+of a legged robot. The problem can be split into a high-           active at the end of the episode, and various penalties
+level policy steering the low-level locomotion controller [24],    provided throughout the episode.
+or combined into a single end-to-end policy [25]. However,            1) Task Reward: The task reward instructs the robot to
+in both cases the locomotion controllers are trained using         reach the provided target location. It is calculated as
+                                                                                    (
+velocity commands resulting in limited capabilities of the                             1       1
+                                                                                                  ∗ 2,   if t > T − Tr
+system.                                                                     rtask = Tr 1+kxb −xb k                         (1)
+                                                                                      0,                 otherwise.
+B. Contribution                                                    where xb and x∗b are the current and target positions of the
+   In this work, we propose a position-based formulation           base, t is the time since the beginning of the episode, T is
+where the robot must reach the target location only after a        the maximum episode length and Tr is a parameter defining
+defined time. The task reward is based on the final distance       the duration of the reward. Tr needs to be long enough to
+to the target at the end of an episode and is not influenced       force the policy to stop at the target in a stable configuration.
+by the trajectory the robot took to get there. We need to          Otherwise, the policy learns to jump or lean towards the
+add multiple penalties to achieve sim-to-real transfer, but        target at the last moment, which would result in a crash on
+this setup has the advantage of decoupling the main task           the real robot where there are no episode resets.
+   2) Penalties: We penalize joint accelerations, joint
+torques, collisions, and abrupt actions changes. Additionally,
+we introduce a new reward penalizing feet accelerations. It
+reduces impacts with the ground, causing loud noises and
+potential damage to the motors and structure. The complete
+set of penalties is computed as
+       rpenalties = − c1 kq̈k2 − c2 kτ k2 − c3 Nc
+                                                            (2)
+                                           X
+                    − c4 ka − a−1 k2 − c5       kẍf k2
+                                            f eet
+
+where q, τ , Nc a, and xf represent joint positions, joint
+torques, number of collisions, actions, and positions of the
+feet respectively, and c1−5 are scaling constants.
+   There is an important difference in how these penalties
+interact with the main task. With velocity tracking, the policy
+must compromise between minimizing these penalties and            Fig. 2: Examples of three newly added terrains types with
+optimizing the main task. On the other hand, minimizing           a representative curriculum from the easiest version on the
+these penalties does not counteract the main reward with          left to the hardest terrain seen during training on the right.
+our approach. As long as the robot reaches the target in
+time, it can freely minimize the different quantities without
+negatively affecting the position tracking. This simplifies the   C. Terrains
+tuning process and removes the need to compromise on the
+                                                                     For a proper comparison with velocity tracking, we first
+quality of the solution.
+                                                                  train a policy on terrains from [26]. These include slopes,
+   3) Exploration Reward: Due to the sparse nature of the
+                                                                  stairs, random rectangular obstacles, and rough surfaces.
+main reward, we find it beneficial to add a reward term
+                                                                  We then explore terrains requiring more agile and complex
+encouraging exploration at the beginning of training. In order
+                                                                  maneuvers. We evaluate our approach on three new tasks
+to bias the policy to walk towards the target, we reward it
+                                                                  represented in Fig. 2. First we create a terrain where the
+for any base velocity in the correct direction. The reward is
+                                                                  policy needs to step or jump over a gap. The size of the gap is
+defined as
+                             ẋb · (x∗b − xb )                    such that keeping a constant base velocity is too constraining
+                   rbias =                                  (3)   since the robot needs to leap forward to cross the distance
+                           kẋb kkx∗b − xb k
+                                                                  and inevitably slows down after the jump side since it barely
+   This rewards is automatically removed after a few train-       reaches the other side. Second, we explore the use of other
+ing iterations, and thus doesn’t constrain the final solution     parts of the body by creating a climbing task. In this scenario
+learned by the policy. rbias is removed once rtask reaches        the robot must climb out of a pit, which is too deep to simply
+50 % of it’s maximum value.                                       step out of it. The policy needs to learn a complex series
+   4) Stalling Penalty: PPO optimizes the discounted sum          of actions where it first puts the front feet up before using
+of rewards over the episode, with a discount factor that must     the back knees to help it reach the top. Finally, we test the
+be lower than 1 for stability. This has an unintended effect      local planning capabilities of our policy by creating a terrain
+on the optimal solution to the problem. The policy receives       with high obstacles which the policy must avoid. When an
+two types of rewards, a positive reward at the end of an          obstacle is in its way, the policy must learn to disregard the
+episode representing the main task and negative penalties         direct path towards the target and find a way around the
+throughout the episode, which are larger when the robot is        obstacle.
+walking. In order to optimize the discounted sum of rewards,
+it is beneficial to push the negative penalties as far into the   D. Episode Process
+future as possible. Therefore, the policy learns to wait until       At the beginning of each episode, a valid position target is
+the last moment when it suddenly runs fast towards the target.    sampled for each robot. The sampling is done uniformly in
+In practice, we would like the robot to either use all of the     polar coordinates around the initial position of the robot with
+provided time or wait at the target. Furthermore, the real-       a radius between 1 m and 5 m. The height of the target is
+world energy consumption should be optimized without a            set to 0.5 m above the ground. A target is considered invalid
+discount factor. In order to counterbalance this effect, we       if it overlaps with holes or high obstacles. Invalid targets
+add a small penalty waiting while being far away from the         are re-sampled until none are left. The episode length is set
+target. It is defined as                                          to T = 6 s, with the task reward provided after 5 s for a
+                                                                 duration of Tr = 1 s. At the end of the episode, the progress
+                    −1, if kẋb k < 0.1 m/s
+                    
+                                                                  of each robot is evaluated to update the terrain curriculum. A
+           rstall =         and kxb − x∗b k > 0.5 m         (4)   terrain is considered successfully solved if the robot finishes
+                    
+                      0,    otherwise.                            the episode within 0.5 m of the target.
+                    
+TABLE I: Maximum difficulty of terrains solved with a 95 %            an increased number of terrain levels and higher maximum
+success rate. V : velocity tracking, Pc : continuous position         complexity. After training for the same number of iterations,
+tracking, Pf : final position tracking (ours).                        we evaluate the policies on each terrain difficulty and find the
+       Terrain type    Parameter             95 % Success             highest level they are able to solve. The robots must cross
+                                     V           Pc       Pf (ours)   4 m of the terrain within 8 s. The velocity tracking policy
+          stairs (1)      rise      0.22 m      0.2 m       0.4 m     receives a constant forward velocity command of 1 m/s, and
+          slope (2)      angle      35 deg     21 deg      48 deg
+  random steps (3)      height     ±0.14 m    ±0.16 m      ±0.2 m
+                                                                      we consider a terrain solved if the robot has walked more
+      obstacles (4)     length      0.35 m        -        0.85 m     than 4 m even if it crashed afterwards. For our approach, the
+            gap (5)     width       0.15 m    0.65 m       1.2 m      policy receives a target 5 m in front of its initial position,
+             pit (6)     depth       0.1 m     0.65 m      0.95 m
+                                                                      and we consider an episode successful if the final position
+                                                                      of the robot is within 0.5 m of the target and no crash has
+                                                                      occurred. Even with a setup favoring velocity tracking, our
+E. Training Stability                                                 approach outperforms both methods. In Table I, we report the
+   We have found that while our approach can lead to better-          highest terrain difficulty on which the different policies have
+performing policies, it is also more sensitive to training            a success rate of at least 95 %. The corresponding terrains
+instabilities. In particular, predicting the value function seems     are shown in Fig. 3
+to be more difficult with our temporally sparse task reward.             Our approach raises the achieved difficulty on all terrains
+The fact that the task reward is only provided at the end             compared to velocity tracking. On stairs and slopes, it
+of the episode and only if the robot does not crash until             increases the step height and slope angle by 80 % and 35 %,
+then makes it harder for the critic to predict the correct            which pushes the capabilities of the robot beyond what it
+outcome. This makes the whole system prone to instabilities,          would encounter in standard real-world conditions. Random
+where a random seed change can cause a failed training                rectangular obstacles remain a challenge due to the poor
+run. We use the PPO implementation from [26] with similar             configuration of some of the generated terrains. Nevertheless,
+hyper-parameters. However, we introduce some modifica-                our approach increases the maximum obstacle height by
+tions which have proven effective to mitigate the instabilities       40 %. Finally, the most significant difference appears in our
+described above.                                                      newly added terrains. The velocity tracking policy can only
+   First, we increase the batch size by doubling the number           solve trivial terrain difficulties requiring minor adjustments
+of consecutive steps each robot takes per policy iteration. We        to a standard walking gait. Our approach helps the policy
+use 4096 parallel robots performing 48 steps resulting in a           learn more complex behaviors allowing the robot to perform
+batch size of 2000 000 samples. Additionally, we reduce the           jumps, climb using its knees and avoid obstacles of non-
+episode length from 20 s to 6 s. Finally, the value function          trivial size. Quantitatively, the size of obstacles, length of
+bootstrapping was introduced to mimic an infinite horizon             gaps, and depth of pits are increased by 140 %, 700 %, and
+problem, which is necessary in the case of velocity tracking          850 %, respectively.
+since there is no termination condition for this task. However,          On most terrains, the continuous position tracking ap-
+in our case, the time until task termination is clearly defined       proach achieves higher difficulties than velocity tracking.
+and provided as input to both the actor and the critic. We,           However, it completely fails to navigate obstacles with a
+therefore, remove the bootstrapping and obtain more stable            sufficient reliability, and is inferior to final position tracking
+training. We train all policies for a total of 2000 iterations        on all terrains.
+requiring approximately 1 hour of training.
+                                                                      B. Energy Consumption
+                III. S IMULATION E XPERIMENTS                             The policy does not need to compromise between max-
+   In this section, we compare our approach to the velocity           imizing task rewards and minimizing penalties with our
+tracking task and a continuous position tracking reward. The          approach. Furthermore, the robot’s gait is less restricted than
+velocity tracking policy is trained as in [26] with the only          with the velocity tracking approach. In order to verify this
+difference being reward scales and command ranges. We use             hypothesis, we evaluate the energy consumption of policies
+the penalties described in Sec. II-B.2 with the same weights          trained with various approaches. We use the sum of squared
+while scaling the task rewards to a magnitude similar to the          torques as a proxy for energy since it is the penalized quantity
+tracking reward of the new approach. In order to simplify the         during training and is proportional to heat losses in the
+task, we remove sideways velocity commands keeping only               motors.
+forward/backward and yaw. Continuous position tracking is                 We record the total energy consumption while the robots
+achieved by providing rtask at every time-step (Tr = T )              walk across 100 m of flat terrain at various velocities. While
+without any further tuning.                                           it is straightforward to command the velocity tracking policy,
+                                                                      our approach requires some modification to its commands.
+A. Maximum Terrain Difficulty                                         We can achieve a pseudo velocity control by fixing the
+  We compare the capabilities of the three approaches by              target to be always 3 m in front of the robot and setting
+evaluating the maximum difficulty of terrains each policy             a constant value instead of the time left to reach that
+can solve. We train policies on a single terrain type with            target. By providing a fixed target and time, the policy
+                                                                          (a) V                 (b) Pf                 (c) Pc
+                                                                   Fig. 5: Emerging gait patterns of three task definitions. (a):
+                                                                   Velocity tracking, trotting gait. (b): Final position tracking
+                                                                   (ours), three-phased gait towards the front-left side. (c):
+                                                                   Continuous position tracking, three-phased gait towards the
+                                                                   right-hind side.
+
+Fig. 3: Simulation deployment of policies for each terrain         our approach at higher velocities. We note that this difference
+type. The terrains represent the highest difficulty successfully   is expected since the continuous tracking policy is trained to
+solved by our approach with a 95 % success rate. Parameters        run as fast as possible, while our approach is mostly trained
+of these terrains are provided in Table I.                         with velocities around 1 m/s (5 m in 5 s).
+                                                                      We see higher torques in hardware experiments compared
+                                                                   to our simulated results. The offset can explained by the
+                                                                   restrictive limits we impose on our actuators in simulation.
+                                                                   The real robot is able to produce more torque than what
+                                                                   the policy experienced in simulation. Nevertheless, we see
+                                                                   similar trend, with our approach outperforming the velocity
+                                                                   tracking policy at low speed and converging to similar
+                                                                   torques at higher velocities. We do not transfer the continu-
+                                                                   ous position tracking policy, since it is prone to aggressive
+                                                                   motions which could potentially damage the robot.
+
+                                                                   C. Emergent Gaits
+                                                                      Most previous works on learned locomotion resulted in
+Fig. 4: Normalized cost of transport of three approaches in        a trotting gait. This can be explained by the fact that the
+simulation and on hardware. The sum of squared torques is          robot’s base can keep a nearly constant velocity. As such,
+recorded while the policies receive a constant command over        velocity tracking approaches are heavily biased towards
+100 m in simulation and 5 m on the real robot. V : velocity        trotting. However, walking with a constant base velocity is
+tracking, Pc : continuous position tracking, Pf : final position   not common for animals as it requires additional effort. With
+tracking (ours). Built-in: learning based controller provided      our approach, we remove these artificial constraints, which
+by the manufacturer.                                               allow the emergence of different types of gaits. Furthermore,
+                                                                   for velocity tracking policies, it is necessary to encourage
+                                                                   larger steps by rewarding the air time or clearance of the
+can walk continuously even though it was never trained in          feet [29], [26]. This is needed because the policy prefers to
+that scenario. Furthermore, varying this fixed time directly       do many small steps in order to follow the command with
+influences the velocity of the robot. When the policy believes     minimal oscillations of the base. With our approach, this
+it has a lot of time to reach the target, it will adopt a slow     reward is no longer necessary since base oscillations are no
+and safe gait. As that time is reduced, it will try to close the   longer penalized.
+gap faster and faster. We also modify the commands of the             Fig. 5 compares the gaits of velocity and position tracking.
+continuous position tracking policy. This time we change the       We see that the policy learns a three-phased asymmetric gait
+distance to the target since the policy is not conditioned on      with our approach. Interestingly, the robot moves diagonally,
+time.                                                              probably due to the kinematics and motor arrangement,
+   In Fig. 4 we report the sum of squared torque per               giving the most extended reach and maximum power in this
+traveled distance for all approaches at different velocities.      direction. In Fig. 5, the robot is moving towards the front left.
+Interestingly, all approaches converge to similar values at        The gait is split into three phases. First, the back (right hind)
+high velocities, but the velocity tracking policy performs         leg touches the ground, followed by the center (left hind and
+worse at slow speed. In that regime, keeping the base at           right front) legs. Finally, the forward facing (left front) leg
+constant velocity seems to have a stronger impact on the           is briefly in contact. The continuous tracking policy uses a
+energy consumption. Both position based approaches present         similar gait, but it learns to walk towards it’s right back side,
+similar results, with the continuous tracking outperforming        meaning that the contact schedule is inverted.
+Fig. 6: Deployment of policies on the real robot. Top Left: running on stairs, top right: climbing on a 0.55 m box, bottom
+left: jumping over a 0.6 m gap, bottom right: navigating around obstacles.
+
+
+   Qualitatively, as can be seen in the accompanying video,        over a 0.6 m gap, climbing on a 0.55 m box, and navigating
+the robot’s motion is more dynamic and is generally per-           around obstacles. These motions are represented in Fig. 6 as
+ceived to be more natural with our approach. The combina-          well as in the supplementary video.
+tion of a stronger base motion and large smoother steps gives         The success rate of deployed policies greatly depends on
+the robot an organic appearance, which the velocity tracking       the terrain type. While it is similar to I on stairs, it is lower
+policy lacks.                                                      for harder terrains. This is due to our reliance on provided
+   However, there is an unfortunate artifact in the behavior.      state estimation and perception modules which were not
+The policy only learns to walk in one direction, preferring        designed for jumping or climbing. A motion capture system
+to turn instead of walking sideways or backward. This can          was required to successfully deploy the climbing policy.
+become a problem when we want the robot to walk back and
+                                                                                          IV. D ISCUSSION
+forth repetitively. This seems to be due to a very attractive
+local minimum as every training run results in a random but           In this work, we have proposed to rethink the task defini-
+fixed walking direction.                                           tion used to train locomotion policies for legged robots. We
+                                                                   have shown that specifying a target location instead of a base
+D. Hardware Deployment                                             velocity command reduces the constraints on the solution
+   We deploy policies trained with our approach on the             space. This set-up decouples the task from the optimization
+real robot. Following previous work [29], we augment the           of other quantities, lets the policy learn a more energy-
+simulation with a neural network trained to mimic the series       efficient gait, and most importantly, helps it learn more
+elastic actuators of the robot. Unfortunately, the actuator        complex maneuvers. On the downside, our approach seems
+network is not accurate enough in the high-velocity regime.        more prone to training instabilities. Another challenge is that
+At maximum velocity, it still allows high torques, which is        the robot only learns to walk in one direction and does not
+not possible for a brushless DC motor [30]. We model the           use its kinematic symmetry. The task should also be extended
+maximum torque as an affine function of motor velocity and         to allow the specification of multiple consecutive way-points
+clip the torques required by the policy to those maximum           without discontinuities in the motion. Finally, the reliance on
+values.                                                            state estimation and perception has to be reduced or these
+   During deployment, commands can be specified in two             modules need to be improved for our specific use cases.
+ways: either with real position targets or using a joystick with   Solving these challenges should be part of future work.
+the pseudo velocity control described in Sec. III-B. In the           Our approach can be applied to a large set of tasks
+second case, the direction of the joystick command defines         and robots. It is not limited to locomotion on challenging
+the target direction, while the magnitude is used to scale         terrain. For example in a fall recovery scenario, the reward
+the remaining time given to the policy. This proves to be a        encouraging the robot to stand up can also be activated only
+natural way to command the robot, and the policy responds          at the end of an episode, letting the policy free to choose the
+well to quickly changing commands even though it was not           trajectory instead of requiring it to recover as fast as possible.
+trained for it.                                                       By showing that these relatively small changes in the
+   For practical reasons, we do not use the most complicated       training process lead to great improvements in the agility of
+terrains described in Table I. Nevertheless, we show that our      the robot, we emphasizes that we are still far from exploiting
+approach allows the robot to perform maneuvers that were           the full capabilities of our robots, and encourage other
+previously not possible. We show our policies successfully         researchers to apply similar techniques to their respective
+running on flat terrain, climbing stairs at high speed, jumping    tasks.
+                             R EFERENCES                                       [16] R. Bellman, I. Glicksberg, and O. Gross, “On the “bang-bang” control
+                                                                                    problem,” Quarterly of Applied Mathematics, vol. 14, no. 1, pp. 11–18,
+                                                                                    1956.
+ [1] D. Kim, J. D. Carlo, B. Katz, G. Bledt, and S. Kim, “Highly dynamic       [17] V. Tsounis, M. Alge, J. Lee, F. Farshidian, and M. Hutter, “Deepgait:
+     quadruped locomotion via whole-body impulse control and model                  Planning and control of quadrupedal gaits using deep reinforcement
+     predictive control,” ArXiv, vol. abs/1909.06586, 2019.                         learning,” IEEE Robotics and Automation Letters, vol. 5, no. 2, pp.
+ [2] M. Neunert, M. Stäuble, M. Giftthaler, C. D. Bellicoso, J. Carius,            3699–3706, 2020.
+     C. Gehring, M. Hutter, and J. Buchli, “Whole-body nonlinear model         [18] W. Yu, D. Jain, A. Escontrela, A. Iscen, P. Xu, E. Coumans, S. Ha,
+     predictive control through contacts for quadrupeds,” IEEE Robotics             J. Tan, and T. Zhang, “Visual-locomotion: Learning to walk on
+     and Automation Letters, vol. 3, no. 3, pp. 1458–1465, 2018.                    complex terrains with vision,” in Proceedings of the 5th Conference
+ [3] T. Apgar, P. Clary, K. Green, A. Fern, and J. W. Hurst, “Fast online           on Robot Learning, ser. Proceedings of Machine Learning Research,
+     trajectory optimization for the bipedal robot cassie.” in Robotics:            A. Faust, D. Hsu, and G. Neumann, Eds., vol. 164. PMLR, 08–11
+     Science and Systems, vol. 101, 2018, p. 14.                                    Nov 2022, pp. 1291–1302.
+ [4] M. Bjelonic, P. K. Sankar, C. D. Bellicoso, H. Vallery, and M. Hutter,    [19] H.-W. Park, P. M. Wensing, and S. Kim, “Jumping over obstacles
+     “Rolling in the deep – hybrid locomotion for wheeled-legged robots             with mit cheetah 2,” Robotics and Autonomous Systems, vol. 136,
+     using online trajectory optimization,” IEEE Robotics and Automation            p. 103703, 2021. [Online]. Available: https://www.sciencedirect.com/
+     Letters, vol. 5, no. 2, pp. 3626–3633, 2020.                                   science/article/pii/S0921889020305431
+ [5] X. B. Peng, E. Coumans, T. Zhang, T.-W. E. Lee, J. Tan, and S. Levine,    [20] Q. Nguyen, M. J. Powell, B. Katz, J. D. Carlo, and S. Kim, “Optimized
+     “Learning agile robotic locomotion skills by imitating animals,” in            jumping on the mit cheetah 3 robot,” in 2019 International Conference
+     Robotics: Science and Systems, 07 2020.                                        on Robotics and Automation (ICRA), 2019, pp. 7448–7454.
+ [6] A. Reske, J. Carius, Y. Ma, F. Farshidian, and M. Hutter, “Imitation      [21] S. H. Jeon, S. Kim, and D. Kim, “Real-time optimal landing control
+     learning from mpc for quadrupedal multi-gait control,” in 2021 IEEE            of the mit mini cheetah,” 2021.
+     International Conference on Robotics and Automation (ICRA), 2021,         [22] N. Rudin, H. Kolvenbach, V. Tsounis, and M. Hutter, “Cat-like
+     pp. 5014–5020.                                                                 jumping and landing of legged robots in low gravity using deep
+ [7] J. Lee, J. Hwangbo, L. Wellhausen, V. Koltun, and M. Hutter,                   reinforcement learning,” IEEE Transactions on Robotics, 2021.
+     “Learning quadrupedal locomotion over challenging terrain,” Science       [23] V. Kurtz, H. Li, P. M. Wensing, and H. Lin, “Mini cheetah, the falling
+     robotics, vol. 5, no. 47, p. eabc5986, 2020.                                   cat: A case study in machine learning and trajectory optimization for
+ [8] J. Siekmann, K. Green, J. Warila, A. Fern, and J. W. Hurst,                    robot acrobatics,” 2021.
+     “Blind bipedal stair traversal via sim-to-real reinforcement learning,”   [24] D. Hoeller, L. Wellhausen, F. Farshidian, and M. Hutter, “Learning
+     CoRR, vol. abs/2105.08328, 2021. [Online]. Available: https:                   a state representation and navigation in cluttered and dynamic envi-
+     //arxiv.org/abs/2105.08328                                                     ronments,” IEEE Robotics and Automation Letters, vol. 6, no. 3, pp.
+ [9] T. Miki, J. Lee, J. Hwangbo, L. Wellhausen, V. Koltun, and M. Hutter,          5081–5088, 2021.
+     “Learning robust perceptive locomotion for quadrupedal robots in the      [25] C. Imai, M. Zhang, Y. Zhang, M. Kierebinski, R. Yang, Y. Qin, and
+     wild,” Science Robotics, vol. 7, no. 62, p. eabk2822, 2022.                    X. Wang, “Vision-guided quadrupedal locomotion in the wild with
+[10] D. Wooden, M. Malchano, K. Blankespoor, A. Howardy, A. A. Rizzi,               multi-modal delay randomization,” in 2022 IEEE/RSJ international
+     and M. Raibert, “Autonomous navigation for bigdog,” in 2010 IEEE               conference on intelligent robots and systems (IROS).
+     International Conference on Robotics and Automation, 2010, pp.            [26] N. Rudin, D. Hoeller, P. Reist, and M. Hutter, “Learning to walk
+     4736–4741.                                                                     in minutes using massively parallel deep reinforcement learning,”
+                                                                                    in Proceedings of the 5th Conference on Robot Learning, ser.
+[11] C. D. Bellicoso, M. Bjelonic, L. Wellhausen, K. Holtmann,
+                                                                                    Proceedings of Machine Learning Research, A. Faust, D. Hsu, and
+     F. Günther, M. Tranzatto, P. Fankhauser, and M. Hutter, “Advances
+                                                                                    G. Neumann, Eds., vol. 164. PMLR, 08–11 Nov 2022, pp. 91–100.
+     in real-world applications for legged robots,” Journal of Field
+                                                                                    [Online]. Available: https://proceedings.mlr.press/v164/rudin22a.html
+     Robotics, vol. 35, no. 8, pp. 1311–1326, 2018. [Online]. Available:
+                                                                               [27] V. Makoviychuk, L. Wawrzyniak, Y. Guo, M. Lu, K. Storey, M. Mack-
+     https://onlinelibrary.wiley.com/doi/abs/10.1002/rob.21839
+                                                                                    lin, D. Hoeller, N. Rudin, A. Allshire, A. Handa, and G. State,
+[12] Y. Guo, M. Zhang, H. Dong, and M. Zhao, “Fast online planning for              “Isaac gym: High performance gpu-based physics simulation for robot
+     bipedal locomotion via centroidal model predictive gait synthesis,”            learning,” 2021.
+     IEEE Robotics and Automation Letters, vol. 6, no. 4, pp. 6450–6457,       [28] J. Schulman, F. Wolski, P. Dhariwal, A. Radford, and
+     2021.                                                                          O. Klimov, “Proximal policy optimization algorithms,” CoRR,
+[13] G. Ji, J. Mun, H. Kim, and J. Hwangbo, “Concurrent training of a               vol. abs/1707.06347, 2017.
+     control policy and a state estimator for dynamic and robust legged        [29] J. Hwangbo, J. Lee, A. Dosovitskiy, D. Bellicoso, V. Tsounis,
+     locomotion,” 2022.                                                             V. Koltun, and M. Hutter, “Learning agile and dynamic motor skills
+[14] Y. Yang, T. Zhang, E. Coumans, J. Tan, and B. Boots, “Fast and                 for legged robots,” Science Robotics, vol. 4, no. 26, p. eaau5872,
+     efficient locomotion via learned gait transitions,” in Proceedings of          2019. [Online]. Available: https://www.science.org/doi/abs/10.1126/
+     the 5th Conference on Robot Learning, ser. Proceedings of Machine              scirobotics.aau5872
+     Learning Research, A. Faust, D. Hsu, and G. Neumann, Eds., vol. 164.      [30] N. Hemati and M. Leu, “A complete model characterization of
+     PMLR, 08–11 Nov 2022, pp. 773–783.                                             brushless dc motors,” IEEE Transactions on Industry Applications,
+[15] A. W. Winkler, C. D. Bellicoso, M. Hutter, and J. Buchli, “Gait and            vol. 28, no. 1, pp. 172–180, 1992.
+     trajectory optimization for legged systems through phase-based end-
+     effector parameterization,” IEEE Robotics and Automation Letters,
+     vol. 3, no. 3, pp. 1560–1567, 2018.
+

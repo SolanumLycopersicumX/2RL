@@ -1,0 +1,665 @@
+                                                                                                                                                                                         1
+
+
+
+
+                                                                        MoRE: Mixture of Residual Experts
+                                                  for Humanoid Lifelike Gaits Learning on Complex Terrains
+                                           Dewei Wang1,2 , Xinmiao Wang2,3 , Xinzhe Liu2,4 , Jiyuan Shi2 , Yingnan Zhao3 , Chenjia Bai2 ∗ , Xuelong Li1,2 ∗ ,
+                                                                         1
+                                                                           University of Science and Technology of China
+                                                                  2
+                                                                    Institute of Artificial Intelligence (TeleAI), China Telecom
+                                                                  3
+                                                                    Harbin Engineering University 4 ShanghaiTech University
+                                                                                       ∗ Corresponding author.
+
+
+                                                                                Website: https://more-humanoid.github.io/
+
+
+
+
+arXiv:2506.08840v2 [cs.RO] 12 Jun 2025
+                                            Abstract—Humanoid robots have demonstrated robust loco-
+                                         motion capabilities using Reinforcement Learning (RL)-based
+                                         approaches. Further, to obtain human-like behaviors, existing
+                                         methods integrate human motion-tracking or motion prior in
+                                         the RL framework. However, these methods are limited in flat
+                                         terrains with proprioception only, restricting their abilities to
+                                         traverse challenging terrains with human-like gaits. In this work,
+                                         we propose a novel framework using a mixture of latent residual
+                                         experts with multi-discriminators to train an RL policy, which
+                                         is capable of traversing complex terrains in controllable lifelike
+                                         gaits with exteroception. Our two-stage training pipeline first
+                                         teaches the policy to traverse complex terrains using a depth
+                                         camera, and then enables gait-commanded switching between
+                                         human-like gait patterns. We also design gait rewards to adjust
+                                         human-like behaviors like robot base height. Simulation and
+                                         real-world experiments demonstrate that our framework exhibits
+                                         exceptional performance in traversing complex terrains, and
+                                         achieves seamless transitions between multiple human-like gait
+                                         patterns.
+                                            Index Terms—Humanoid Locomotion, Reinforcement Learn-
+                                         ing, Robot Learning.
+
+
+                                                               I. I NTRODUCTION
+                                            Legged robots have experienced remarkable progress in re-
+                                         cent years [1], [2]. With the development of hardware and con-
+                                         trol algorithms, humanoid robots have driven more research           Fig. 1. Our framework leverages a two-stage training pipeline and the mixture
+                                         attention due to their anthropomorphic morphology, which             of latent residual experts to enable the humanoid robot to traverse complex
+                                                                                                              terrain with controllable anthropomorphic gaits including walk, run, crouch-
+                                         enables them to perform human-like tasks more effectively.           walking and high-knees.
+                                         Locomotion is one of the primary skills for humanoid robots
+                                         and serves as a foundation for their applications in various
+                                         scenarios. With Reinforcement Learning (RL) algorithms, hu-          kind of approach trains a policy to encourage the robot to track
+                                         manoid robots can perform robust locomotion on challenging           human motions step-by-step in simulation, and then leverages
+                                         terrains only with proprioception [3], [4]. Equipped with            regularization rewards and domain randomization techniques
+                                         exteroceptive sensors such as LiDAR and RGB-D cameras,               to perform sim-to-real transfer effectively, enabling them to
+                                         humanoid robots can perform more complex locomotion tasks            track smooth [9], [10] or agile motions [11]. Another way
+                                         [5]–[7]. However, the robots often lack anthropomorphism and         to obtain human-like behavior is through Adversarial Motion
+                                         diversity in their gait behaviors.                                   Prior (AMP) [12], a method that leverages the overall style of
+                                            Some works for humanoid robots focus on learning human-           motion trajectories to capture natural motion dynamics, rather
+                                         like behaviors by imitating human motions, where motions can         than stepwise motion tracking [13], [14]. AMP-based methods
+                                         be recorded by a Motion-Capture (MoCap) system or sampled            demonstrate human-like behavior by injecting knowledge of
+                                         from a motion dataset (e.g., AMASS [8]). Specifically, this          reference motions into a reward function, which improves the
+                                                                                                                                   2
+
+
+
+naturalness of locomotion gaits and effectively reduces the         both reference motions and auxiliary behavioral constraints,
+complexity of regularization rewards [13], [15], [16].              facilitating precise gait acquisition instead of being limited
+   However, although the motion-tracking policies trained by        by reference motions. Our contributions are summarized as
+imitating the stepwise human behaviors can track complex            follows:
+motions, they often fail to serve as a robust controller for           • Two-Stage Paradigm: We present a two-stage method
+
+humanoid robot to traverse complex terrains. AMP-based                    that employs a single policy to acquire multiple gaits and
+methods can traverse moderately rugged terrain with natural               achieve robust locomotion across complex terrains.
+gaits, while just learning from a single reference motion.             • Residual Experts: We train a mixture of latent residual
+
+Meanwhile, the MoCap data predominantly provides refer-                   experts to learn gait-dependent transition with human
+ence motions only for locomotion on flat terrain, making it               motion priors from multiple discriminators.
+extremely challenging to leverage such data to learn highly dy-        • Gait Rewards: We propose gait-specific rewards for pre-
+
+namic and balance-critical movements across complex terrains.             cise behavior control during policy optimization, thereby
+Moreover, both motion imitation and AMP-based approaches                  enhancing the gait diversity accordingly.
+typically depend solely on proprioception, overlooking the             • Deployment: The learned policy can be deployed in a
+
+utilization of exteroceptive sensors. This limitation prevents            real Unitree G1 robot. The experiments exhibit robust
+robots from detecting real-time terrain variations, limiting              locomotion capabilities with multiple human-like gaits.
+their ability to traverse certain terrains like gaps. Enabling
+humanoid robots to integrate proprioceptive and exteroceptive                            II. R ELATED W ORK
+sensors to master diverse anthropomorphic gaits for complex         A. Learning-based Humanoid Locomotion
+terrains is a promising solution.                                      Humanoid robots with a deep RL controller trained in highly
+   In this work, we present Mixture of latent Residual Ex-          parallel simulations [21] exhibit robust and agile locomotion
+perts (MoRE), aiming to learn multiple human-like gaits that        capabilities, where most of this line of research focuses solely
+can traverse complex terrains in a single network based on          on the use of proprioception for locomotion. Some previous
+both proprioceptive and exteroceptive sensors. Our framework        works [3], [4], [22], [23] utilize proprioceptive information to
+adopts a two-stage training pipeline: (i) in the first stage, the   achieve humanoid robots’ robust locomotion on flat or rela-
+randomly initialized policy focuses on learning locomotion          tively uneven terrains. ALMI [24] proposes a novel adversarial
+capability using an exteroceptive sensor without any motion         training pipeline which iteratively trains both a upper-body
+prior; and (ii) in the second stage, we introduce a novel           policy and a lower-body policy getting a controller capable
+residual module attached to the pretrained policy to learn mul-     of resisting multiple disturbances. Drawing inspiration from
+tiple anthropomorphic gaits, effectively utilizing previously       previous work [25], HugWBC [26] introduces phase variables
+acquired locomotion policy. Specifically, the residual module       into the locomotion policy to achieve more diverse gaits. Since
+processes multimodal inputs, and incorporates a gait command        no exteroceptive sensors are utilized, these methods are unable
+to explicitly control gait selection. This module outputs a         to fully unleash the robot’s potential and traverse complex
+latent feature added to the last hidden layer of the locomotion     terrains.
+policy to provide residual information. The motion priors              To enable humanoid robots to perceive the environment
+are incorporated through the multiple discriminators in the         more directly and comprehensively, some other works inte-
+second stage, where each discriminator is trained on distinct       grate LiDAR or depth camera data into the policy. Humanoid
+reference motions (as real samples) and robot trajectories (as      parkour with depth camera [6] is achieved by a three-stage
+fake samples) to formulate gait rewards. In policy training,        training pipeline including policy distillation and an auto-
+the discriminators are selected based on the gait command to        curriculum mechanism. PIM [5] constructs the elevation map
+acquire gait-dependent rewards.                                     using a LiDAR or RGB-D camera and used contrastive loss for
+   Benefiting from the capabilities acquired in the first stage,    state prediction achieving humanoid locomotion on complex
+the final policy combined with the residual module achieves         terrain such as stairs and slopes. More challenging locomotion
+seamless transitions between human-like gaits and robust            capabilities [7], [27], such as walking on sparse footholds
+traversal of complex terrains. To perform multi-gait learning,      and autonomous obstacle avoidance, can be achieved through
+we propose a Mixture-of-Experts (MoE) [17], [18]-based ar-          techniques like multi-policy integration, reward function engi-
+chitecture for the residual module, which not only accelerates      neering, and multi-stage training.
+learning but also eliminates gradient conflicts [19], [20]. The
+architecture employs a gating network to compute a weighted         B. Anthropomorphic Behavior Learning
+combination of expert outputs, generating the final latent            Learning anthropomorphic behavior for humanoid robots
+residual. Furthermore, we design specialized gait rewards to        has recently garnered significant attention in the research
+achieve finer-grained gait control that can simultaneously learn    community. By training a policy to perform frame-by-frame
+                                                                                                                                                           3
+
+
+
+
+                                                                              Policy
+                                                                                                                                 Simulations
+                           Depth                    Actor
+                                                                              Actor
+                                                    Hidden
+                          Encoder                                             Head
+                                                    Layers
+     current                                                                                   feet positions
+  proprioception                                                                                     ...
+                                                                              MoRE
+                                                                                              elevation map
+     history              History
+                                                        MoE           Weighted
+  proprioception          Encoder
+                                                        Layer          Sum
+                                                                                                   Critic
+
+     Stage 1        gait
+                                                                        Reference                         Multi-
+                  command                                                                                                       PPO update
+                                                                         Motions                      Discriminators
+     Stage 2                                             Gate
+
+
+Fig. 2. Overview of the proposed framework. In the first training stage, we first train a base locomotion policy using only locomotion rewards r l which
+enables the humanoid robot to traverse complex terrains with a depth camera. In the second training stage, we add a mixture of latent residual experts module
+to the pretrained base locomotion policy and train them together using multi-discriminators for anthropomorphic gaits learning.
+
+
+
+tracking of reference motions extracted from videos or Mo-                      tion while dynamically switching between multiple human-
+Cap systems, humanoid robots can imitate complex human                          like gaits. This is due to the need for effective comprehen-
+behaviors, such as backward-leaning, jumping, and shooting                      sion of depth information, robust locomotion across com-
+[11], [28]. OmniH2O [9] performs motion imitation through                       plex terrains, and the learning of diverse anthropomorphic
+the integration of motion re-targeting, feasibility filter, and RL-             gaits. We address these challenges via a two-stage training
+based policy training, while enabling real-time human motion                    pipeline, MoRE, which includes locomotion skill learning and
+imitation on robots via a teleoperation system. ExBody2 [10]                    anthropomorphic gait acquisition, as illustrated in Fig. 2. This
+designes a difficulty level mechanism for reference motion and                  training pipeline successfully empowers the humanoid robot
+used motion synthesis to expand motion data, achieving robust                   to traverse complex terrains with gait command-dependent
+and diverse anthropomorphic behavior in humanoid robots.                        anthropomorphic gaits.
+However, these motion tracking approaches fail to enable the
+humanoid robot to navigate complex terrains.
+   Using of AMP as a reward function in RL learning has been                    A. Problem Formulation
+extensively demonstrated to be an efficient and convenient                         We formulate the humanoid locomotion control as a Par-
+approach for enabling legged robots to learn animal-level                       tially Observable Markov Decision Process (POMDP), defined
+natural gaits [12], [13], [16]. Zhang et al. [15] use reference                 by a tuple M = (S, A, P, R, γ) where S is the state space,
+motions retargeted from human demonstrations as motion                          A is the action space, P(·|s, a) is the transition function,
+priors to guide the policy optimization, achieving robust                       R : S × A → R is the reward function, and γ ∈ [0, 1)
+humanoid locomotion on flat and slope terrains. Combing a                       is the reward discount factor. We adopt the Proximal Policy
+policy guided by AMP with a safety recovery policy [29], the                    Optimization (PPO) [30] for the problem solving with the
+humanoid robot can perform relative natural gait and robust                     objective:
+locomotion. The soft-boundary Wasserstein-1 loss with AMP                                                    XT
+                                                                                            π ∗ = arg max E        γ t R(st , at ) .
+                                                                                                                                  
+proposed by HumanMimic [14] helps the policy learn fluent                                                                                (1)
+                                                                                                            π            t=0
+natural locomotion and transitions in simulations. We also
+                                                                                In the first training stage, the asymmetric actor-critic is applied
+employ AMP for humanoid gait learning. Unlike previous
+                                                                                where the policy takes non-privileged observations onp       t   =
+approaches, our policy simultaneously learns multiple gaits as
+                                                                                (ot , ot−H:t , It−1:t ) as input where ot is the proprioceptive
+well as gait transitions, with multiple discriminators providing
+                                                                                information including a velocity command and It represent
+corresponding motion priors.
+                                                                                depth image from camera mounted on the robot head. For
+                                                                                better value estimation, the critic takes the privileged observa-
+                             III. M ETHOD                                       tions opt = (mt , et ) as input, where mt is the elevation map
+   It is challenging for humanoid robots to traverse complex                    and et includes privileged information such as feet positions in
+terrains with both proprioceptive and exteroceptive informa-                    addition to ot and ot−H:t . In addition to their original inputs,
+                                                                                                                                           4
+
+
+
+the policy and critic receive an additional one-hot encoded gait         as input and outputs a latent residual zt′ added to zto to serve
+command cgt in the second training stage.                                as input of actor head. The feature possesses a higher density
+                                                                         of information. Using such a compact input can decrease the
+B. Base Locomotion Policy                                                complexity of environmental comprehension of the residual
+                                                                         module, thereby reducing the required parameters and enabling
+   In the first stage, the actor-critic network is trained from
+                                                                         the residual module to more efficiently acquire knowledge of
+scratch and focus on learning basic locomotion skills to
+                                                                         the gaits and gait transitions. At the beginning of residual
+traverse various terrains. The policy is trained using only
+                                                                         module training, its output is almost totally random and will
+locomotion rewards r l listed in Table III-D without any motion
+                                                                         bring adverse effects to the performance. A suboptimal latent
+prior and gait commands.
+                                                                         residual induces less detrimental impact than a suboptimal
+   We choose the depth camera as the exteroceptive sensor
+                                                                         action residual since the pre-trained actor head can ensure
+for terrain perception. The proprioception observation ot is
+                                                                         that the output actions remain within a reasonable range.
+defined as:
+                                                                         Meanwhile, by designing both the input and output to reside
+                  ot = [ωt , gt , cvt , θt , θ̇t , at−1 ],   (2)
+                                                                         in the latent space, the residual module can generate more
+which contains the robot angular velocity ωt , the projected             information-rich outputs to the base policy while eliminating
+gravity vector gt , the velocity command cvt including linear ve-        the need to learn the mapping from the latent space to the
+locity command vlin  cmd
+                         and angular velocity command ωyaw  cmd
+                                                                , the    action space.
+last action at−1 , the joint angle and the joint velocity θt and θ̇t .      To guide the policy to learn gait command-dependent an-
+Two consecutive depth images It−1:t and history propriocep-              thropomorphic locomotion, we incorporate the gait command
+tion ot−H:t are encoded by depth encoder and history encoder             cg into the input of residual module. Motivated by [13], [16],
+into depth feature ftd and history feature fth . The two encoded         we use AMP for locomotion style learning from reference
+feature together with the current proprioception observation ot          motions, which designs a discriminator Dϕ to predict whether
+are concatenated into the actor feature ft , which serves as the         a state transition (samp   amp
+                                                                                              t , st+1 ) is sampled from the reference
+input of actor hidden layers. The output of actor hidden layers          motions or generated by the policy. Here, samp  t   ∈ R16 consists
+zto serves as the input of actor head that predicts the action           of the 16 joint angles controlled on the robot. Unlike previous
+at for the robot execution. We divide the actor into two parts           approaches, we replace one state transition with a five-step
+because a latent residual zt′ will be added to zto to obtain             trajectory τ = (samp     amp   amp    amp    amp
+                                                                                            t , st+1 , st+2 , st+3 , st+4 ) for a more pre-
+the combined latent feature zt . Here, zto is equal to zt . The          cise prediction. Since we need the policy to learn more than
+critic uses an elevation map mt and privileged information et            one distinct anthropomorphic gait simultaneously, we design
+including robot feet information, ground truth linear velocity           a multi-discriminator framework, where the objective for the
+and randomized physical parameters in simulations to predict             i-th discriminator is defined as:
+the value Vt for policy update. The depth encoder and history
+                                                                           arg max Eτ ∼Mi [(Dϕi (τ ) − 1)2 ] + Eτ ∼G [(Dϕi (τ ) + 1)2 ]
+encoder adopt the 2D-CNN and 1D-CNN architectures, while                         ϕi
+
+the remaining networks are all composed by MLPs.                                                  αd
+                                                                                                    +Eτ ∼Mi [∥∇ϕi Dϕi (τ )∥2 ],    (3)
+   After this training stage, the policy is capable of traversing                                 2
+stairs, gaps and high platforms, as well as performing robust            where Mi is the reference motion dataset of i-th gait, and
+locomotion in all directions across rough and sloped terrains.           G is the dataset generated by the policy interacting with
+                                                                         simulations. The first two terms in Eq. (3) are least square
+C. Mixture of Latent Residual Experts                                    GAN formulation while the final term is a gradient penalty
+                                                                         mitigating the discriminator’s tendency of assigning non-zero
+   In the second training stage, we integrate MoRE with the
+                                                                         gradients on the manifold of the reference data. The style
+pre-trained base locomotion policy from the previous stage
+                                                                         reward of the i-th discriminator is computed by:
+for anthropomorphic gait learning while keeping the original
+                                                                                              N
+locomotion capabilities. Since learning to traverse complex                                   X
+                                                                                 rts (τ ) =         max[0, 1 − 0.25(Dϕi (τ ) − 1)2 ] ∗
+terrains using natural gaits is quite challenging for humanoid
+                                                                                              i=1
+robots, the two-stage training pipeline reduces training com-
+                                                                                                      I(arg max(cgt ) == i),             (4)
+plexity while conveniently incorporating the gait command cg
+to control the gait of the robot.                                        which represents that the policy receives style reward only
+   Residual policy learning [31], [32] has been proved to be an          from the output of the corresponding discriminator according
+effective way for improving the performance of a base policy.            to the gait command, and N is the number of gaits. Through
+In our framework, instead of taking the full original observa-           the multi-discriminators, the policy can learn multiple gaits as
+tion as base policy and output a residual action, our residual           well as transitions based on the reward associated with the gait
+module takes the actor feature ft and the gait command cg                command.
+                                                                                                                                                   5
+
+
+
+   Although our two-stage training pipeline reduces training                                      TABLE I
+                                                                              R EWARD F UNCTIONS U SED IN B OTH T RAINING S TAGES
+complexity, learning human-like gaits for complex terrain
+traversal remains challenging. Traversing different terrains and
+                                                                      Component                             Equation                   Weight
+performing different gaits are both considered as a multi-
+                                                                                                                        l
+skill learning task, while combining them makes it extremely                                    Locomotion r
+                                                                                                                   cmd
+                                                                                                                ||vlin  −vlin ||22
+hard for a single policy to learn. We thus construct the              Track lin. vel.              exp{−               0.25        }   2.0
+                                                                                                          (ω cmd −ωyaw )2
+residual module as an MoE architecture, aiming to utilize a           Track ang. vel.              exp{− yaw0.25          }            2.0
+gating mechanism to make a single expert learn similar skills,        Joint acc.                           ||θ̈||22                    −5e − 7
+thus eliminating the gradient conflict problem in direct multi-       Joint vel.                           ||θ̇||22                    −1e − 3
+task policy optimization [33], [34]. The final residual module        Action rate                    ||at − at−1 ||22                  −0.03
+includes N experts and a gate network, both constructed by            Action smoothness          ||at − 2at−1 + at−2 ||22              −0.05
+MLP and taking the same input. The output of residual module          Angular vel. (xy)                      ||ωxy ||22                −0.05
+z ′ is obtained by performing a weighted sum of the outputs           Joint power                            |τ ||θ̇|   T
+                                                                                                                                       −2.5e − 5
+from all experts layers, where the weights are determined by          Feet stumble                I(∃i, |Fixy | ≥ 3|Fiz |)             −1.0
+the gate network. It can be defined as:
+                                                                                                    X
+                                                                      Arm deviations                       |θi − θdefault |            −0.5
+                      XN                                                                           arm joints
+                z′ =         zie · softmax(w)[i].             (5)
+                                                                                                            X
+                         i=1                                          Joint pos. limits                                outi            −2.0
+                                                                                                          all joints
+where zie is the output of the i-th expert and w is a weight          Joint vel. limits                RELU (θ̇ − θ̇max )              −1.0
+predicted by the gate network. The MoE architecture can               Torque limits                    RELU (τ − τ          max
+                                                                                                                                  )    −1.0
+effectively handle this multi-skill task by activating different      Feet lateral dist.         |yibase − yjbase | − dmin             0.5
+experts for different skills.                                         Feet slippage
+                                                                                                  X
+                                                                                                        |vifoot | ∗ Icontact           −0.25
+                                                                                                X feet
+D. Gait Rewards                                                       Feet force                   RELU (Fiz − Fmin       force
+                                                                                                                                )      −2.5e − 4
+                                                                                                feet
+   The policy trained by the proposed two-stage training              Collision                              ncollision                −15.0
+pipeline is able to perform anthropomorphic gaits on complex          Stuck                  (||v||2 ≤ 0.1) ∗ (||cv ||2 ≥ 0.2)         −1.0
+terrains, but the locomotion style is strictly constrained by         Cheat                            I(|θheading | > 1.0)            −2.0
+the reference motions. However, if there are shortcomings in          y axis offset                      |yrobot − ystart |            −2.0
+the reference motion or the style is not satisfied with our                                 N
+                                                                                            X             1
+requirement, retraining becomes necessary. To address this                                      max[0, 1 − (Dϕi (τ ) − 1)2 ]
+                                                                      Style r s             i=1
+                                                                                                          4                            5.0
+problem, we introduce gait rewards, which, similar to the style
+                                                                                                 ∗I(arg max(cgt ) == i)
+reward, is specifically designed for different gaits based on
+the gait command. The gait rewards incorporate constraints                                             Gait r g
+                                                                                                          |htarget         robot
+                                                                                                             knee − max(hknees )|
+on the base height during the crouch-walking, restrictions on         Knee height              exp{−               0.25           }    2.0
+                                                                                                          target     robot 2
+leg lift height in the high-knees gait and so on. Through such        Squat height                     ||hsquat − h       ||2          2.0
+hand-crafted gait command-dependent rewards, the policy can
+learn more diverse and desirable natural behaviors rather than
+strictly replicating the reference motion.                             2) Terrain Curriculum: Terrains used for training in simu-
+                                                                    lations include stairs, gaps, steps and roughness terrains. Since
+                        IV. T RAINING                               directly learning locomotion on complex terrains is difficult,
+   1) Training Details: The whole training process is per-          we adopt an auto-curriculum mechanism that progressively
+formed in the NVIDIA Isaac Gym simulation and uses one              increases terrain difficulty based on policy performance, fol-
+NVIDIA RTX 4090 in the first training stage for around 10000        lowing the previous work [36]. The terrain curriculum is
+iterations and four NVIDIA RTX 4090s in the second training         applied in both stages of training. In the curriculum terrains,
+stage for around 20000 iterations. To accelerate the training       the gap width ranges from 0.05m to 0.45m, the step height
+process, we use NVIDIA Warp for depth image rendering               range from 0.05m to 0.3m and the stair height ranges from
+instead of the original cameras in Isaac Gym. The policy            0.05m to 0.15m. The policy will be moved to harder terrains
+predicts 16-dimensional action at ∈ R16 which controls              if it performs well, and to easier terrains if it performs poorly.
+shoulder pitch joints, elbow pitch joints and all leg joints,          3) Domain Randomization & Rewards: For robust locomo-
+since the anthropomorphic gaits that the policy to learn is         tion and better sim-to-real transfer performance, we random-
+independent of other joints. We use LAFAN1 dataset [35]             ize physics parameters in simulations including the friction
+retargeted to Unitree G1 robot as real samples for training         coefficient, the restitution coefficient, the mass payload, the
+the discriminators.                                                 center of mass of the robot, the initial joint positions, the
+                                                                                                                                      6
+
+
+
+                           TABLE II                                                   V. R ESULTS AND D ISCUSSION
+  D OMAIN R ANDOMIZATION R ANGE OF DYNAMIC PARAMETERS AND
+               D EPTH C AMERA D URING T RAINING                           In this section, we systematically investigate the perfor-
+                                                                       mance of the proposed framework across complex terrains,
+  Term                           Randomization Range         Unit
+                                                                       the knowledge acquired by individual experts in the MoRE
+  Friction Coefficient           [0.5, 2.0]                  −
+                                                                       module and the rationale behind applying residuals to the
+  Mass Payload                   [-3.0, 3.0]                 Kg
+  Center of Mass Shift           [-3.0, 3.0]                 cm
+                                                                       latent space. Meanwhile, our policy can be directly deployed
+  Motor Strength Factor          [0.8, 1.2]×motor toeque     Nm        on the real-world robot and perform strong robustness.
+  Motor Strength Noise           [-0.1, 0.1]                 Nm           We use the Unitree G1 humanoid robot which is equipped
+  Kp Gains                       [0.8, 1.2]×standard value   Nm/rad    with an Intel RealSense D435i for training and real-world
+  Kd Gains                       [0.8, 1.2]×standard value   Nms/rad   deployment. In the real-world experiments, we employ TCP
+  Initial Joint Positions        [0.5, 1.5]×nominal value    rad       multiprocess communication to achieve robot control and im-
+  Ground Restitution             [0, 1.0]                    −         age acquisition. The raw 640 × 480 resolution images captured
+  Actions Delay                  [0, 40]                     ms        from the depth camera are processed by built-in filters in the
+  Mass of Each Link              [0.8, 1.2]×nominal value    Kg        Intel RealSense API to bridge the gap between simulations
+  Depth Gaussian Noise           [0, 5]                      cm
+                                                                       and real-world environments and subsequently downsampled
+  Depth Gaussian Filter Kernel   [1, 3, 5]                   −
+                                                                       to 64×64 resolution as policy inputs. The camera operates at
+  Depth Gaussian Filter Sigma    [1.2, 1.2]                  −
+                                                                       10 Hz, while the policy runs at 50 Hz. The policy outputs
+  Depth Deviation Noise          [0, 15]                     cm
+  Depth Delay                    [0, 8]                      ms
+                                                                       target joint positions, which are then converted into torques
+  Camera Position                [-1, 1]                     cm        via a PD controller to actuate the motors.
+  Camera Pitch                   [42, 48]                    deg
+  Camera Horizontal FOV          [77, 81]                    deg       A. Simulation Experiments
+                                                                          1) Locomotion Performance: We evaluate our proposed
+                                                                       MoRE against following baseline methods: (1) Blind Loco-
+                                                                       motion: trained under the same settings as the first-stage base
+motor strength, the PD gains, the action delay and the mass of
+                                                                       policy, but without visual inputs. (2) Base Locomotion: The
+each link. For the ability of resisting external disturbances, we
+                                                                       locomotion policy obtained from the first training stage, which
+applied external forces to the robot at 8s intervals. To bridge
+                                                                       lacks lifelike gait adaptation capabilities. In this comparative
+the depth camera gap between the simulation and real world,
+                                                                       study, MoRE is implemented with the number of experts set
+we add domain randomization and noise to the camera in
+                                                                       to 3, which is selected based on best practices observed in our
+simulations. We add gaussian noise, depth deviation noise and
+                                                                       experiments.
+adapt gaussian filter to the depth image and also randomize the
+                                                                          To evaluate the locomotion capabilities of policies under
+camera position and rotation. Details of domain randomization
+                                                                       different terrain conditions, we design a standardized bench-
+parameters and their range are listed in Table IV-3. Noticing
+                                                                       mark terrain of size 8m×14m. Each track contains one type of
+that the peripheral regions in images captured by the head-
+                                                                       obstacle chosen from three categories: gaps, stairs, and steps.
+mounted camera provide no benefit for locomotion tasks, we
+                                                                       For each obstacle type, we define two difficulty levels–Easy
+crop the central region of the image as the policy input. The
+                                                                       and Hard. For gap, the spacing ranges from 0.25-0.4m in Easy
+NVIDIA Warp camera can not render occlusions caused by
+                                                                       mode and 0.4-0.6m in Hard mode. For step and stair, the
+the robot body and humanoid robots cannot avoid occlusions
+                                                                       obstacle height varies from 0.15-0.25m (step) and 0.05-0.15m
+of their own bodies on cameras in the real world. To solve
+                                                                       (stair) in Easy mode, and increases to 0.25-0.35m (step) and
+this issue, we collect some robot body occlusions rendered by
+                                                                       0.15-0.25m(stair) in Hard mode.
+Isaac Gym’s camera when the second training stage has nearly
+                                                                          We assess locomotion performance through three quanti-
+converged and randomly apply occlusions to the images from
+                                                                       tative measures: (1) Success Rate (Succ.): The percentage
+NVIDIA Warp camera in the subsequent training allowing the
+                                                                       of trails in which the robot successfully reaches the 14m
+policy to adapt to real-world cameras.
+                                                                       goal within 40s without triggering termination; (2)Traversing
+   Our reward functions can be decomposed into three com-              Distance (Dist.): The average distance the robot travels before
+ponents: locomotion rewards r l , style rewards r s and gait           termination, computed across all trials including both success-
+rewards r g . In the first training stage, only r l is utilized,       ful and failed attempts.
+whereas the second stage incorporated all reward components.              The results in Table III clearly demonstrate the advantages
+It should be noted that r s and r g are specifically designed to       of our proposed MoRE framework over baseline methods
+be provided only when their corresponding gait commands are            across a range of terrains. Besides, the results underscore the
+sampled. Table III-D lists the details of reward functions and         critical role of visual perception in terrain-aware locomotion,
+their weights.                                                         as the blind policy exhibits significantly poorer performance
+                                                                                                                                                             7
+
+
+
+                                                                    TABLE III
+              L OCOMOTION PERFORMANCE COMPARISON ON MULTIPLE TERRAINS , EVALUATED BY SUCCESS RATE (S UCC .) AND TRAVERSE DISTANCE (D IST.).
+
+                                                    Gap (Easy)           Gap (Hard)       Stair (Easy)     Stair (Hard)     Step (Easy)      Step (Hard)
+                        Method
+                                                 Succ.      Dist.      Succ.   Dist.     Succ.   Dist.    Succ.   Dist.    Succ.   Dist.    Succ.   Dist.
+                    Blind Locomotion             0.585       8.021     0.517   7.046     0.697    9.635   0.218   2.751    0.609    8.377   0.289   3.763
+                    Base Locomotion              0.943      13.186     0.893   12.465    0.853   11.893   0.660   9.104    0.945   13.214   0.663   9.154
+                        Walk-Run Gait            0.999      13.993     0.933   13.041    0.997   13.964   0.682   9.420    1.000   14.000   0.777   10.796
+               MoRE     High-Knees Gait          0.995      13.935     0.904   12.624    0.971   13.592   0.903   12.606   0.989   13.849   0.947   13.247
+                        Squat Gait               0.998      13.979     0.912   12.746    0.999   13.992   0.816   11.357   1.000   14.000   0.809   11.252
+
+
+
+
+                                                                               MoRE        gaits: walk&run, high-knees and squat gait. When using two
+                                                                               MoRE4       experts, the high-knees and squat gaits are each associated
+              100
+                                                                               MoRE2
+                                                                               MoRE-A      with a dedicated expert, while walk&run behavior emerges
+                                                                               MoRE-OS
+
+
+
+Mean Reward
+              80                                                                           as a linear combination of the two. With three experts, each
+                                                                                           expert captures a distinct gait pattern. This leads to improved
+              60                                                                           modularity and more efficient gait composition, resulting in the
+                                                                                           highest training performance. While, using four experts leads
+              40                                                                           to a decrease in performance. We observe that the high-knees
+                                                                                           gait is represented by two separate experts, with different
+              20                                                                           expert weightings between the left and right legs. This suggests
+                    0    2500    5000     7500      10000   12500    15000
+                                        Iteration                                          that the model overfits to minor differences in the reference
+                                                                                           motion between legs, thereby reducing generalization.
+Fig. 3. The training reward curves under different ablation settings of MoRE.
+                                                                                              Residual Fusion Dimension: We compare MoRE with a
+                                                                                           variant that applies residual integration directly in the action
+across all terrain types compared to those with visual input.                              space (denoted as MoRE-A in Figure 3). In this variant, the
+Moreover, incorporating human motion priors substantially                                  residual network predicts delta actions that are added directly
+enhances generalization to unseen and complex terrains (i.e.,                              to the output of the base policy which is consistent with
+Hard mode). A further key strength of MoRE lies in its ability                             common residual policy approaches [11], [32]. Empirically,
+to learn and leverage a diverse set of gait strategies, each                               this approach results in unstable training and fails to converge,
+tailored to specific terrain challenges. For example, the High-                            indicating that latent-space fusion provides better gradient flow
+Knees gait is particularly effective on terrains with tall steps or                        and more structured modulation of motion features.
+stair-like structures due to its enhanced leg-lifting capability.                             Policy Initialization Strategy: Instead of initializing from
+The Walk-Run gait is well-suited for traversing wide gaps,                                 a pretrained base locomotion policy, we attempt to directly
+as its increased forward momentum and stride length enable                                 train the residual policy from scratch (one-stage training).
+the robot to bridge discontinuities more effectively. By equip-                            This setting leads to complete training failure, as evidenced
+ping the policy with multiple specialized motion strategies,                               by the training curve labeled MoRE-OS in Figure 3. These
+MoRE significantly enhances adaptability, robustness, and                                  results confirm that a strong base policy provides essential
+performance across a wide range of environments.                                           locomotion priors, allowing the residual module to focus on
+   2) Policy Component Ablations: To better understand the                                 motion specialization and composition. This also highlights
+contribution of each component in our proposed mixture of                                  the importance of the two stage training scheme.
+latent residual experts framework, we conduct several ablation                                3) Residual Latent Analysis: To further interpret the latent
+experiments. Specifically, we evaluate the impact of the num-                              representation learned by each expert, we extract the residual
+ber of experts, the choice of residual fusion dimension, and                               latent outputs from policies trained with three experts and
+the initialization strategy. The effectiveness of each variant is                          apply t-SNE to project them into a 2D space. As shown in
+assessed based on the training mean episode reward curves.                                 Figure 4, samples associated with the same gait form tight
+All experiments are performed under consistent settings, and                               clusters, even when collected across varying terrains. This
+the comparative results are illustrated in Figure 3.                                       clustering behavior indicates that the residual latent space is
+   Expert Number: We perform ablation experiments with                                     semantically structured, capturing high-level motion charac-
+expert numbers set to 2, 3 and 4, which correspond to                                      teristics rather than overfitting to terrain-specific variations.
+MoRE2, MoRE, and MoRE4 in the legend of Figure 3,                                          Furthermore, when a single expert is tasked with handling
+respectively. During training, we use tree types of reference                              both walk and run reference motions, the resulting latent
+                                                                                                                                                            8
+
+
+
+ 60
+                                                               Gap (Walk)          distinct terrain types, including a Gap terrain with a 0.4m-
+                                                               Gap (Run)
+                                                               Gap (High-Knee)
+                                                                                   wide trench, a Step terrain with a 0.3m elevation, and a Stair
+ 40
+                                                               Gap (Squat)         terrain composed of three 0.15m-high steps. We deploy walk-
+                                                               Pit (Walk)
+                                                               Pit (Run)           run, high-knees, and squat gaits on each of these terrains.
+ 20                                                            Pit (High-Knee)
+                                                               Pit (Squat)
+                                                                                   In addition, we construct a composite terrain that combines
+                                                               Rough (Walk)        the aforementioned obstacles to further evaluate the policy’s
+  0                                                            Rough (Run)
+                                                               Rough (High-Knee)   performance in complex environments. The robot success-
+                                                               Rough (Squat)
+                                                               Stair (Walk)
+                                                                                   fully traverses all terrain combinations, even under intentional
+−20
+                                                               Stair (Run)         disturbances (e.g., external pushes), while maintaining stable
+                                                               Stair (High-Knee)
+                                                               Stair (Squat)       posture and accurate foot placement. Furthermore, the pro-
+−40
+                                                                                   posed policy enables smooth and seamless transitions between
+                                                                                   different gait patterns during traversing terrains.
+         −40       −20       0        20        40
+                                                                                      As shown in Figure 5, the robot demonstrates robust and
+Fig. 4. The t-SNE visualization of residual latent space across different gaits    stable behavior across multiple challenging terrain scenarios.
+and terrains.
+                                                                                   Notably, the integration of visual sensing enables the policy to
+                                                                                   anticipate upcoming terrain changes and generate appropriate
+vectors form two distinct clusters. This suggests that a single                    responses proactively. This contrasts with prior approaches
+expert is capable of encoding multiple similar motion modes                        that rely solely on proprioception, which typically respond
+via separable latent features. In addition, we observe that                        reactively to terrain-induced disturbances (e.g., after a collision
+even when executing the walk gait, the residual latent outputs                     or misstep).
+may cluster in the region associated with the run gait during
+transitions over challenging terrain, such as stair climbing or
+gap crossing. This suggests that the latent space is not merely
+reflecting the reference gait labels, but is instead dynamically
+modulated based on locomotion demands.
+   4) Gait Reward Modulation: To evaluate the effectiveness
+of gait reward in modulating motion characteristics, we con-
+duct a series of experiments with different gait-specific targets.
+We set target values for attributes such as squat height and
+knee lift height in squat, high-knees gait. As shown in Table
+IV, we present the mean achieved values alongside their
+corresponding target values and the original reference motion
+values for each gait type. The results demonstrate that the gait
+reward enables tune specific motion features in a interpretable
+manner.                                                                            Fig. 5. Real-world deployment of MoRE on the Unitree G1 humanoid robot.
+                                                                                   The upper row shows indoor deployment results, where the robot successfully
+                             TABLE IV                                              traverses composite terrains.
+      Q UANTITATIVE E VALUATION OF G AIT R EWARD M ODULATION
+
+  Attribute Type                 Reference      Target        Achieved
+                                                0.600      0.669 ± 0.007                                     VI. C ONCLUSION
+  Squat Height (m)                 0.680
+                                                0.550      0.642 ± 0.015
+                                                0.580      0.612 ± 0.004              In this work, we proposed a novel framework that integrates
+  Knee Lift Height (m)             0.922
+                                                0.480      0.474 ± 0.023           visual perception and latent residual experts to enable robust
+                                                                                   and versatile humanoid locomotion over complex terrains. By
+                                                                                   leveraging MoRE, our method learns a diverse set of human-
+                                                                                   like gaits, allowing the robot to reproduce lifelike behaviors.
+B. Real-World Experiments
+                                                                                   Through extensive simulation and real-world experiments,
+   We deploy the trained MoRE policies onto a Unitree G1                           MoRE demonstrates superior robustness and generalization
+humanoid robot and conduct real-world experiments without                          across a variety of challenging terrains, consistently outper-
+any additional fine-tuning, directly transferring the policies                     forming baseline policies. In future work, we aim to extend
+from simulation to the robot. To evaluate the generalization                       our framework to learn more challenging and lifelike gaits and
+and robustness of the proposed method, we test it on several                       achieving smoother gait transitions.
+                                                                                                                                                              9
+
+
+
+                              R EFERENCES                                         [21] V. Makoviychuk, L. Wawrzyniak, Y. Guo, M. Lu, K. Storey, M. Macklin,
+                                                                                       D. Hoeller, N. Rudin, A. Allshire, A. Handa et al., “Isaac gym: High
+ [1] J. Lee, J. Hwangbo, L. Wellhausen, V. Koltun, and M. Hutter, “Learning            performance gpu-based physics simulation for robot learning,” arXiv
+     quadrupedal locomotion over challenging terrain,” Science robotics,               preprint arXiv:2108.10470, 2021.
+     vol. 5, no. 47, p. eabc5986, 2020.                                           [22] I. Radosavovic, T. Xiao, B. Zhang, T. Darrell, J. Malik, and K. Sreenath,
+ [2] S. Luo, S. Li, R. Yu, Z. Wang, J. Wu, and Q. Zhu, “Pie: Parkour with              “Real-world humanoid locomotion with reinforcement learning,” Sci-
+     implicit-explicit learning framework for legged robots,” IEEE Robotics            ence Robotics, vol. 9, no. 89, p. eadi9579, 2024.
+     and Automation Letters, 2024.                                                [23] X. Gu, Y.-J. Wang, X. Zhu, C. Shi, Y. Guo, Y. Liu, and J. Chen,
+ [3] W. Sun, L. Chen, Y. Su, B. Cao, Y. Liu, and Z. Xie, “Learning                     “Advancing humanoid locomotion: Mastering challenging terrains with
+     humanoid locomotion with world model reconstruction,” arXiv preprint              denoising world model learning,” arXiv preprint arXiv:2408.14472,
+     arXiv:2502.16230, 2025.                                                           2024.
+ [4] W. Cui, S. Li, H. Huang, B. Qin, T. Zhang, L. Zheng, Z. Tang, C. Hu,         [24] J. Shi, X. Liu, D. Wang, O. Lu, S. Schwertfeger, F. Sun, C. Bai,
+     N. Yan, J. Chen et al., “Adapting humanoid locomotion over challenging            and X. Li, “Adversarial locomotion and motion imitation for humanoid
+     terrain via two-phase training,” in 8th Annual Conference on Robot                policy learning,” arXiv preprint arXiv:2504.14305, 2025.
+     Learning, 2024.                                                              [25] G. B. Margolis and P. Agrawal, “Walk these ways: Tuning robot control
+ [5] J. Long, J. Ren, M. Shi, Z. Wang, T. Huang, P. Luo, and J. Pang,                  for generalization with multiplicity of behavior,” in Conference on Robot
+     “Learning humanoid locomotion with perceptive internal model,” arXiv              Learning. PMLR, 2023, pp. 22–31.
+     preprint arXiv:2411.14386, 2024.                                             [26] Y. Xue, W. Dong, M. Liu, W. Zhang, and J. Pang, “A unified and
+ [6] Z. Zhuang, S. Yao, and H. Zhao, “Humanoid parkour learning,” arXiv                general humanoid whole-body controller for fine-grained locomotion,”
+     preprint arXiv:2406.10759, 2024.                                                  arXiv preprint arXiv:2502.03206, 2025.
+ [7] H. Wang, Z. Wang, J. Ren, Q. Ben, T. Huang, W. Zhang, and J. Pang,           [27] J. Ren, T. Huang, H. Wang, Z. Wang, Q. Ben, J. Pang, and P. Luo, “Vb-
+     “Beamdojo: Learning agile humanoid locomotion on sparse footholds,”               com: Learning vision-blind composite humanoid locomotion against
+     in Robotics: Science and Systems (RSS), 2025.                                     deficient perception,” arXiv preprint arXiv:2502.14814, 2025.
+ [8] N. Mahmood, N. Ghorbani, N. F. Troje, G. Pons-Moll, and M. J. Black,         [28] X. B. Peng, P. Abbeel, S. Levine, and M. Van de Panne, “Deepmimic:
+     “Amass: Archive of motion capture as surface shapes,” in Proceedings              Example-guided deep reinforcement learning of physics-based character
+     of the IEEE/CVF international conference on computer vision, 2019,                skills,” ACM Transactions On Graphics (TOG), vol. 37, no. 4, pp. 1–14,
+     pp. 5442–5451.                                                                    2018.
+ [9] T. He, Z. Luo, X. He, W. Xiao, C. Zhang, W. Zhang, K. Kitani,                [29] S. Lin, G. Qiao, Y. Tai, A. Li, K. Jia, and G. Liu, “Hwc-loco: A hier-
+     C. Liu, and G. Shi, “Omnih2o: Universal and dexterous human-                      archical whole-body control approach to robust humanoid locomotion,”
+     to-humanoid whole-body teleoperation and learning,” arXiv preprint                arXiv preprint arXiv:2503.00923, 2025.
+     arXiv:2406.08858, 2024.                                                      [30] J. Schulman, F. Wolski, P. Dhariwal, A. Radford, and O. Klimov, “Prox-
+[10] M. Ji, X. Peng, F. Liu, J. Li, G. Yang, X. Cheng, and X. Wang,                    imal policy optimization algorithms,” arXiv preprint arXiv:1707.06347,
+     “Exbody2: Advanced expressive humanoid whole-body control,” arXiv                 2017.
+     preprint arXiv:2412.13196, 2024.                                             [31] T. Silver, K. Allen, J. Tenenbaum, and L. Kaelbling, “Residual policy
+[11] T. He, J. Gao, W. Xiao, Y. Zhang, Z. Wang, J. Wang, Z. Luo, G. He,                learning,” arXiv preprint arXiv:1812.06298, 2018.
+     N. Sobanbab, C. Pan et al., “Asap: Aligning simulation and real-world        [32] A. Zeng, S. Song, J. Lee, A. Rodriguez, and T. Funkhouser, “Tossing-
+     physics for learning agile humanoid whole-body skills,” arXiv preprint            bot: Learning to throw arbitrary objects with residual physics,” IEEE
+     arXiv:2502.01143, 2025.                                                           Transactions on Robotics, vol. 36, no. 4, pp. 1307–1319, 2020.
+[12] X. B. Peng, Z. Ma, P. Abbeel, S. Levine, and A. Kanazawa, “Amp:              [33] T. Yu, S. Kumar, A. Gupta, S. Levine, K. Hausman, and C. Finn, “Gra-
+     Adversarial motion priors for stylized physics-based character control,”          dient surgery for multi-task learning,” Advances in neural information
+     ACM Transactions on Graphics (ToG), vol. 40, no. 4, pp. 1–20, 2021.               processing systems, vol. 33, pp. 5824–5836, 2020.
+[13] A. Escontrela, X. B. Peng, W. Yu, T. Zhang, A. Iscen, K. Goldberg,           [34] B. Liu, X. Liu, X. Jin, P. Stone, and Q. Liu, “Conflict-averse gradi-
+     and P. Abbeel, “Adversarial motion priors make good substitutes for               ent descent for multi-task learning,” Advances in Neural Information
+     complex reward functions,” in 2022 IEEE/RSJ International Conference              Processing Systems, vol. 34, pp. 18 878–18 890, 2021.
+     on Intelligent Robots and Systems (IROS). IEEE, 2022, pp. 25–32.             [35] F. G. Harvey, M. Yurick, D. Nowrouzezahrai, and C. Pal, “Robust motion
+[14] A. Tang, T. Hiraoka, N. Hiraoka, F. Shi, K. Kawaharazuka, K. Kojima,              in-betweening,” vol. 39, no. 4, 2020.
+     K. Okada, and M. Inaba, “Humanmimic: Learning natural locomotion             [36] N. Rudin, D. Hoeller, P. Reist, and M. Hutter, “Learning to walk
+     and transitions for humanoid robot via wasserstein adversarial imitation,”        in minutes using massively parallel deep reinforcement learning,” in
+     in 2024 IEEE International Conference on Robotics and Automation                  Conference on Robot Learning. PMLR, 2022, pp. 91–100.
+     (ICRA). IEEE, 2024, pp. 13 107–13 114.
+[15] Q. Zhang, P. Cui, D. Yan, J. Sun, Y. Duan, G. Han, W. Zhao, W. Zhang,
+     Y. Guo, A. Zhang et al., “Whole-body humanoid robot locomotion
+     with human reference,” in 2024 IEEE/RSJ International Conference on
+     Intelligent Robots and Systems (IROS). IEEE, 2024, pp. 11 225–11 231.
+[16] J. Wu, G. Xin, C. Qi, and Y. Xue, “Learning robust and agile legged
+     locomotion using adversarial motion priors,” IEEE Robotics and Au-
+     tomation Letters, vol. 8, no. 8, pp. 4975–4982, 2023.
+[17] R. A. Jacobs, M. I. Jordan, S. J. Nowlan, and G. E. Hinton, “Adaptive
+     mixtures of local experts,” Neural computation, vol. 3, no. 1, pp. 79–87,
+     1991.
+[18] Z. Chen, Y. Deng, Y. Wu, Q. Gu, and Y. Li, “Towards understanding
+     the mixture-of-experts layer in deep learning,” Advances in neural
+     information processing systems, vol. 35, pp. 23 049–23 062, 2022.
+[19] S. Zhou, W. Zhang, J. Jiang, W. Zhong, J. Gu, and W. Zhu, “On
+     the convergence of stochastic multi-objective gradient manipulation and
+     beyond,” Advances in Neural Information Processing Systems, vol. 35,
+     pp. 38 103–38 115, 2022.
+[20] S. Sodhani, A. Zhang, and J. Pineau, “Multi-task reinforcement learning
+     with context-based representations,” in International Conference on
+     Machine Learning. PMLR, 2021, pp. 9767–9779.
+

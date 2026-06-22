@@ -1,0 +1,652 @@
+                                                                Learning Agile Locomotion on Risky Terrains
+                                                                      Chong Zhang1 , Nikita Rudin1 , David Hoeller1 , Marco Hutter1
+
+
+                                           Abstract— Quadruped robots have shown remarkable mo-
+                                        bility on various terrains through reinforcement learning. Yet,
+                                        in the presence of sparse footholds and risky terrains such
+                                        as stepping stones and balance beams, which require precise
+                                        foot placement to avoid falls, model-based approaches are often
+                                        used. In this paper, we show that end-to-end reinforcement
+                                        learning can also enable the robot to traverse risky terrains with
+
+
+
+
+arXiv:2311.10484v2 [cs.RO] 8 Aug 2024
+                                        dynamic motions. To this end, our approach involves training a
+                                        generalist policy for agile locomotion on disorderly and sparse
+                                        stepping stones before transferring its reusable knowledge
+                                        to various more challenging terrains by finetuning specialist
+                                        policies from it. Given that the robot needs to rapidly adapt its
+                                        velocity on these terrains, we formulate the task as a navigation
+                                        task instead of the commonly used velocity tracking which
+                                        constrains the robot’s behavior and propose an exploration
+                                        strategy to overcome sparse rewards and achieve high robust-
+                                        ness. We validate our proposed method through simulation and
+                                        real-world experiments on an ANYmal-D robot achieving peak           Fig. 1. The ANYmal-D robot executing the learned RL policies on stepping
+                                        forward velocity of ≥ 2.5 m/s on sparse stepping stones and          stones, balance beams with gaps, and stepping beams. Left top: the stepping
+                                                                                                             stones were 20 cm wide taking up only ∼ 10% of the whole area, and the
+                                        narrow balance beams. Video: youtu.be/Z5X0J8OH6z4                    height difference between high and low stones was 12 cm. The robot reached
+                                                                                                             the peak forward velocity of 2.7 m/s when traversing the stones from left
+                                                            I. INTRODUCTION                                  to right. Right top: the terrain consisted of two beams of 100 cm × 20 cm
+                                                                                                             and three gaps. The peak forward velocity of the robot was 2.5 m/s from
+                                           Quadrupedal robots require perceptive locomotion abilities        right to left. Bottom: The widths of stepping beams varied in [12 cm, 17
+                                                                                                             cm], the horizontal distances between two beams varied in [30 cm, 60 cm],
+                                        on rough and complex terrains, including risky terrains with         and the vertical distances varied in [0 cm, 20 cm]. For practical reasons, we
+                                        sparse footholds such as stepping stones and balance beams.          only tested the policy in simulation, and the peak forward velocity of the
+                                        Existing works typically employ model-based controllers              robot reached 1.5 m/s from left to right.
+                                        [1]–[6] which perform well in simulation or under laboratory         decoupled planning and control can inherently limit the range
+                                        conditions. However, they are empirically difficult to deploy        of behaviors that can be expressed [15].
+                                        in the wild due to model mismatch and unexpected slippage
+                                                                                                                Some existing works combine RL and model-based con-
+                                        [7], [8], and typically require dedicated design (e.g. motion
+                                                                                                             trollers. For example, [16] uses RL to generate desired
+                                        references [9] and handcrafted heuristics such as terrain
+                                                                                                             foot positions which are then tracked by a whole-body
+                                        roughness and pose safety [3]) to achieve specified motions.
+                                                                                                             motion controller, as well as corrective joint torques to
+                                        Furthermore, the dynamics model needs to be simplified
+                                                                                                             achieve domain adaptative tracking. Another work uses RL
+                                        especially for the limbs [2], [4], and replanning is often slow
+                                                                                                             to generate the desired acceleration of the base and tracks it
+                                        due to the heavy computational burden [3], [5].
+                                                                                                             with model-based controllers [17]. All of these approaches,
+                                           On the other hand, model-free reinforcement learning              however, demonstrate limited agility with velocity ≤ 0.5m/s.
+                                        (RL)-based methods demonstrate excellent robustness in the           Another recent work [18] opens a new venue by tracking
+                                        wild via domain randomization and massive training data              trajectories from a model-based planner with an RL policy
+                                        [10], [11]. However, no existing works have used end-to-end          and demonstrates remarkable performance, but the motions
+                                        RL to handle the sparse footholds on highly risky terrains,          are constrained by the planner and cannot recover from
+                                        where precise motions are necessary to avoid failures, and           failures.
+                                        exploration is difficult due to the numerous ways to fail.
+                                                                                                                In this paper, we explore how dynamic locomotion of a
+                                        First attempts to solve such locomotion challenges using
+                                                                                                             quadrupedal robot can be achieved on highly risky terrains
+                                        end-to-end learning show promising results, but still have
+                                                                                                             through end-to-end RL. We first train a generalist policy to
+                                        limited terrain complexity [12] or need to exactly know
+                                                                                                             learn reusable sensorimotor skills on sparse and disorderly
+                                        which stones to step on [13]. Another work trains decoupled
+                                                                                                             stepping stones. Then, we finetune multiple specialist poli-
+                                        policies for foothold planning and execution [14], but it
+                                                                                                             cies from the generalist policy on various more challeng-
+                                        cannot achieve dynamic locomotion on risky terrains, and
+                                                                                                             ing terrains, and successfully transfer two of the specialist
+                                          1 Authors are with the Robotic Systems Lab, ETH Zurich, 8092
+                                                                                                             policies to real-world stepping stones and narrow beams.
+                                        Zurich, Switzerland. Emails: {chozhang, rudinn, dhoeller,            We achieve highly agile motions with peak forward velocity
+                                        mahutter}@ethz.ch                                                    ≥ 2.5 m/s, as shown in Fig. 1.
+                                            Policy Inputs                         Policy Outputs                                    Navigation Formulation
+           Observation 𝑜𝑡
+                                                            Policy 𝜋(𝑎|𝑠 = 𝑜𝑡 )                    Motor Position Commands 𝑞𝑐𝑑𝑒𝑠
+       Base Linear Velocity 𝑣𝑡
+                                                                                                                   Interaction
+      Base Angular Velocity 𝜔𝑡                 50 Hz
+                                                                       PPO Optimization                    Environment               Exploration Strategy
+         Projected Gravity 𝑔𝑡
+        Position Command 𝑝𝑡𝑐
+       Heading Command 𝜓𝑡𝑐
+                                                 States
+        Time Left to Target 𝑇𝑡                                                                                                      Double-Stage Training
+ Joint Positions and Velocities 𝑞𝑡 , 𝑞ሶ 𝑡
+          Past Actions 𝑎𝑡−1
+                                                                                                                                   Learning Agile Locomotion
+         Heightmap Scan ℎ𝑡
+                                                                                                                                    Skills on Risky Terrains
+
+
+           Fig. 2.     An overview of our methodology. The learning system is illustrated on the left. Different components are listed on the right.
+
+   Traditional learning methods based on the commonly used                                       tation;
+velocity tracking formulation (e.g., the one used in [19] and                                 3) The methodology of training a generalist policy and
+[12]) can not achieve these challenging tasks. It is intractable                                 finetuning specialist policies under hard exploration;
+to assign appropriate velocity commands to the robots on                                      4) Successful sim-to-real transfer of the learned agile mo-
+risky terrains especially when they need to rapidly adapt their                                  tions on challenging stepping stones and balance beams.
+velocities, and the feasible solutions are quite rare and hard
+to explore compared to nonrisky terrains. Hence, the key                                                           II. M ETHODOLOGY
+idea in this paper is to formulate the task as a navigation                                   All of the implementations in this paper are based on the
+problem as in [20], though the risky environments and the                                   PPO algorithm [24] with massively parallel simulation [19]
+sparse rewards make the exploration even harder.                                            enabled by the GPU-based simulator Isaac Gym [25]. An
+   To overcome the hard exploration in the navigation formu-                                overview is presented in Fig. 2.
+lation, we improve the curriculum learning design in [20],
+                                                                                            A. Formulating Locomotion as Navigation
+and incorporate curiosity-driven intrinsic rewards [21]. We
+also employ a symmetry-based data augmentation from [22],                                      In this paper, we formulate the problem as a navigation
+utilizing the left-right and front-back symmetry of our robot                               task: the robot should get close to an assigned target on the
+to improve the data efficiency. These improvements result                                   terrain to get high task rewards. The navigation formulation
+in an exploration strategy that can learn a robust generalist                               has shown great potential when velocity commands cannot
+policy.                                                                                     be easily assigned, e.g., when the robot walks in a maze
+   Still, we find such an exploration strategy above is not                                 [26] or needs to first recover from a fall and then walk [27].
+enough to learn specialist policies from scratch on the                                     In [20], advanced locomotion skills like jumping over large
+terrains in Fig. 1. Besides, we want the learned sensorimotor                               gaps and climbing high boxes are learned with the navigation
+skills to be reusable for new terrains. To this end, we divide                              formulation, where velocity-based tracking fails to achieve
+the training procedure into two stages, where the first stage is                            the desired behaviors.
+to learn a common generalist policy on sparse and disorderly                                   In this work, considering that the robot should adapt its
+stepping stones, and the second stage is to finetune different                              velocity to the terrain and inappropriate velocity commands
+specialist policies on different terrains from this generalist                              can be misguiding, we also use the navigation formulation.
+policy. By doing so, the generalist policy can learn some                                   We deploy the system illustrated in Fig. 2 based on [20],
+basic motion skills that are reusable on different terrains,                                and assign position and heading commands to the robots.
+and the specialist policies can benefit from the pre-training                               Tracking these commands dominates the rewards as follows:
+of the first stage. This generalist-specialist training procedure                                            (c           1
+                                                                                                                task
+                                                                                                                     ·       ∗ 2
+                                                                                                                                 , if t > T − Tr
+enables learning of agile locomotion skills which are then                                            rtask = Tr 1+∥χt −χt ∥                           (1)
+transferred to a real robot on risky terrains.                                                                 0,                   otherwise,
+   It is also worth mentioning that we do not focus on                                      where χ and χ ∗ are the current and target positions (or
+perception in this paper and therefore use a ground truth map                               headings) of the base, t is the current time, T is the maximum
+and a motion capture system for state estimation during real-                               episode length, and Tr defines the duration of the reward. By
+world deployment. That said, it is possible to use onboard                                  doing so, the policy is free to modulate the movement of the
+sensors with the techniques proposed in [23].                                               robot as long as it reaches the target towards the end of the
+   In summary, our contributions include:                                                   episode.
+ 1) The extension of the navigation formulation in [20] to
+    challenging risky terrains;                                                             B. Exploration Strategy
+ 2) An exploration strategy consisting of a curriculum,                                        Our exploration strategy improves the prior work [20] in
+    intrinsic rewards, and a symmetry-based data augmen-                                    three aspects: the curriculum learning design, the intrinsic
+rewards, and the data augmentation. The proposed techniques          front-back symmetry. The augmented state-action pairs are
+can empirically train a more robust policy under sparse              assigned the same target values, advantages, and discounted
+rewards, and are experimentally analyzed in the ablation             returns as the original pairs. In this way, the actor and critic
+studies in Sec. IV-B.                                                networks are enforced to learn symmetric actions and values.
+   1) Curriculum Design: Curriculum learning is a common
+                                                                     C. Double-Stage Generalist-Specialist Training
+technique for learning locomotion skills on challenging ter-
+rains [7], [10], [19], [20]. In Isaac Gym, a typical imple-             In this paper, we achieve agile locomotion on diverse
+mentation of curriculum learning is to generate all terrains         challenging terrains with sparse footholds as shown in Fig.
+of different difficulty levels before training, and distribute       1. However, even with all the techniques presented above,
+the robots on different terrains [19], [20]. Based on this, the      these motions cannot be learned from scratch due to the
+curriculum design in [20] is formulated as: 1) go to a higher        extremely sparse rewards. To address this, we first train a
+difficulty level if the policy performs well, 2) go to a lower       generalist policy on relatively simple stepping stones (see
+difficulty level if the policy performs poorly, and 3) go to         Sec. III-A). Then, the learned policy and its critic network
+a random difficulty level if the policy performs well on the         are finetuned on new terrains, enabling data-efficient learning
+highest difficulty level.                                            of agile motions, where the generalist policy can serve as a
+   However, we find that such a curriculum suffers from              pre-trained model.
+sparse rewards and difficulty gaps between levels due to the            Besides the data efficiency, the generalist policy is shared
+highly challenging and risky terrains. A policy performing           for different specialist policies, which means that the learned
+well on a low-difficulty terrain can hardly work on a high-          sensorimotor skills are reusable. Therefore, the costly gener-
+difficulty terrain, leading to a large reward difference that can    alist training stage only happens once, and only data-efficient
+be incorrectly attributed by the difficulty-agnostic optimizer       finetuning is needed for new terrains.
+to different actions, thereby misguiding the optimization. To                         III. E XPERIMENTAL S ETUP
+alleviate this problem, we propose to relax the curriculum              We create 4 different types of terrains in Isaac Gym, each
+update mechanism: the robot only gets demoted when the               with 10 difficulty levels. Among them, ”Stones-Everywhere”
+policy cannot outperform random actions in the remaining             is used for generalist policy training and benchmarking,
+distance to the target. By doing so, the robot can keep              while the other three (”Stones-2Rows”, ”Balance-Beams”,
+interacting with the same level until it overcomes it.               and ”Stepping-Beams”) are used for finetuning. The terrains
+   2) Intrinsic Curiosity Rewards: On top of the task rewards
+                                                                     are described in Sec. III-A. Sec. III-B and Sec. III-C present
+which incentivize the robot to reach the target, we also use
+                                                                     the specific rewards and task-related randomizations of each
+curiosity-based intrinsic rewards that encourage the robot
+                                                                     terrain type respectively.
+to explore novel state-action pairs during training. Among
+many variants [21], [28], [29], we use the random network            A. Terrains
+distillation (RND) [21] with the version in [30] due to its             The four terrain types are displayed in Fig. 3 and described
+simple implementation and competitive performance against            in the following paragraphs. Since the ”Stones-Everywhere”
+other variants. Specifically, the curiosity reward is defined as     type serves to benchmark the performance of different learn-
+          rcurio (s, a) = ccurio · |M1 (s, a) − M2 (s, a)| ,   (2)   ing methods, we present it in detail, while other terrain types
+                                                                     are introduced briefly.
+where M1 and M2 are two randomly initialized neural net-                1) Stones-Everywhere: This is the terrain type used to
+works taking state-action (s, a) pairs as inputs, and M1 can         train the generalist policy and benchmark the ablation stud-
+be trained while M2 is frozen. By fitting M1 towards the             ies. Each stone is assigned a grid square and has a random
+outputs of M2 with visited state-action pairs, the curiosity         height with a random X-Y plane shift from the square center.
+rewards will be high for unfamiliar pairs but decay to 0 for         Highly disorderly and sparse stepping stones can be gener-
+familiar ones.                                                       ated in this way. The parameters for different levels include
+   It is worth mentioning that while curiosity rewards are           the stone size wstone , the stone gap wgap , the maximum shift
+commonly leveraged to improve data efficiency, we do not             smax , and the maximum height hmax . The stone size is the
+witness a significant change on the learning curves. Instead,        width of the square stones, and the stone gap is the grid
+we empirically find that it can improve the robustness of            size minus the stone size, i.e., the size of gap between two
+the learned policy, as is discussed in Sec. IV-B. This can           stones with zero shift. Both the X shift and the Y shift are
+potentially be due to an increased coverage of the state space,      uniformly sampled from [-smax , smax ], and the stone height
+as suggested by [31] where a larger state-space coverage can         is uniformly sampled from [-hmax , hmax ].
+improve the robustness of some learned locomotion skills.               The parameters are presented in Table I, together with the
+   3) Symmetry-Based Data Augmentation: To improve the               sparsity representing the ratio of the non-steppable area over
+data efficiency and reduce base inclination during locomo-           the whole terrain.
+tion, we utilize the symmetric design of our robot to augment           2) Stones-2Rows: Terrains of this type have 1, 2 or 3 rows
+sampled data as proposed in [22], which is an adaptation             of stepping stones which match what we can build in the lab.
+of the duplication method in [32]. To be specific, one state-        By doing so we can achieve a policy that does not overfit to
+action pair can be augmented to four pairs with left-right and       a specific gait pattern.
+                                                                                                                           TABLE I
+  Stones-Everywhere, used for generalist training and benchmarking
+                                                                                                 PARAMETERS OF ”S TONES -E VERYWHERE ” TERRAINS
+
+                                                                                    Difficulty     Stone Size     Stone Gap       Max. Shift      Max. Height       Sparsity
+                                                                                     Level         wstone (cm)    wgap (cm)       smax (cm)        hmax (cm)          (%)
+                                                                                         0              92             8             3.6               1              15.4
+                                                                                       ···             ···            ···            ···              ···
+                                                                                         5              52            18             8.2               6              44.8
+                                                                                       ···             ···            ···            ···              ···
+                                                                                         9              20            26            11.8              10              81.1
+                                                                                    * All parameters except the calculated sparsity are linear to the levels so we only list the
+
+  Stones-2Rows, used for specialist finetuning with sim-to-real transfer             levels 0, 5, and 9.
+                                                                                    ** For reference, [12] built the stepping stones of ∼ 65% sparsity without random heights
+                                                                                     and significant shifts.
+
+
+
+
+  Balance-Beams, used for specialist finetuning with sim-to-real transfer
+
+
+
+
+                                                                                   Fig. 4. The learned infeasible crawling motions on balance beams due to
+                                                                                   inappropriate terrain curriculum design. The terrain here for display is far
+                                                                                   less challenging than the terrains in the real world, but the robot cannot
+                                                                                   traverse it. When the beam is narrow, the robot cannot find its next step on
+                                                                                   the beam.
+  Stepping-Beams, used for specialist finetuning
+                                                                                   rate, the torques, and the contact forces. We guide exploration
+                                                                                   with the ”Don’t wait” and ”Move in Direction” rewards as
+                                                                                   in [20], and provide a ”Stand Still” rewards to make the
+                                                                                   robot stand still after reaching the target.
+                                                                                      We regularize the aggressive motions on ”Stones-2Rows”
+                                                                                   and ”Balance-Beams”, and further regularize the torques on
+                                                                                   ”Balance-Beams”. We also add a ”Stand Pose” reward to
+Fig. 3. Different types of terrains with difficulty levels 0, 5, and 9 from left   ”Stones-2Rows” and ”Balance-Beams” to prepare the robot
+to right. One terrain type can have different subtypes that stress different       for further repetitive tests.
+features, as is explained in Sec. III-A.
+   3) Balance-Beams: Terrains of this type have stepping                           C. Domain Randomization
+stones evolving from two rows merging into one as the level                           We use domain randomization to improve robustness and
+goes up. Random gaps are added to the terrains as well.                            facilitate sim-to-real transfer [33], [34]. Task-related ran-
+Such evolving stones can guide the policy to learn catwalk-                        domization settings are presented in Table III in the Ap-
+like motions. Beams with gradually smaller widths can be a                         pendix. We slightly extend the episode length to slow down
+more intuitive choice, but this can lead to infeasible crawling                    the aggressive motions on ”Stones-2Rows” and ”Balance-
+motions in Fig. 4, a local minimum that works only on wide                         Beams”. The center of mass (CoM) is heavily randomized
+beams.                                                                             for ”Balance-Beams” to reduce the dangerous shaking of the
+   4) Stepping-Beams: Terrains of this type have a sequence                        base on the beams.
+of beams to step on, and the beams are more narrow and
+randomized on higher levels. This terrain type is hard to                                                  IV. R ESULTS IN S IMULATION
+build in the lab so we only tried it in simulation to show that                    A. Learned Motions in Simulation
+finetuning can work on a wide range of different terrains.
+                                                                                      Our learned policy demonstrates many interesting behav-
+B. Rewards                                                                         iors on ”Stones-Everywhere” in simulation. In Fig. 5, we
+   The same reward function can work on all terrains in                            made the robot walk around on stepping stones by providing
+simulation, yet slight terrain-dependant modifications of are                      a series of waypoints as target positions and headings, show-
+necessary for elegant motions in the real world. We present                        casing the ability of omnidirectional locomotion learned by
+the rewards in Table IV in the Appendix, and the changes in                        our method. During locomotion, the robot also had different
+weights for special tasks are annotated. For each task on its                      gait patterns and contact modes under different situations.
+terrain, the reward function is the sum of all terms.                                 We also find the policy can recover from missed steps in
+   Among these rewards, we have position tracking and                              simulation, as is displayed in Fig. 6. The ∼ 50 kg robot is
+heading tracking for task performance. We use penalties for                        able to quickly react to the external force disturbances and
+early termination and collision. We also regularize the joint                      continues to walk even when the forces on all feet reaches
+velocities, the acceleration of the base and feet, the action                      ∼ 100 N.
+                                   1.8 s                                  5.0 s                                                           9.4 s                                           19.6 s
+
+
+
+
+                                  22.8 s                                25.4 s                                                           31.5 s                                           33.9 s
+
+
+Fig. 5. The robot walking around on the hardest ”Stones-Everywhere” terrain in simulation. The yellow boxes indicate a series of target positions and
+headings we provided to the robot to achieve omnidirectional locomotion. The robot had different gait patterns under different situations, e.g., the 3-contact
+walk or 2-contact trot gaits when easy to find safe footholds ahead, and the 2-contact pace gaits otherwise. Feet in contact with the terrain are marked.
+
+                                                                                                      100
+
+
+
+
+                                                                                   Success Rate (%)
+                                                                                                       80
+                                                                                                                  w/o Navigation
+                                                                                                       60
+                        50 N                                                                                      w/o Curriculum
+                          80 N                                                                         40         w/o Curiosity
+                                                                                                                  w/o Augmentation
+                                                                                                       20
+                                                                                                                  Proposed
+                                 0.0 s                                 0.8 s
+                                                                                                        0
+                                                                                                            0     1       2          3            4         5         6         7     8       9
+
+                                                                                                                                                Terrain Level
+                                                                                  Fig. 7.      Success rate of traversing 6 meters on different levels of
+                                                                                  ”Stones-Everywhere”. The settings based on the navigation formulation
+                                                                                  far outperform the velocity tracking one. Three runs (policies trained with
+                                                                                  different random seeds) per setting were performed to calculate the mean
+                                 1.1 s                                 1.3 s      (line) and std (in shadow) values, and the checkpoints of 8000 iterations
+                                                                                  (all converged) were used. The velocity command used for testing velocity
+Fig. 6. The robot could dynamically recover from missed steps due to              tracking is 0.8 m/s forward, which demonstrates the highest robustness
+external force disturbances while walking on stepping stones in simulation.       empirically in simulation. Each policy’s success rate is calculated from 1000
+Left top: the robot received external forces on its four feet lasting 0.4 s       trials on 100 diverse randomized terrains.
+when traversing the stones from left to right. Right top: the robot missed a
+step due to the external forces. Left bottom: the robot recovered from the                            100
+
+
+
+
+                                                                                   Success Rate (%)
+missed step by pulling itself upwards and forwards with the legs pressing                              95
+
+the stones. Right bottom: the robot continued to walk after the missed step.                           90
+
+                                                                                                       85         w/o Curriculum
+                                                                                                                  w/o Curiosity
+                                                                                                       80
+B. Benchmarked Ablation Studies                                                                                   w/o Augmentation
+                                                                                                       75         Proposed
+  We compare different settings and analyze the robustness                                             70
+                                                                                                            2.0   2.5         3.0         3.5         4.0       4.5       5.0       5.5      6.0
+of the learned policies on ”Stones-Everywhere”. The com-                                                                Traversed Distance on Level 9 Terrains (m)
+pared settings are:                                                               Fig. 8. Success rate of traversing different distances on the hardest level
+  1) w/o navigation: where the velocity tracking formulation                      of ”Stones-Everywhere”. Our proposed strategy stably learns robust policies
+                                                                                  over long distances. The shadow indicates the std values.
+     is used based on [19] with the corresponding curricu-
+     lum, while the intrinsic rewards and the symmetry-based                      the navigation formulation can achieve a high success rate,
+     data augmentation are also applied;                                          though the “w/o augmentation” setting does not perform
+  2) w/o curriculum: every technique proposed in this paper                       well on low-difficulty terrains. This can be explained by the
+     except the improved curriculum is used, and the cur-                         policy’s inability to overcome the hardest terrains without
+     riculum is the one in [20];                                                  data augmentation, and the neural network policy forgets the
+  3) w/o curiosity: every technique proposed in this paper                        samples on low-difficulty terrains when the robots get stuck
+     except the intrinsic curiosity rewards is used;                              on high-difficulty ones.
+  4) w/o augmentation: every technique proposed in this                              The second metric is the success rate of traversing different
+     paper except the data augmentation is used;                                  distances on the highest difficulty level, which demonstrates
+  5) proposed: every technique proposed in this paper is                          a clearer trend between the navigation-formulated ones, as
+     used.                                                                        is shown in Fig. 8. All techniques in our strategy signifi-
+   Two metrics are used for the comparison of performance                         cantly contribute to improving robustness, with symmetry-
+and robustness. The first one is the success rate of traversing                   based data augmentation being the most critical one. The
+6 meters on different difficulty levels, as is shown in Fig. 7.                   improved curriculum design and the curiosity rewards have
+After level 4 with sparsity ∼ 40%, the averaged success                           relatively smaller effects. Besides, the symmetry-based data
+rate for velocity tracking is lower than 90% and quickly                          augmentation also makes the motions more balanced with
+drops down as the difficulty level goes up. In comparison,                        less base inclination.
+                                                   Test Terrains                  1                               2                    3                      4                   5
+                                          Stones-  Stones-   Balance- Stepping-
+                                        Everywhere 2Rows      Beams    Beams
+
+                             Stones-
+                           Everywhere      9/9       6/9      <0/9       2/9
+
+
+
+
+       Training Terrains
+                                                                                                          0.0 s               0.9 s                   1.9 s               2.7 s       3.6 s
+                            Stones-
+                                           9/9       9/9       3/9       6/9
+
+
+                                                                                    Position (m)
+                            2Rows
+
+
+                            Balance-
+                             Beams         3/9      <0/9       9/9      <0/9
+
+
+
+
+                                                                                    Velocity (m/s)
+                                                                                                                      2                    3          4
+                           Stepping-                                                                      1
+                            Beams          4/9       7/9      <0/9       9/9
+                                                                                                                                                                      5
+
+
+
+Fig. 9. The transferability matrix of our learned policies. Values (before                                                                     Time (s)
+”/9”) in the matrix are the maximum difficulty (0 ∼ 9 with 9 being the
+hardest) of test terrains that can be traversed for 3.5m with an 80% success      Fig. 10. Learned agile motions on stepping stones in real-world exper-
+rate. For the ”< 0”s, the success rate is within [50%, 80%) on level 0.           iments. The robot frequently leaps upwards and forwards to traverse the
+                                                                                  terrain. The robot positions are sampled from the motion capture system
+                                                                                  in the world frame, and the velocities are obtained by differentiating the
+C. Finetuning v.s. From Scratch                                                   positions.
+   We train specialist policies on multiple challenging ter-
+                                                                                  1                               2                    3                      4                   5
+rains as shown in Fig. 1 and 3 by finetuning the learned gen-
+eralist policy. The generalist policy took 8000 iterations, the
+”Stones-2Rows” policy took 2000 iterations, the ”Balance-
+Beams” policy took 3000 iterations, and the ”Stepping-
+Beams” policy took 1000 iterations. In comparison, when                                                   1.4 s               2.4 s                   3.2 s               4.1 s       4.6 s
+
+the specialist policies are trained from scratch for 10000
+
+                                                                                  Position (m)
+iterations per task, the robot can not learn to traverse the
+terrains, as we design these terrains to be quite challenging.
+D. Transferability of Policies                                                                                                                                    4
+
+
+
+                                                                                  Velocity (m/s)
+   We also test whether policies trained on different terrains                                                            1                    2
+
+are transferable to other terrains. Figure 9 presents the trans-                                                                                          3                 5
+ferability matrix of our learned policies. Due to the similarity
+of terrains, policies trained on ”Stones-Everywhere” and                                                                                       Time (s)
+”Stones-2Rows” can be mutually transferred, and the latter is
+                                                                                  Fig. 11. Learned agile motions on balance beams in real-world experiments.
+also transferrable to and from ”Stepping-Beams”. For other                        The robot first slowly aligns itself with the beam center before landing on
+terrain pairs, the policies do not tranfer well. Such results                     the beam. Afterward, the robot rapidly alternates its left and right diagonals,
+indicate that the learned policies highly differentiate due to                    and makes a speed burst (3 ∼ 5 s in the plot) to traverse the beams.
+their training data although they originate from the same                                                                  TABLE II
+generalist policy. Hence, if we want a unified policy that                                           R EPETITIVE ROBUSTNESS T EST R ESULTS ON R EAL T ERRAINS
+performs well on various terrains, we must randomize all                                                  Real Terrain                Stones-2Rows            Balance-Beams
+possible terrains the robot may encounter. Otherwise, the                                                 Success Rate                     8/10                    5/5
+learned policy cannot generalize well.                                                                    Survival Rate                   10/10                    5/5
+
+                                      V. R EAL -W ORLD R ESULTS                   different terrains. It keeps leaping on stepping stones, while
+   Due to practical reasons, we only build two terrains in                        first slowly aligning itself towards the center and then making
+the real world: stepping stones and balance beams, and suc-                       a speed burst to quickly traverse the terrain on balance
+cessfully transfer the learned ”Stones-2Rows” and ”Balance-                       beams.
+Beams” policies. To minimize the sim-to-real gap and focus
+on the locomotion problem, we use a motion capture system                         B. Robustness Tests
+to get the robot’s state and terrain information.                                    We did repetitive robustness tests for the two policies (see
+                                                                                  also the video attachment), and the results are presented in
+A. Agile Motions                                                                  Table II. The success rate counts the trials that were perfectly
+   Motions of the learned policies on real terrains are dis-                      finished, while the survival rate also counts the cases where
+played in Fig. 10 and 11. The motions involve multiple                            the robot missed a step but recovered.
+leaps and rapidly changing velocities which are difficult                            Our method also differs from the model-based controllers
+to achieve with velocity tracking. To solve the task in the                       in that the robot can quickly react to unexpected missed steps
+given episode length, the robot takes different strategies on                     and survive, as is discussed in Sec. IV-A. We refer readers
+                                                                                                            TABLE III
+to the video attachment to see the emergent behaviors. It
+                                                                            D OMAIN R ANDOMIZATION S ETTINGS IN D IFFERENT TASKS
+is worth mentioning that our controller is vulnerable to
+mapping drifts, and a 5-cm odometry drift can make the robot          Parameter                                               Randomization Range
+fall, though this is partly due to the highly risky terrains.         Stones-Everywhere
+                                                                      Episode Length (s)                                                   [5, 7]
+                                                                      Target Distance (m)                                                [1.5, 4.9]
+            VI. L IMITATIONS AND D ISCUSSION                          Stones-2Rows
+                                                                      Episode Length (s)                                                   [6, 8]
+   Though we can achieve agile locomotion on various                  Target Distance (m)                                                [3.5, 4.5]
+                                                                      Heightmap Scan Drift (m)                                         [−0.05, 0.05]
+terrains, we have difficulty training a unified policy for all        Balance-Beams
+because the learning progresses on different terrains can vary        Episode Length (s)                                                    [8, 10]
+and interfere with each other. Also, we use slightly different        Target Distance (m)                                                  [3.5, 4.5]
+                                                                      Heightmap Scan Drift (m)                                        [−0.025, 0.025]
+settings for different specialist tasks with human insights to        Center of Mass Bias (m)                                         x : [−0.15, 0.15]
+help the sim-to-real transfer. The reward functions can be                                                                            y : [−0.05, 0.05]
+tedious to tune, and the rare failure cases are hard to interpret.                                                                     z : [−0.1, 0.2]
+                                                                      Stepping-Beams
+   To be specific, the task reward functions are quite an             Episode Length (s)                                                   [5, 7]
+”equilibrium” of multiple motivations. First, as we want the          Target Distance (m)                                                [2.5, 4.0]
+robot to automatically discover a way to reach the target
+without human priors, a short reward duration is preferred
+                                                                                                    TABLE IV
+but can also lead to sparse rewards and hard exploration.
+                                                                                   U SED S YMBOLS AND R EWARD F UNCTION T ERMS
+Second, a long episode length can make the motions less
+aggressive for sim-to-real transfer but also makes the task           Symbol              Description
+rewards sparse. Hence, tuning the rewards is tedious, and we          t and T             The current timestep, and the whole length of an episode
+                                                                      p and p∗            The 2-d position and the target position of the robot
+partly sidestep these trade–offs by pre-training and finetuning       ψ and ψ ∗           The heading and the target heading of the robot
+in this paper.                                                        q, q̇, and q̇lim    The joint positions, joint velocities, and the joint veloc-
+   Regarding the failure cases, it is always difficult to achieve                         ity limit of the robot
+                                                                      v, vH , and ω       The linear velocity, horizontal linear velocity, and an-
+a 100% success rate, and the rare failure cases do exist.                                 gular velocity of the robot base
+However, contrary to model-based controllers whose failure            z                   The height of the robot base
+cases are easy to understand (e.g., missed steps, slippery,           v f and Ff          The linear velocity and the contact force of the f -th foot
+                                                                      a                   The action, i.e., the target joint positions
+or unexpected collisions), our controllers’ failure cases are         τ and τlim          The torques and the torque limit of the joints
+more difficult to interpret. In these rare cases, the robot may       g                   The projected gravity on the robot base
+                                                                                            1
+misplace its feet in the air when there are feasible footholds,       δT (t0 )             t0 · 1(t > T − t0 ), the reward duration mask for the last
+which might be due to the singularity of neural networks                                  t0 seconds
+                                                                      δ p (d0 )           1(∥pt − pt ∗ ∥ < d0 ), the robot position mask
+[35]. We believe representation learning techniques such as           δψ (θ0 )            1(∥ψt − ψt∗ ∥ < θ0 ), the robot heading mask
+contrastive learning [36] may help solve this.                        ”S2”                The abbreviation for ”Stones-2Rows”
+                                                                      ”BB”                The abbreviation for ”Balance-Beams”
+
+         VII. C ONCLUSION AND F UTURE W ORKS                          Reward Term              Expression                               Weight
+                                                                                                     1
+                                                                      Position Tracking                                                 10δT (2)
+                                                                                               1+∥pt −pt ∗ ∥2
+   In this paper, we achieve end-to-end learning of agile                                                       for ”S2” and ”BB”       25δT (4)
+                                                                                                     1
+quadrupedal locomotion on challenging risky terrains. To              Heading Tracking
+                                                                                               1+∥ψt −ψt ∗ ∥2
+                                                                                                                                        5δ p (2)δT (4)
+                                                                                                                 for ”S2” and ”BB”      12δ p (2.5)δT (4)
+this end, we propose to use the navigation formulation and
+                                                                      Termination Penalty      const for early termination              −200
+an exploration strategy with multiple improvements from               Collision Penalty        const for thighs and shanks              −1
+previous works. We apply two-staged training to overcome              Joint Velocity Penalty   ∥q̇t ∥2                                  −0.001
+                                                                      Joint Velocity Limit     ∑12
+                                                                                                 i=1 max(|q̇i,t | − 0.9q̇lim , 0)       −1
+exploration on challenging terrains, with specialist policies         Base Accel. Penalty      ∥v̇t ∥2 + 0.02∥ω̇t ∥2                    −0.001
+on different terrains that are finetuned from one generalist          Feet Accel. Penalty      ∑4f =1 ∥v̇ f ,t ∥                        −0.0005
+                                                                      Action Rate Penalty      ∥at − at−1 ∥2                            −0.01
+policy.                                                               Torque Penalty           ∥τt ∥2                                   −0.00001
+   Our future work will include: 1) making the terrain percep-                                                             for ”BB”     −0.00002
+
+tion onboard based on online representation techniques such           Torque Limit             ∑12
+                                                                                                i=1 max(|τi,t | − τlim , 0)             −0.2
+                                                                                                  for ”BB” w/ τlim   ′ = 0.8τ           −0.5
+                                                                                                                             lim
+as the one in [23]; 2) training a unified policy for locomotion       Contact Force Penalty    ∑4f =1 clip(∥Ff ,t ∥ − 700, 0, 700)2     −0.000025
+on all kinds of terrains; and 3) making the learned policy            Don’t Wait               1(∥vt ∥ < 0.2)                           −(1 − δ p (1))
+                                                                      Move in Direction        cos⟨vt , pt∗ − pt ⟩                      1 for first 150 iter
+more interpretable and robust.                                        Stand Still              2.5∥vt ∥ + 1∥ωt ∥                        −δ p (0.25)δψ (0.5)δT (1)
+                                                                      Aggressive Motion        (|vtH | − 1)2 · 1(|vtH | > 1)            0
+                                                                                                             for ”S2” and ”BB”          −5
+                         APPENDIX                                     Stand Pose               |zt − 0.6| + g2x,t + g2yt                0
+                                                                                                            for ”S2” and ”BB”           −5δ p (0.25)δψ (0.5)δT (1)
+A. Task Specifications
+   The task-related domain randomization settings are pre-           B. Learning Settings
+sented in Table III, and the used symbols and reward terms
+in Table IV.                                                           Some learning-related settings are presented in Table V.
+                                TABLE V
+                                                                                [15] Y. Song, A. Romero, M. Müller, V. Koltun, and D. Scaramuzza,
+                           L EARNING S ETTINGS                                       “Reaching the limit in autonomous racing: Optimal control versus
+                                                                                     reinforcement learning,” Science Robotics, vol. 8, no. 82, p. eadg1462,
+  Configuration                                 Values                               2023.
+  Actor and critic                MLP, hidden layer size (512, 256, 128)        [16] S. Gangapurwala, M. Geisert, R. Orsolino, M. Fallon, and I. Havoutis,
+                                       All observations flattened                    “Rloc: Terrain-aware legged locomotion using reinforcement learning
+  Exteroception                     25 × 16 heightmap, 7cm gridsize                  and optimal control,” IEEE Transactions on Robotics, 2022.
+  Number of robots                               4096                           [17] Z. Xie, X. Da, B. Babich, A. Garg, and M. v. de Panne, “Glide:
+  Policy steps per iteration                       48                                Generalizable quadrupedal locomotion in diverse environments with
+  Clip negative rewards to 0?                     No                                 a centroidal model,” in International Workshop on the Algorithmic
+  RND M1                           MLP, hidden layer size (128, 128)                 Foundations of Robotics. Springer, 2023, pp. 523–539.
+  RND M2                           MLP, hidden layer size (256, 256)            [18] F. Jenelten, J. He, F. Farshidian, and M. Hutter, “Dtc: Deep tracking
+  RND reward weight                               1.0                                control,” Science Robotics, vol. 9, no. 86, p. eadh5401, 2024.
+  RND optimization weight                         1.0                           [19] N. Rudin, D. Hoeller, P. Reist, and M. Hutter, “Learning to walk
+  Loss for RND M1                            mean L1-loss                            in minutes using massively parallel deep reinforcement learning,” in
+                                                                                     Conference on Robot Learning. PMLR, 2022, pp. 91–100.
+                                                                                [20] N. Rudin, D. Hoeller, M. Bjelonic, and M. Hutter, “Advanced skills
+                     ACKNOWLEDGMENT                                                  by learning locomotion and local navigation end-to-end,” in 2022
+  This work is supported in part by the EU Horizon 2020                              IEEE/RSJ International Conference on Intelligent Robots and Systems
+                                                                                     (IROS 2022). IEEE, 2022.
+program grant agreement No.852044                                               [21] Y. Burda, H. Edwards, A. J. Storkey, and O. Klimov, “Exploration
+                                                                                     by random network distillation,” in 7th International Conference on
+                             R EFERENCES                                             Learning Representations, 2019.
+                                                                                [22] D. Hoeller, N. Rudin, D. Sako, and M. Hutter, “Anymal parkour:
+ [1] A. W. Winkler, C. D. Bellicoso, M. Hutter, and J. Buchli, “Gait and
+                                                                                     Learning agile navigation for quadrupedal robots,” Science Robotics,
+     trajectory optimization for legged systems through phase-based end-
+                                                                                     vol. 9, no. 88, p. eadi7566, 2024.
+     effector parameterization,” IEEE Robotics and Automation Letters,
+                                                                                [23] D. Hoeller, N. Rudin, C. Choy, A. Anandkumar, and M. Hutter,
+     vol. 3, no. 3, 2018.
+                                                                                     “Neural scene representation for locomotion on structured terrain,”
+ [2] F. Jenelten, R. Grandia, F. Farshidian, and M. Hutter, “Tamols: Terrain-
+                                                                                     IEEE Robotics and Automation Letters, vol. 7, no. 4, 2022.
+     aware motion optimization for legged systems,” IEEE Transactions on
+                                                                                [24] J. Schulman, F. Wolski, P. Dhariwal, A. Radford, and O. Klimov,
+     Robotics, vol. 38, no. 6, pp. 3395–3413, 2022.
+                                                                                     “Proximal policy optimization algorithms,” arXiv preprint
+ [3] S. Fahmi, V. Barasuol, D. Esteban, O. Villarreal, and C. Semini,
+                                                                                     arXiv:1707.06347, 2017.
+     “Vital: Vision-based terrain-aware locomotion for legged robots,”
+                                                                                [25] V. Makoviychuk, L. Wawrzyniak, Y. Guo, M. Lu, K. Storey, M. Mack-
+     IEEE Transactions on Robotics, 2022.
+                                                                                     lin, D. Hoeller, N. Rudin, A. Allshire, A. Handa, and G. State, “Isaac
+ [4] R. Grandia, F. Jenelten, S. Yang, F. Farshidian, and M. Hutter,
+                                                                                     gym: High performance GPU based physics simulation for robot
+     “Perceptive locomotion through nonlinear model-predictive control,”
+                                                                                     learning,” in Thirty-fifth Conference on Neural Information Processing
+     IEEE Transactions on Robotics, 2023.
+                                                                                     Systems Datasets and Benchmarks Track (Round 2), 2021.
+ [5] O. Melon, R. Orsolino, D. Surovik, M. Geisert, I. Havoutis, and
+                                                                                [26] E. Chane-Sane, C. Schmid, and I. Laptev, “Goal-conditioned reinforce-
+     M. Fallon, “Receding-horizon perceptive trajectory optimization for
+                                                                                     ment learning with imagined subgoals,” in International Conference
+     dynamic legged locomotion with learned initialization,” in 2021 IEEE
+                                                                                     on Machine Learning. PMLR, 2021, pp. 1430–1440.
+     International Conference on Robotics and Automation (ICRA). IEEE,
+                                                                                [27] C. Yang, K. Yuan, Q. Zhu, W. Yu, and Z. Li, “Multi-expert learning
+     2021, pp. 9805–9811.
+                                                                                     of adaptive legged locomotion,” Science Robotics, vol. 5, no. 49, p.
+ [6] F. Jenelten, T. Miki, A. E. Vijayan, M. Bjelonic, and M. Hutter,
+                                                                                     eabb2174, 2020.
+     “Perceptive locomotion in rough terrain–online foothold optimization,”
+                                                                                [28] D. Pathak, P. Agrawal, A. A. Efros, and T. Darrell, “Curiosity-driven
+     IEEE Robotics and Automation Letters, vol. 5, no. 4, 2020.
+                                                                                     exploration by self-supervised prediction,” in International conference
+ [7] J. Lee, J. Hwangbo, L. Wellhausen, V. Koltun, and M. Hutter,
+                                                                                     on machine learning. PMLR, 2017, pp. 2778–2787.
+     “Learning quadrupedal locomotion over challenging terrain,” Science
+                                                                                [29] Y. Burda, H. Edwards, D. Pathak, A. Storkey, T. Darrell, and A. A.
+     robotics, vol. 5, no. 47, p. eabc5986, 2020.
+                                                                                     Efros, “Large-scale study of curiosity-driven learning,” in International
+ [8] F. Jenelten, J. Hwangbo, F. Tresoldi, C. D. Bellicoso, and M. Hut-
+                                                                                     Conference on Learning Representations, 2019.
+     ter, “Dynamic locomotion on slippery ground,” IEEE Robotics and
+                                                                                [30] H. Sun, L. Han, R. Yang, X. Ma, J. Guo, and B. Zhou, “Optimistic
+     Automation Letters, vol. 4, no. 4, 2019.
+                                                                                     curiosity exploration and conservative exploitation with linear reward
+ [9] Z. Zhou, B. Wingo, N. Boyd, S. Hutchinson, and Y. Zhao,
+                                                                                     shaping,” in Advances in Neural Information Processing Systems,
+     “Momentum-aware trajectory optimization and control for agile
+                                                                                     2022.
+     quadrupedal locomotion,” IEEE Robotics and Automation Letters,
+                                                                                [31] C. Zhang, W. Yu, and Z. Li, “Accessibility-based clustering for effi-
+     vol. 7, no. 3, 2022.
+                                                                                     cient learning of locomotion skills,” in 2022 International Conference
+[10] T. Miki, J. Lee, J. Hwangbo, L. Wellhausen, V. Koltun, and M. Hutter,
+                                                                                     on Robotics and Automation (ICRA). IEEE, 2022, pp. 1600–1606.
+     “Learning robust perceptive locomotion for quadrupedal robots in the
+                                                                                [32] F. Abdolhosseini, H. Y. Ling, Z. Xie, X. B. Peng, and M. Van de Panne,
+     wild,” Science Robotics, vol. 7, no. 62, p. eabk2822, 2022.
+                                                                                     “On learning symmetric locomotion,” in Proceedings of the 12th ACM
+[11] M. Tranzatto, T. Miki, M. Dharmadhikari, L. Bernreiter, M. Kulkarni,
+                                                                                     SIGGRAPH Conference on Motion, Interaction and Games, 2019, pp.
+     F. Mascarich, O. Andersson, S. Khattak, M. Hutter, R. Siegwart, et al.,
+                                                                                     1–10.
+     “Cerberus in the darpa subterranean challenge,” Science Robotics,
+                                                                                [33] J. Tobin, R. Fong, A. Ray, J. Schneider, W. Zaremba, and P. Abbeel,
+     vol. 7, no. 66, p. eabp9742, 2022.
+                                                                                     “Domain randomization for transferring deep neural networks from
+[12] A. Agarwal, A. Kumar, J. Malik, and D. Pathak, “Legged locomo-
+                                                                                     simulation to the real world,” in 2017 IEEE/RSJ international con-
+     tion in challenging terrains using egocentric vision,” in 6th Annual
+                                                                                     ference on intelligent robots and systems (IROS). IEEE, 2017, pp.
+     Conference on Robot Learning, 2022.
+                                                                                     23–30.
+[13] Z. Xie, H. Y. Ling, N. H. Kim, and M. van de Panne, “Allsteps:
+                                                                                [34] Z. Xie, X. Da, M. Van de Panne, B. Babich, and A. Garg, “Dynamics
+     curriculum-driven learning of stepping stone skills,” in Computer
+                                                                                     randomization revisited: A case study for quadrupedal locomotion,”
+     Graphics Forum, vol. 39, no. 8. Wiley Online Library, 2020, pp.
+                                                                                     in 2021 IEEE International Conference on Robotics and Automation
+     213–224.
+                                                                                     (ICRA). IEEE, 2021, pp. 4955–4961.
+[14] V. Tsounis, M. Alge, J. Lee, F. Farshidian, and M. Hutter, “Deepgait:
+                                                                                [35] E. Orhan and X. Pitkow, “Skip connections eliminate singularities,”
+     Planning and control of quadrupedal gaits using deep reinforcement
+                                                                                     in International Conference on Learning Representations, 2018.
+     learning,” IEEE Robotics and Automation Letters, vol. 5, no. 2, 2020.
+                                                                                [36] M. Laskin, A. Srinivas, and P. Abbeel, “Curl: Contrastive unsupervised
+                                                                                     representations for reinforcement learning,” in International Confer-
+                                                                                     ence on Machine Learning. PMLR, 2020, pp. 5639–5650.
+

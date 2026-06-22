@@ -1,0 +1,1173 @@
+                                                           Agile But Safe: Learning Collision-Free
+                                                              High-Speed Legged Locomotion
+                                                      Tairan He1†          Chong Zhang2†              Wenli Xiao1          Guanqi He1            Changliu Liu1           Guanya Shi1
+                                                                            1                                        2                    †
+                                                                   Carnegie Mellon University ETH Zürich Equal Contributions
+                                                  Page: https://agile-but-safe.github.io Code: https://github.com/LeCAR-Lab/ABS
+                                         a                                                                                b
+
+
+
+                                                                                                                                                                                                               V=3.1 m/s
+
+
+
+
+arXiv:2401.17583v3 [cs.RO] 21 May 2024
+                                         c                                                                                d
+
+
+                                                                                                                                                                                                               V=3.1 m/s
+
+
+                                         e
+
+
+
+                                                                                                                                                                                     V        =2.1 m/s, V           =2.9 m/s
+                                                                                                                                                                                        avg                  peak
+
+                                         f
+
+
+
+                                                                                                                                                                                     V         =1.5 m/s, V      =2.5 m/s
+                                                                                                                                                                                         avg             peak
+
+                                         g
+
+
+
+                                                                                                                                                                                    V      =2.3 m/s, V          =3.0 m/s
+                                                                                                                                                                                     avg                 peak
+
+
+
+                                         Fig. 1. Our proposed framework ABS demonstrates agile and collision-free locomotion capabilities, where the robot, with fully onboard computation and
+                                         sensing, can safely navigate through cluttered environments and rapidly react to diverse and dynamic obstacles, both indoors and outdoors. ABS involves a
+                                         dual-policy setup: green lines at the bottom indicate the agile policy taking control, and red lines indicate the recovery policy in operation. The agile policy
+                                         enables the robot to run fast amidst obstacles, and the recovery policy saves the robot from risky cases where the agile policy might fail. Subfigures: (a)
+                                         The robot dodges a swinging human leg. (b) The agile policy enables the robot to run at a peak speed of 3.1 m/s. (c) The robot dodges a moving stroller
+                                         during high-speed locomotion. (d) The robot dodges a moving human in snowy terrain. (e) The robot safely navigates in a hall with both static and dynamic
+                                         obstacles, with an average speed of 2.1 m/s and a peak speed of 2.9 m/s. (f) The robot avoids obstacles and moving humans in a dim corridor, with an
+                                         average speed of 1.5 m/s and a peak speed of 2.5 m/s. (g) The robot, running outdoors at an average speed of 2.3 m/s and a peak speed of 3.0 m/s, avoids
+                                         both moving and static trash bins and climbs up a grassy slope. Videos: see the website.
+
+                                            Abstract—Legged robots navigating cluttered environments                      off between agility and safety, and is crucial for real-world
+                                         must be jointly agile for efficient task execution and safe to avoid             applications that require both robustness and efficiency, such
+                                         collisions with obstacles or humans. Existing studies either de-                 as search and rescue [68], disaster response [63], and police
+                                         velop conservative controllers (< 1.0 m/s) to ensure safety, or fo-
+                                         cus on agility without considering potentially fatal collisions. This            robotics [71]. Existing works typically exhibit limited agility
+                                         paper introduces Agile But Safe (ABS), a learning-based control                  (velocity < 1 m/s) to ensure safety [38, 17, 7, 23, 28, 77,
+                                         framework that enables agile and collision-free locomotion for                   12, 49, 44, 83], or focus solely on maximizing agility without
+                                         quadrupedal robots. ABS involves an agile policy to execute agile                considering safety in navigation scenarios [48, 58]. Our work
+                                         motor skills amidst obstacles and a recovery policy to prevent                   distinguishes itself by achieving high-speed (max velocity >
+                                         failures, collaboratively achieving high-speed and collision-free
+                                         navigation. The policy switch in ABS is governed by a learned                    3 m/s), collision-free quadrupedal locomotion in cluttered
+                                         control-theoretic reach-avoid value network, which also guides                   environments.
+                                         the recovery policy as an objective function, thereby safeguarding                  The agility limitations in existing works in the navigation
+                                         the robot in a closed loop. The training process involves the                    domain stem from varied factors. Regarding the formulation,
+                                         learning of the agile policy, the reach-avoid value network, the                 some decouple locomotion and navigational planning into two
+                                         recovery policy, and an exteroception representation network, all
+                                         in simulation. These trained modules can be directly deployed in                 subtasks and build hierarchical systems [38, 17, 7, 28, 49, 83].
+                                         the real world with onboard sensing and computation, leading to                  Such decoupling not only constrains the controller from the
+                                         high-speed and collision-free navigation in confined indoor and                  optimal solution [61], but also results in conservative behaviors
+                                         outdoor spaces with both static and dynamic obstacles (Figure 1).                to ensure safety, thereby limiting the system from fully un-
+                                                                                                                          leashing the locomotion agility. This work, instead, learns end-
+                                                                   I. I NTRODUCTION                                       to-end controllers that directly output joint-level actions for
+                                           Agile locomotion of legged robots in cluttered environments                    collision-free locomotion to reach specified goal positions. Our
+                                         presents a non-trivial challenge due to the inherent trade-                      approach is inspired by recent works [76, 54, 82, 29] where
+robots learn end-to-end controllers to overcome challenging                             II. R ELATED W ORKS
+terrains by integrating locomotion with navigation.                 A. Agile Legged Locomotion
+   Regarding the controller, some works employ model-based
+                                                                       Model-based methods such as MPC use simplified models
+methods with simplified models, such as model predictive
+                                                                    and handcrafted gaits to enable dynamic legged locomotion [5,
+control (MPC) and barrier functions, for guaranteed safety [23,
+                                                                    14, 15, 25, 35, 26]. Despite their impressive performance
+12, 44]. The model mismatch and potential constraint viola-
+                                                                    in simulation and under laboratory conditions, these methods
+tions such as slippage, together with the online computational
+                                                                    struggle in the wild due to model mismatch and unexpected
+burden, limit these controllers from agile motions and stable
+                                                                    slippage [34, 41]. The online computational burden also limits
+deployment in the wild [23, 34, 41]. On the other hand, recent
+                                                                    perceptive model-based controllers from agile motions [12].
+progress of model-free reinforcement learning (RL) in legged
+                                                                       Recently, RL-based controllers have shown promising re-
+locomotion has demonstrated remarkable agile motor skills
+                                                                    sults for robust locomotion [76, 41, 50, 24] and agile motor
+that model-based controllers have not achieved [48, 58, 29, 41,
+                                                                    skills including high-speed running [32, 48, 58], challenging
+50, 36, 86, 46, 79, 11], although potentially unsafe in cluttered
+                                                                    terrain traversal [82, 29, 36, 86, 11], jumping [42, 79], and
+environments. We harness the flexibility and agility of model-
+                                                                    fall recovery [76, 46, 72, 81]. However, existing works on
+free RL and further safeguard it using control-theoretic tools.
+                                                                    agile locomotion mostly study how to achieve fast speeds for
+   Named ABS, our framework goes beyond a single RL
+                                                                    racing or skillful motions to overcome challenging terrains. In
+policy. First, we have a model-free perceptive agile policy that
+                                                                    cluttered environments, these methods necessitate a high-level
+incorporates collision avoidance into locomotion, as presented
+                                                                    navigation module for collision avoidance, which is typically
+in Section IV, enabling our Go1 robot to achieve peak speeds
+                                                                    conservative and greatly constrains the motion far below the
+up to 3.1 m/s while being aware of collisions. However, the
+                                                                    motor limit [73, 83]. In contrast, this paper studies agile
+RL policy does not guarantee safety, so we safeguard the robot
+                                                                    collision avoidance for versatile navigation.
+with another recovery policy (see Section VI) when the agile
+policy may fail. To decide which policy to take control, we         B. Legged Collision Avoidance
+use a policy-conditioned reach-avoid (RA) value network to             Classical methods tackle collision avoidance in legged
+quantify the risk level of the agile policy. This is inspired by    robots with collision-free motion planning [38, 17, 7] in the
+[30] where model-free RA values can be efficiently learned          configuration space without considering the robot dynamics,
+based on the Hamilton-Jacobi reachability theory [3]. The           leading to slow and statically stable gaits. MPC-based meth-
+RA value network is trained by a discounted RA Bellman              ods [23, 12, 64, 44] integrate planning and control by treating
+equation, with data collected by the learned agile policy in        distances to obstacles as optimization constraints. However,
+simulation. Beyond being a threshold, the differentiable RA         they suffer from the aforementioned drawbacks of model-
+value network also provides gradient information to guide the       based controllers and slow movements (velocity < 0.5 m/s).
+recovery policy, thus closing the loop, which will be further          Learning-based methods are another choice. Some existing
+presented in Section V.                                             works [28, 57, 37, 69, 83, 80] train RL-based policies that out-
+   To get collision avoidance behaviors that can generalize in      put twist commands to be tracked by the locomotion controller,
+different scenarios, we use a low-dimensional exteroceptive         while the velocity commands are bounded by 1 m/s to ensure
+feature for policy and RA value training: the traveling dis-        safety. However, the decoupling of navigation planning and
+tances of several rays cast from the robot to obstacles. In order   locomotion control makes high-speed locomotion risky, as the
+to achieve this, we additionally train an exteroception represen-   high-level planner is unaware of the low-level tracking error.
+tation (or ray-prediction) network with simulated data, which          Yang et al. [77] instead provides an end-to-end RL-based
+maps depth images to ray distances as detailed in Section VII.      solution that maps depth images and proprioceptive data
+By doing so, we achieve robust collision avoidance in high-         directly to joint actions, but the robot can only walk forward
+speed locomotion with onboard sensing and computation.              and the velocity is limited to ∼ 0.4 m/s. In contrast, our
+   Briefly, we identify our contributions as follows:               work deploys an end-to-end agile policy for omnidirectional
+   1) A perceptive agile policy for obstacle avoidance in high-     rapid locomotion with collision avoidance, and safeguards the
+       speed locomotion with novel training methods.                robot with RA values and a recovery policy. To the best of
+   2) A novel control-theoretic data-driven method for RA           our knowledge, our work is the first to validate collision-free
+       value estimation conditioned on the learned agile policy.    quadruped locomotion with maximum velocity up to 3.1 m/s.
+   3) A dual-policy setup where an agile policy and a recovery      Even in tight space with dynamic adversarial obstacles, our
+       policy collaborates for high-speed collision-free locomo-    system can still reach a peak velocity of 2.5 m/s and an average
+       tion, and the RA values govern the policy switch and         speed of 1.5 m/s (Figure 1 (f)).
+       guide the recovery policy.
+   4) An exteroception representation network that predicts         C. Safe Reinforcement Learning
+       low-dimensional obstacle information for generalizable         There are two main categories of methods to perform safe
+       collision avoidance capability.                              RL [85]: 1) end-to-end methods and 2) hierarchical methods.
+   5) Validation of ABS’s superior safety and state-of-the-art      Lagrangian-based methods [53, 4, 43, 65] are the most repre-
+       agility amidst obstacles indoors and outdoors (Figure 1).    sentative end-to-end safe RL methods that solve a primal-dual
+                                                                                                      TABLE I
+optimization problem to satisfy safety constraint where the                           I MPORTANT S YMBOLS AND A BBREVIATIONS
+Lagrange multipliers can be optimized along with the policy
+parameters. However, the constraint is often enforced before             Symbol          Meaning
+                                                                             t           Time step, converted to time in calculation
+convergence, hindering exploration and lowering returns [53].             s∈S            State
+   Hierarchical safe RL methods safeguard unsafe RL actions               a∈A            Action
+                                                                          o∈O            Observation
+using structures of underlying dynamics [13, 78, 75] and                     T           Time horizon or episode length
+control-theoretic safety certificates [10, 84, 51]. These methods          γRL           Discount factor for reinforcement learning
+typically build on the assumptions of available dynamics                   γRA           Discount factor in reach-avoid Bellman equation
+                                                                         Vthreshold      Reach-avoid value threshold equal to −ϵ, ϵ > 0
+or safety certificate functions before learning, which heavily             ζ(·)          Function indicating failures
+limits the scalability to high-dimensional complex systems.                l(·)          Function indicating reaching the target
+                                                                           π
+                                                                         VRA∗ (·)        Ground-truth reach-avoid values conditioned on policy
+Some recent works learn safety prediction networks (or safety
+                                                                                         π
+critics) and safety backup policies to safeguard RL when the               π (·)
+                                                                          VRA            Ground-truth discounted reach-avoid values condi-
+safety critics indicate the nominal policy is unsafe [66, 31].                           tioned on policy π
+Nevertheless, these frameworks lack interplay between safety               V̂ (·)        Neural network for discounted policy-conditioned
+                                                                                         reach-avoid value approximation
+critics and backup policies, relying on the demanding assump-
+                                                                         π Agile         Agile policy
+tion that the backup policy can restore safety without explicit         π Recovery       Recovery policy
+optimization to satisfy the safety critics.                                  v           Linear velocity in the base frame
+                                                                            ω            Angular velocity in the base frame
+   Our approach aligns with the hierarchical methods, yet it                cf           Foot contact statuses
+stands out with a distinctive strategy. We focus on estimating               g           Normalized projected gravity in the base frame
+the reach-avoid values of the agile policy and feed the reach-           q, q̇, q̈       Joint positions, velocities, and accelerations
+                                                                             τ           Joint torques
+avoid values’ gradient information back into the system to                  R            Logarithm of ray distances
+guide the recovery policy within a closed loop. This innovative           dgoal          Distance from the robot to the goal
+approach enables a dynamic and adaptive recovery process.                  Gc            Goal command
+Notably, all our modules are trained in simulation using                    vc           Linear velocity command in the base frame
+                                                                            ωc           Angular velocity command in the base frame
+a model-free approach, enhancing the generalizability and                  twc           Twist command
+scalability of our method.                                              ReLU(·)          Function clipping negative values to zero [22]
+                                                                       Abbreviation      Full Form
+                                                                          ABS            Agile but safe
+                                                                           RA            Reach-avoid
+                                                                           RL            Reinforcement learning
+D. Reach-Avoid Problems and Hamilton-Jacobi Analysis                      MPC            Model predictive control
+                                                                          MLP            Multilayer perceptron
+
+   Reach-avoid (RA) problems involve navigating a system
+to reach a target while avoiding certain undesirable states.
+Hamilton-Jacobi (HJ) reachability analysis [3] solves this                            III. OVERVIEW AND P RELIMINARIES
+problem by analyzing the associated Hamilton-Jacobi partial          A. Nomenclature
+differential equation, which provides a set of states that the
+system must stay out of in order to remain safe.                       We present important symbols and abbreviations that are
+   HJ reachability analysis faces computational challenges,          used across this paper in Table I for reference.
+which escalate exponentially with the system’s dimensional-
+ity [9]. Recent learning-based methods [2] try to scale HJ           B. Problem Formulation
+reachability analysis to high-dimensional systems by learning          1) Dynamics: Let st ∈ S ⊂ Rns be the state at time step t,
+value networks that satisfy the associated HJ partial differential   where ns is the dimension of the state space S; at ∈ A ⊂ Rna
+equations and constraints. However, they still require explicit      be the control input at time step t, where na is the dimension
+system Hamiltonian expression before learning.                       of the action space A. The system dynamics are defined as:
+   Our method builds on another line of works [21, 30] that
+leverage contraction properties to derive a time-discounted                                     st+1 = f (st , at ),                         (1)
+reach-avoid Bellman equation. However, contrary to previous
+works that learn policy-agnostic RA values during RL training,       where f : S × A → S is a function that maps the current
+we instead learn a policy-conditioned RA value network.              robot state and control to the next state. For simplicity, this
+This not only reduces the computational burden by avoiding           paper considers deterministic dynamics that can be without
+the identifiability issue of the global RA set but also best         an analytical form. We denote the robot observations from
+suits our trained agile policy. Similarly, a concurrent work         proprioception and/or exteroception as ot = h(st ) where h :
+on neural control barrier functions [60] also applies policy-        S → O is the sensor mapping. Detailed observation and action
+conditioned safety filters to shield complex systems with            space of the agile policy and recovery policy will be introduced
+reduced complexity.                                                  in Section IV and Section VI.
+(i) Stage 1: Policy training.                                     (a) Training            (b) Deployment
+                           Ground Truth
+                                                                                                             Joint Targets
+       Proprioception                            Joint Targets
+       Exteroception               Agile                             Simulation
+         Navigation                Policy                                                           Agile                    Recovery           PD Controller
+                                                RL Optimizer                                                                                                 200Hz
+         Command                                                                                    Policy                    Policy
+                                 Random
+                                 Sampling
+                                                 Joint Targets                                                                                 Twist
+           Twist
+                                                                                                                                             Command
+         Command                 Recovery
+                                  Policy
+       Proprioception                           RL Optimizer
+                                                                                                                                               Online
+(ii) Stage 2: Network training from agile policy rollout data.
+                                                                                                             50Hz                   50Hz      Search for
+                                                            Reach/                                                                            Safe Twist
+ (   Navigation   Twist
+     Command Command
+                            Proprioception Exteroception   Failure/
+                                                             Safe    ,            )
+                                                                                                   Reach-Avoid Value Network
+      Agile                    Reach-Avoid         Train          Reach-Avoid
+                                                                                                                                     50Hz
+      Policy                     Dataset                         Value Network
+                   Rollout
+                                Perception         Train         Ray-Prediction            Navigation     Proprioception        Exteroception
+   Simulation
+                                 Dataset                           Network                 Command
+                                                                                                                 State              Ray-Prediction
+                                                                                                               Estimator              Network
+
+ (                                    ) (                                         )
+                                                                                                                                                      40Hz
+
+
+                      ,                                          ,                                                                  Robot
+
+
+Fig. 2. Overview of ABS: (a) There are four trained modules within the ABS framework: 1) Agile Policy (introduced in Section IV) is trained to achieve
+the maximum agility amidst obstacles; 2) Reach-Avoid Value Network (introduced in Section V) is trained to predict the RA values conditioned on the agile
+policy as safety indicators; 3) Recovery Policy (introduced in Section VI) is trained to track desired twist commands (2D linear velocity vxc , vyc and yaw
+angular velocity ωzc ) that lower the RA values; 4) Ray-Prediction Network (introduced in Section VII) is trained to predict ray distances as the policies’
+exteroceptive inputs given depth images. (b) Illustration of the ABS deployment architecture. The dual policy setup switches between the agile policy and
+the recovery policy based on the estimated V̂ from the RA value network: 1) if V̂ < Vthreshold , the agile policy is activated to navigate amidst obstacles; 2) if
+V̂ ≥ Vthreshold , the recovery policy is activated to track twist commands that lower the RA values via constrained optimization.
+
+
+   2) Goal and Policy: Goal-conditioned reinforcement learn-                      all prior timesteps.
+ing [45] learns to reach goal states G ∈ Γ via a goal-                               4) Reach-Avoid Value and Time-Discounted Reach-Avoid
+conditioned policy π : O × Γ → A. With the reward function                        Bellman Equation: We define policy-conditioned reach-avoid
+                                                                                                 π                           π
+r : S × A × Γ → R and the discount factor γRL . The policy is                     values as: VRA    ∗ (s) ≤ 0 ⇔ s ∈ RA (Θ; F). Following the
+
+learned to maximize the expected cumulative return over the                       proof (Appendix A in [30]), it can be easily extended that value
+                                                                                               π
+goal distribution pG :                                                            function VRA   ∗ (s) satisfies the fixed-point reach-avoid Bellman
+                                "
+                                  X
+                                                      #                           equation (our policy-conditioned value function is a special
+                                     t                                            case of the general value function):
+    J(π) = Eat ∼π(·|ot ,G),G∼pG     γRL r(st , at , G) .  (2)
+                                            t
+                                                                                                         n                                      o
+                                                                                       π                                      π
+                                                                                                                      
+                                                                                     VRA ∗ (s) = max      ζ(s), min l(s), VRA   ∗ (f (s, π(s)))   .
+   3) Failure Set, Target Set and Reach-Avoid Set: We denote
+the failure set F ⊆ S as unsafe states (e.g., collision) where                                                                                    (4)
+the robot is not allowed to enter. The failure set can be                         However, there is no assurance that Equation (4) will result
+represented by the zero-sublevel set of a Lipschitz-continuous                    in a contraction in the space of value functions. To make it
+function ζ : S → R, i.e., s ∈ F ⇔ ζ(s) > 0. The target                            accessible to data-driven approximation, we leverage time-
+set Θ ⊂ S is defined as desired states (i.e., goal states).                       discounted reach-avoid Bellman equation [30] to make a
+Similarly, the target set can be represented by the zero-sublevel                 contraction on the discounted policy-conditioned reach-avoid
+set of a Lipschitz-continuous function l : S → R, i.e.,                           values VRAπ
+                                                                                              (s) defined as
+s ∈ Θ ⇔ l(s) ≤ 0. We denote ξsπt (·) as the future trajectory                                           n                                  o
+                                                                                      π                                    π
+                                                                                                                  
+rollout from state st (ξsπt (0) = st ) using policy π up to sT .                     VRA (s) =γRA max ζ(s), min l(s), VRA    (f (s, π(s)))
+The reach-avoid set conditioned on policy π is defined as                                                       
+                                                                                                + (1 − γRA ) max l(s), ζ(s) .
+  RAπ (Θ; F) := {st ∈ S |ξsπt (T − t) ∈ Θ∧                                                                                                  (5)
+                                                                           (3)
+                                   ∀t′ ∈ [0, T − t], ξsπt (t′ ) ∈
+                                                                / F},             Following [30], it can be shown that VRA     π
+                                                                                                                                 (s) is always
+                                                                                                                  π
+which represents the set of states governed by policy π capable                   an under-approximation of VRA∗ (s) for γRA ∈ [0, 1), and
+                                                                                    π                   π
+of leading the system to Θ while consistently avoiding F in                       VRA (s) converges to VRA ∗ (s) as γRA approaches 1. Note that
+                                π          π
+the under-approximation of VRA    (s) to VRA ∗ (s) means that          All of the four modules are directly deployed in the real world
+  π                      π
+VRA (s) ≤ 0 ⇒ s ∈ RA (Θ; F), which enables that shielding              after training.
+                             π
+methods on thresholds of VRA   (s) could make the system stay
+in the control-theoretic reach-avoid set RAπ (Θ; F).
+                                                                                       IV. L EARNING AGILE P OLICY
+C. System Structure
+                                                                          As mentioned in Section III-C, we train an agile policy to
+    As shown in Figure 2, our proposed ABS framework                   achieve high agility amidst obstacles. Previous works on learn-
+involves a dual-policy setup where the agile policy π Agile and        ing agile locomotion typically employ the velocity-tracking
+the recovery policy π Recovery work together to enable agile and       formulation [48, 58], i.e., to track velocity commands on
+safe locomotion skills. The agile policy performs agile motor          open, flat terrains. However, designing a navigation planner
+skills (up to 3.1 m/s on Unitree Go1) to navigate the robot            for these velocity-tracking policies in cluttered environments
+based on goal commands (target 2D positions and headings)              can be non-trivial. To ensure safety, the planner may have to
+with basic collision-avoidance ability (see also Section IV).          be conservative and unable to fully unleash the locomotion
+The recovery policy is responsible for safeguarding the agile          policy’s agility.
+policy by rapidly tracking twist commands (2D linear velocity             Instead, we use the goal-reaching formulation to maximize
+vxc , vyc and yaw rate ωzc ) that can avoid collisions (see also       the agility, inspired by [54, 82]. Specifically, we train the robot
+Section V-C and Section VI). Both policies output joint targets        to develop sensorimotor skills that enable it to reach specified
+that are tracked by a PD controller.                                   goals within the episode time without collisions. The agility
+    During deployment, the policy switch is governed by RA             is also encouraged by a reward term pursuing high velocity
+values conditioned on the agile policy, estimated using a neural       in the base frame. By doing so, the robot naturally learns to
+network V̂ (see also Section V). With a safety threshold               achieve maximum agility while avoiding collisions.
+Vthreshold = −ϵ where ϵ is a small positive number, we have:              This section presents the details of our agile policy learning.
+    • If V̂ ≥ Vthreshold , we search for a twist command that          A detailed comparison between goal-reaching and velocity-
+        drives the robot closer to the goal while maintaining          tracking formulations for agility will be presented in Sec-
+        safety based on V̂ (see also Equation (21)). The recovery      tion IX-A1.
+        policy takes control and tracks the searched twist com-
+        mand.
+    • If V̂ < Vthreshold , the agile policy takes control.
+                                                                       A. Observation Space and Action Space
+We expect the system to activate the agile policy in most time,           The observation space of the agile policy consists of the
+and use the recovery policy as a safeguard in risky situations         foot contacts cf ∈{1,2,3,4} , the base angular velocities ω, the
+until it is safe again for the agile policy, i.e., V̂ < Vthreshold .   projected gravity in the base frame g, the goal commands Gc
+    For collision avoidance, both the agile policy and the RA          (i.e., the relative position and heading of the goal) in the base
+value networks need exteroceptive inputs. Inspired by [29,             frame, the time left of the episode T − t, the joint positions
+16, 1], we choose to use a low-dimensional exteroception               q, the joint velocities q̇, the actions a of the previous frame,
+representation: the distances that 11 rays travel from the robot       and the exteroception (i.e., log values of the ray distances) R.
+to obstacles, similar to sparse LiDAR readings. We train a             Here we omit the step-based timestamps (t − 1 for the actions
+network that maps raw depth images to predicted ray distances          and t otherwise) for brevity. We refer to the collection of all
+(see also Section VII), and the ray distances serve as part of         these variables as oAgile .
+the observations for the agile policy and the RA value network.           Among these observations, only g and Gc require the
+    To summarize, as shown in Figure 2 (a), ABS needs to train         state estimators for respectively orientation and odometry.
+four modules all in simulation:                                        All other values are available from raw sensor data without
+    1) The agile policy (Section IV) is trained via RL to reach        cumulative drifts. The IMU-based orientation estimation for g
+         the goal without collisions. We design goal-reaching          (i.e., roll and pitch) is usually very accurate, and our policy can
+         rewards to encourage the most agile motor skills.             effectively handle the odometry drift (as we can even suddenly
+    2) The RA value network (Section V) is trained to indicate         change the goals in the run, see Section IX-D). Therefore, our
+         the safety for the agile policy. We use a data-driven         agile policy is robust to inaccurate state estimators which can
+         method to train it based on the RA bellman equation           be problematic for model-based controllers [6, 34, 18].
+         (Equation (5)), and collect data in simulation by rolling        The action space of the agile policy consists of 12-d
+         out the agile policy.                                         joint targets. A PD controller tracks these joint targets a by
+    3) The recovery policy (Section VI) is trained to track twist      converting them to joint torques:
+         commands rapidly from high-speed movements.
+    4) The ray-prediction network (Section VII) is trained to                              τ = Kp (a − q) − Kd q̇.                    (6)
+         predict ray distance observations from depth images.
+         We collect synthetic depth images and ray distances in        A fully-connected MLP maps the observations oAgile to the
+         simulation by rolling out the agile policy.                   actions a.
+B. Rewards
+  Our reward function is the summation of multiple terms:
+                  r = rpenalty + rtask + rregularization ,          (7)
+where each term can be further divided into subterms as
+                                                                           Fig. 3. Example training environments. The magenta points indicate the
+follows.                                                                   goals, and the bluegreen lines indicate the exteroceptive ray observations.
+   1) Penalty Rewards: We use a simple penalty design:                     Terrains from left to right: flat, low stumbling blocks, and rough.
+             rpenalty = −100 · 1(undesired collision),              (8)
+where undesired collision refers to collisions on the base,                reached (based on the hardware datasheet), and the “correct
+thighs, and calves, and horizontal collisions on the feet.                 direction” means that the angle between the robot heading
+   2) Task Rewards: The task rewards are:                                  and the robot-goal line is smaller than 105◦ . To maximize this
+         rtask = 60 · rpossoft + 60 · rpostight + 30 · rheading            term, the robot has to either run fast or stay at the goal.
+                                                                    (9)       The stall term rstall is 1 if the robot stays static when dgoal >
+               − 10 · rstand + 10 · ragile − 20 · rstall ,                 σsoft and the robot is not in the “correct direction”. This term
+i.e., a soft position tracking term rpossoft to encourage the              penalizes the robot for time waste.
+exploration for goal reaching, a tight position tracking term                 3) Regularization Rewards: The regularization rewards are:
+rpostight to reinforce the robot to stop at the goal, a heading
+                                                                            rregularization = − 2 · vz2 − 0.05 · (ωx2 + ωy2 ) − 20 · (gx2 + gy2 )
+tracking term rheading to regulate the robot’s heading near the                                             X12
+goal, a standing term rstand to encourage a standing posture at                 − 0.0005 · ∥τ ∥22 − 20 ·            ReLU (|τi | − 0.85 · τi,lim )
+                                                                                                                i=1
+the goal, an agile term ragile to encourage high velocities, and a                                          X12
+stall term rstall to penalize the waiting behaviors. These terms                − 0.0005 · ∥q̇∥22 − 20 ·            ReLU (|q̇i | − 0.9 · q̇i,lim )
+                                                                                                               i=1
+ensure that the robot should reach the goal with appropriate                              X12
+heading and posture as fast as possible while wasting no time.                  − 20 ·           ReLU (|qi | − 0.95 · qi,lim )
+                                                                                            i=1
+   To be specific, our tracking terms (rpossoft , rpostight , rheading )        − 2 × 10−7 · ∥q̈∥22 − 4 × 10−6 · ∥ȧ∥22 − 20 · 1(fly),
+are in the same form as shown below, inspired by [83] where                                                                             (13)
+RL-based navigation planners are learned:                                  where τ is the joint torques, τlim is the hardware torque limits,
+                                           1    1(t > T − Tr )             q̇lim is the hardware joint velocity limits, qlim is the hardware
+ rtrack (possoft/postight/heading) =
+                                           error   2 · Tr
+                                                                 ,         joint position limits, and “fly” refers to when the robot has no
+                              1+             σ                             contact with the ground. We penalize the “fly” cases as they
+                                                               (10)
+                                                                           make the robot base uncontrollable, threatening the system’s
+where σ normalizes the tracking errors, T is the episode
+                                                                           safety.
+length, and Tr is a time threshold. By doing so, the robot
+only needs to reach the goal before T − Tr to maximize the                 C. Training in Simulation
+tracking rewards, free from explicit motion constraints such as               1) Simulator: We use the GPU-based Isaac Gym simu-
+target velocities that may limit the agility. For the soft position        lator [47] which supports us to train 1280 environments in
+tracking, we have σsoft = 2 m and Tr = 2 s with the error                  parallel with the PPO algorithm [56].
+being the distance to the goal. For the tight position tracking,              2) Terrains: We train the agile policy with randomized
+we have σtight = 0.5 m and Tr = 1 s. For the heading tracking,             terrains following a curriculum to facilitate learning. To pre-
+we have σheading = 1 rad and Tr = 2 s with the error being                 vent unstable gaits that over-exploits the simulation dynamics,
+the relative yaw angle to the goal heading. We further disable             the terrains are randomly sampled to be flat, rough, or low
+rheading when the distance to the goal is larger than σsoft so             stumbling blocks, as shown in Figure 3. As the difficulty level
+that collision avoidance is not affected.                                  goes up from 0 to 9, the rough terrains and the stumbling
+   The standing term is defined as                                         blocks have larger height difference from 0 cm to 7 cm.
+                        1(t > T − Tr,stand )                                  3) Obstacles: We train the policy with cylinders of 40 cm
+ rstand = ∥q − q̄∥1 ·                        · 1(dgoal < σtight ), (11)    radius. For each episode we have 0∼8 obstacles randomly
+                             Tr,stand
+                                                                           distributed in a 11 m× 5 m rectangle that covers the origin
+where q̄ is the nominal joint positions for standing, Tr,stand =
+                                                                           and the goal. To facilitate learning, we also apply a curriculum
+1 s, and dgoal is the distance to the goal.
+                                                                           where higher difficulty levels have more obstacles.
+   The agile term is the core term that encourages the agile
+                                                                              4) Domain Randomization: We do domain randomiza-
+locomotion. It is defined as
+                          vx                                              tion [67] for sim-to-real transfer. The randomized settings
+   ragile = max ReLU(           ) · 1(correct direction),                  are listed in Table II. Among these few terms, two are
+                          vmax                               (12)          critical: the illusion, and the ERFI-50. The illusion makes
+                                        1(dgoal < σtight ) ,               the policy more robust to unseen geometries such as walls:
+where vx is the forward velocity in the robot base frame,                  it overwrites the observed ray distances by random values
+vmax = 4.5 m/s is an upper bound of vx that cannot be                      subject to U(dgoal + 0.3, ray distance) if they are larger than
+                           TABLE II
+  D OMAIN R ANDOMIZATION S ETTINGS FOR AGILE P OLICY T RAINING               On the other hand, we don’t use joint-level observations (such
+                                                                             as q and q̇) here because they are high-dimensional and less
+  Term                        Value                                          pertinent to goal reaching. We train an RA value network V̂
+  Observation
+    Illusion                  Enabled                                        to approximate the RA values:
+    Joint position noise      U (−0.01, 0.01) rad                                                   π  Agile
+
+    Joint velocity noise      U (−1.5, 1.5) rad/s                                                  VRA (s) ≈ V̂ (oRA ).                     (15)
+    Angular velocity noise    U (−0.2, 0.2) rad/s                              Based on Equation (5), we minimize the following loss for
+    Projected gravity noise   U (−0.05, 0.05)
+    log(ray distance) noise   U (−0.2, 0.2)                                  each episode with gradient descent:
+  Dynamics                                                                                         T                        2
+    ERFI-50 [8]               0.78 N m× difficulty level                                        1 X
+    Friction factor           U (0.4, 1.1)
+                                                                                          L=           V̂ (oRA
+                                                                                                            t ) − V̂
+                                                                                                                     target
+                                                                                                                               ,    (16)
+                                                                                               T t=1
+    Added base mass           U (−1.5, 1.5) kg
+    Joint position biases     U (−0.08, 0.08) rad                            where
+  Episode                                                                                          n                                  o
+                                                                                V̂ target =γRA max ζ(st ), min l(st ), V̂ old (oRA
+                                                                                                              
+    Episode length            U (7.0, 9.0) s                                                                                    t+1 )
+    Initial robot position    x = 0, y = 0                                                                                                 (17)
+    Initial robot yaw         U (−π, π) rad                                                + (1 − γRA ) max l(st ), ζ(st ) ,
+    Initial robot twist       U (−0.5, 0.5) m/s or rad/s
+    Goal Position             xgoal ∼ U (1.5, 7.5) m                         and we set the discount factor γRA = 0.999999 to best
+                              ygoal ∼ U (−2.0, 2.0) m                        approximate RAπ (Θ; F) since VRA      π
+                                                                                                                     (s) converges to VRA π
+                                                                                                                                            ∗ (s)
+    Goal Heading              arctan 2(ygoal , xgoal ) + U (−0.3, 0.3) rad                              old
+                                                                             as γRA approaches 1. V̂ refers to V̂ from previous iteration,
+                                                                             and we set V̂ old (oRA
+                                                                                                 T +1 ) = +∞.
+dgoal + 0.3. The ERFI-50 proposed by Campanaro et al. [8]                       Differing from [30], our approach learns policy-conditioned
+implicitly models the motor sim-to-real gaps with random                     reach-avoid values instead of solving policy-agnostic global
+torque perturbations, and we add a curriculum in our work to                 reach-avoid value of the entire system dynamics which in-
+avoid impeding the early stage of learning. We also randomly                 volves another value minimization problem over A. Our
+bias the joint positions to model the motor encoders’ offset                 method offers several advantages: 1) simplicity: as highlighted
+errors.                                                                      in Equation (5), this simplicity arises from avoiding the
+   5) Curriculum: As mentioned above, we apply a curricu-                    need to solve for the lowest value of the next state across
+lum where difficulty levels can change the terrains, the obstacle            the entire action space. 2) two-stage offline learning: our
+distribution, and the domain randomization. For the assign-                  approach can be learned in a two-stage offline manner. This
+ment of difficulty levels, we follow the design of Zhang et al.              involves first collecting policy trajectories and then training the
+[82]: when an episode terminates, the robot gets promoted to                 policy-conditioned reach-avoid value. This two-stage process
+a higher level if dgoal < σtight , and gets demoted to a lower               enhances stability compared to the online training method
+level if dgoal > σsoft . If the robot gets promoted at the highest           presented in [30].
+level, it will go to a random level, following [55].
+                                                                             B. Implementation
+     V. L EARNING AND U SING R EACH -AVOID VALUES
+                                                                                According to [30], l(s) and ζ(s) should be Lipschitz-
+   Although the agile policy learns certain collision avoidance              continuous for theoretical guarantees. In our implementation,
+behaviors via corresponding rewards, it does not ensure safety.              we define the l(s) as
+To safeguard the robot, we propose to use RA values to predict
+                                                                                                                    dgoal
+the failures, and then a recovery policy can save the robot                                      l(s) = tanh log          ,           (18)
+based on the RA values.                                                                                            σtight
+   Inspired by Hsu et al. [30], we learn RA values in a model-               thereby making it Lipschitz-continuous, bounding it with
+free way, contrasting typical approaches of model-based reach-               (−1, 1), and setting dgoal ≤ σtight as “reach”.
+ability analysis [2]. This better suits the model-free RL-based                 Regarding failures, we naturally have
+policies. Also different from [30], we do not learn the global                           ζ(s) = 2 ∗ 1(undesired collision) − 1.             (19)
+RA values, but make it policy-conditioned, as mentioned in
+Section III-B4. The learned RA value function will predict                   However, this definition violates the Lipschitz continuity.
+only the agile policy’s failures based on the observations.                  Hence, we soften the function in a hindsight way: when
+                                                                             an undesired collision happens, the ζ values for the last 10
+A. Learning RA Values                                                        timesteps are relabelled to be −0.8, −0.6, . . . , 0.8, 1.0.
+  To avoid overfitting in high dimensions and make the RA                       For RA dataset sampling, we make the obstacles distribute
+values generalize, we use a reduced set of observations as the               as in the highest difficulty level during the training of the agile
+inputs of the RA value function:                                             policy. We roll out our trained agile policy for 200k episodes,
+                                                                             and collect these trajectories for RA learning.
+                   oRA = [v; ω] ; Gcx,y ; R ,
+                                          
+                                                          (14)
+                                                                                Figure 4 visualizes the learned RA values for a specific set
+i.e., the base twists, the goal (x, y) position in the robot frame,          of obstacles. As the robot’s velocity changes, the landscape
+and the exteroception. These components are centroidal obser-                of RA values changes accordingly. The sign of the RA values
+vations that significantly influence safety and goal reaching.               reasonably indicates the safety for the agile policy.
+                  1m/s                         2.5m/s              4m/s             A. Observation Space and Action Space
+                              1m/s
+
+
+Lipschitz
+                                                                                       The observation space of the recovery policy differs from
+                                                                                    the agile policy in that it tracks twist commands and it does
+                                                                                    not need exteroception. The recovery policy’s observation oRec
+                                                                                    consists of: the foot contacts cf , the base angular velocities ω,
+                  1m/s
+
+
+Non-Lipschitz
+                              1m/s             2.5m/s              4m/s             the projected gravity in the base frame g, the twist commands
+                                                                                    twc (only non-zero variables), the joint positions q, the joint
+                                                                                    velocities q̇, and the actions a of the previous frame.
+                                                                                       The action space of the recovery policy is exactly the same
+                                                                                    as that of the agile policy: the 12-d joint targets. We also use
+  Fig. 4. Visualization of V̂ with different linear velocities and 2D positions     an MLP as the policy network.
+  relative to the 3 fixed obstacles. The angular velocities are set to zero, and
+  the relative goal commands are set to 5 m ahead of the robot. The grey            B. Rewards
+  circles represent the obstacles, and the colors represent the values of V̂ at        Similar to the agile policy, the reward functions for the
+  corresponding 2D positions. The first row presents the RA values trained
+  with the softened failure function ζ, while the second row uses the raw one       recovery policy also consist of three parts: the penalty re-
+  in Equation (19). Without softening ζ to approach the Lipschitz continuity,       wards, the task rewards, and the regularization rewards. The
+  the value estimation fails to indicate collisions on the sides of obstacles and   regularization rewards and the penalty rewards remain the
+  has local minima in front of the obstacles, compromising safety.
+                                                                                    same, except that we allow knee contacts with the ground
+                                                                                    for maximum deceleration (e.g., Figure 1 (a)).
+  C. Using RA Values for Recovery                                                      The task rewards are for twist tracking:
+     RA values provide a failure prediction conditioned on the
+  agile policy, and we propose to use RA values to guide                             rtask = 10 · rlinvel − 0.5 · rangvel + 5 · ralive − 0.1 · rposture , (23)
+  the recovery policy. To be specific, the robot decides the                        i.e., a term for tracking vxc and vyc , a term for tracking ωzc , a
+  optimal twist to avoid collisions using the RA value func-                        term for staying alive, and a term for maintaining a posture to
+  tion, and employs the recovery policy to track these twist                        seamlessly switch back to the agile policy.
+  commands. The recovery policy is triggered as a back-up                              To be specific, we have
+  shielding policy if and only if V̂ (oRA ) ≥ Vthreshold . We set                                           "                              #
+  Vthreshold = −0.05 to compensate for learning errors without                                                 (vx − vxc )2 + (vy − vyc )2
+                                                                                               rlinvel = exp −              2                ,   (24)
+  causing over-conservative shielding.                                                                                    σlinvel
+     During recovery, we assume that the recovery policy is well-
+  trained so that the robot twist is close to the command                           where we set σlinvel = 0.5 m/s. For the angular velocity,
+
+                              twc = [vxc , vyc , 0, 0, 0, ωzc ],           (20)                            rangvel = ∥ωz − ωzc ∥22 ,                     (25)
+
+  and the robot should try to get closer to the goal if its twist is                which provides a softer landscape near the command than
+  safe given the goal and the exteroception. Therefore, the twist                   rlinvel . The alive term is simply
+  command is obtained from the optimization:                                                                ralive = 1 · 1(alive).                       (26)
+            twc = arg min dfuture           c   c
+                           goal s.t. V̂ ([tw ; Gx,y ; R]) < Vthreshold , (21)       The posture term is
+  and dfuture
+        goal refers to the approximate distance to the goal after                                          rposture = ∥q − q̄rec ∥1 ,                    (27)
+  tracking the twist command for a small amount of time δt =
+  0.05 s. This is calculated based on the linearized integral of                    where q̄rec is a nominal standing pose with low height allowing
+  the robot displacement in the base frame:                                         the robot to switch back to the agile policy seamlessly.
+                              δx = vxc δt − 0.5vyc ωzc δt2 ,                        C. Training in Simulation
+                                                                           (22)
+                              δy = vyc δt + 0.5vxc ωzc δt2 .                           The simulation settings for training the recovery policy are
+  In our practice, gradient descent with a Lagrangian multiplier                    similar to those for the agile policy. The differences lie in:
+  on the constraint can solve Equation (21) within 5 steps when                        1) Domain Randomization: The observation noises and the
+  initialized with the current twist, thereby enabling real-time                    dynamic randomization do not change. The episode length
+  deployment. A visualization of the twist optimization process                     is changed to 2 s, and there are randomized initial roll and
+  is given in Figure 8 where the searched twist consistently                        pitch angles subject to U(−π/6, π/6) rad. The randomization
+  satisfies the safety constraint (i.e., V̂ < Vthreshold ).                         ranges are also changed for initial vx ∼ U(−0.5, 5.5) m/s
+                                                                                    and initial ω ∼ U(−1.0, 1.0) rad/s. These changes better
+                         VI. L EARNING R ECOVERY P OLICY                            accommodate the states that can trigger the recovery policy
+     The recovery policy is intended to make the robot track a                      during the agile running. The ranges of sampling commands
+  given twist command as fast as possible so that it can function                   are vxc ∼ U(−1.5, 1.5) m/s, vyc ∼ U(−0.3, 0.3) m/s, and
+  as a backup shielding policy, as mentioned in Section V.                          ωzc ∼ U(−3.0, 3.0) rad/s.
+                   Vase         Human          Cone        Cylinder
+                                                                                          way. To facilitate generalization, as shown in Figure 5, we
+                                                                                          replace the cylinders with objects of different shapes during
+                                                                                          data collection.
+                  Oaktree     Office Chair   Fold Chair   Dining Chair
+                                                                                          B. Data Augmentation for Sim-to-Real Transfer
+                                                                                            The real-world depth images collected from cameras are far
+                                                                                          more noisy than the rendered depth images in simulation [28].
+                                                                                          To make the ray-prediction network adapt better to real-world
+     Fig. 5.     Various obstacles used for ray-prediction data collection.               depth images, we apply four data augmentation techniques
+                                                                                          during training, as shown in Figure 6: 1) horizontal flip;
+Original Image    Horizontal Flip   Random Erase      Gaussian Blur      Gaussian Noise   2) random erase; 3) Gaussian blur; 4) Gaussian noise. For
+                                                                                          deployment, we apply hole filling [62] to further reduce the
+                                                                                          gap of depth images between the simulation and the real world.
+                                                                                          C. Other Implementation Details
+                                                                                             To make the network focus more on close obstacles, we
+Fig. 6. Illustration of four kinds of image augmentation used for depth-based             take the logarithm of depth values as the NN inputs, and
+ray-prediction training.                                                                  the logarithm of ray distances as the outputs, with the mean
+                                                                                          squared error as the loss function.
+   2) Curriculum: The curriculum still exists for terrains and                               We finetune ResNet-18 [27] with pretrained weights to
+domain randomization. However, the assignment is changed:                                 train the model. The images are downsampled to [160, 90]
+the robot gets promoted if the velocity tracking error is smaller                         resolution both in simulation and during deployment.
+than 0.7σlinvel , and gets demoted if it falls over.                                                          VIII. E XPERIMENTS
+                              VII. P ERCEPTION                                            A. Baselines
+   As mentioned in Section IV and Section V, both the agile                                  For experimental results, we consider three settings:
+policy and the RA value network use the exteroceptive 11-d                                   1) Our ABS system, with both the agile policy and the
+ray distances as part of the observations, with access to their                                  recovery policy;
+ground truth values during training. These rays are horizontally                             2) Our agile policy π Agile only;
+cast from the robot base, with directions evenly spaced in                                   3) “LAG”: we use PPO-Lagrangian [53] to train end-to-end
+[− π4 , π4 ].                                                                                    safe RL policies with the agile policy’s formulation.
+   However, such ray distances are not directly available during                             By comparing (2) and (3), we can see how agility and safety
+deployment, and we need to train a ray-prediction network to                              trade off without external modules, forming a boundary of
+predict them from depth images, as mentioned in Section III-C.                            agility and safety. With the help of RA values and the recovery
+Such a design leads to the following benefits:                                            policy, we expect (1) to break this boundary with a high safety
+   1) We only need to tune the ray-prediction network to                                  gain: it should be as agile as (2) in safe cases, and shield the
+         handle high-dimensional image noises by data augmen-                             robot in risky cases.
+         tation.                                                                             Note that the three settings here are all based on what we
+   2) The representation is highly interpretable, allowing hu-                            propose. A detailed comparison between our agile policy and
+         mans to supervise.                                                               the previous state-of-the-art (SOTA) agile running policy [48]
+   3) The agile policy and the RA value network are easier to                             is made in Section IX-A1.
+         train with low-dimensional inputs.
+   4) Compared to costly image rendering in simulation, the                               B. Simulation Experiments
+         ray distances are easy to compute and save training time.                           1) Quantitative results: We test the policies trained with
+Besides, although ray distances are similar to sparse LiDAR                               different settings in simulation. To better show the agility-
+readings, we use cameras instead of LiDARs because a                                      safety boundary, we introduce 3 variants for each setting: an
+lightweight low-cost camera can easily reach a high FPS,                                  aggressive one (“-a”) doubling the agile reward term ragile , a
+which is important in high-speed collision avoidance.                                     nominal one (“-n”), and a conservative one (“-c”) halving the
+   We present details for training the ray-prediction network                             ragile . Regarding the obstacles, we distribute eight obstacles
+in this section.                                                                          within a 5.5 m× 4 m rectangle (during training it was 11 m×
+                                                                                          5 m), so the test cases are in distribution but much harder than
+A. Data Collection                                                                        most cases during training.
+  To train our ray-prediction network, we collect a dataset                                  The results are reported in Table III and Figure 7. There are
+of pairs of depth images and ray distances (as shown in                                   three possible outcomes for an episode: success, collision, or
+Figure 2 (a)) by running the agile policy in simulation. The                              timeout. Trajectories that do not trigger success or collision
+ray-prediction network can then be trained in a supervised                                criteria within the episode length are labelled as “timeout”.
+                                                                                        TABLE III
+                                                                          B ENCHMARKED C OMPARISON IN S IMULATION
+
+                                                 Success Rate (%)     Collision Rate (%)     Timeout Rate (%) v̄peak of Success (m/s)         v̄ of Success (m/s)
+                                      ABS-a          78.9±1.4               4.4±0.5             16.7±1.9             3.74±0.02                     2.15±0.04
+                                      ABS-n           79.1±4.4              5.7±2.9              15.2±2.1            3.48±0.06                     2.08±0.01
+                                      ABS-c          85.8±5.6               2.9±0.7             11.3±5.1             2.98±0.12                     1.87±0.03
+                                      π Agile -a      73.3±4.3             26.1±4.4              0.6±0.1             3.83±0.03                     2.55±0.03
+                                      π Agile -n      77.3±4.2             21.7±3.9               1.0±0.4            3.55±0.04                     2.39±0.04
+                                      π Agile -c     83.2±1.7              15.5±2.0               1.3±0.6            3.04±0.13                     2.04±0.08
+                                      LAG-a          82.5±6.0              10.9±2.6              6.6±4.5             2.70±0.13                     1.69±0.09
+                                      LAG-n          77.4±11.5              9.1±1.8             13.5±13.0            2.45±0.07                     1.41±0.03
+                                      LAG-c          49.1±8.4               7.4±2.7             43.5±11.1            2.45±0.10                     1.12±0.08
+                                      *Bold values: the mean falls within the range of top1’s mean ± top1’s std.
+
+                                                                                                  (a)
+                                                                                                                                  (I) (II)
+
+
+
+
+ v in Success Cases (m/s)
+                                     ABS-a
+                            2        ABS-n
+                                     ABS-c
+                                      Agile-a
+                                      Agile-n
+                                                                                                                                          Collision       Success
+                                      Agile-c
+                            1        LAG-a                                                        (b)
+                                     LAG-n
+                                     LAG-c
+                                                                                                                                 (I)   (II)
+                                70                 80                90               100
+                                                Non-Collision Rate (%)
+Fig. 7. Illustration of agility-safety trade-off in benchmarked comparison.
+Agility is quantified by the average speed achieved in success cases while
+safety is represented by the non-collision rate. Points indicate the mean values,                                          Collision                       Success
+and error bars indicate the std values.
+                                                                                                 (c)
+                                                                                                   (I)
+We report the success rate, the collision rate, the timeout rate,
+the average peak velocity for success cases, and the average
+speed for success cases as the metrics. For each setting, the
+mean and std values are calculated over 3 policies trained with
+different seeds, and the metrics are obtained via testing for 10k
+random episodes.
+   The results indicate that, no matter how the reward weights
+are tuned or whether the RL algorithm is constrained by                                            (II)
+safe exploration, the agility and the safety trade off within a
+boundary. Yet, with our RA values and the recovery policy as
+a safeguard, we can break this boundary and get a substantial
+improvement in safety at the cost of only a minor decrease in
+agility.
+   Note that the variants are only introduced to show the
+boundary here. In the following parts, we will only use the
+nominal ones.                                                                                     Fig. 8. An example case in simulation where π Agile fails to reach the goal. a)
+   2) Example Case: We present an example case of ABS and                                         Trajectories of ABS and other baselines, with RA values visualized for ABS.
+                                                                                                  b) The velocity-time curves showing that ABS is much faster than the LAG
+other baselines in simulation, where the robot starting from                                      baseline. c) Illustrations of the RA value landscape when the recovery policy
+(0, 0) needs to run through 8 obstacles to reach the goal (7, 0),                                 is triggered at (I) and (II), projected in the vx − ωz plane and the vx − vy
+as shown in Figure 8. The robot needs to first go through an                                      plane. We show the initial twist before search (i.e., the current twist of the
+                                                                                                  robot base) and the searched commands based on Equation (21).
+open space, followed by two tight spaces, and then another
+open space. In this case, the π Agile baseline runs fast but
+collides near the second tight space. The LAG baseline runs                                       activated, where the searched twist consistently satisfies the
+much slower than ABS. In contrast, our proposed ABS runs                                          safety constraint (i.e., V̂ < Vthreshold ).
+fast in the open spaces, and slows down in the tight spaces for
+safety thanks to the shielding of RA values and the recovery                                      C. Real-World Experiments
+policy. Figure 8 (c) demonstrates the RA value landscape                                            1) Hardware setup: We use the Unitree Go1 for our exper-
+with respect to twist commands when the recovery policy is                                        iments. The robot is equipped a Jetson Orin NX for onboard
+                                                                                                                        TABLE IV
+                                                           Success Collision Time Cost          G OAL -R EACHING P OLICY V. S . V ELOCITY-T RACKING P OLICY
+
+                                              ABS           9/10        1/10     5.91 s                 Term                   Our π Agile             Rapid [48]
+                                                                                                    Gait patterm                  gallop                 near trot
+                                              ABS                                           Max #. uncontrollable DoFs              1                        3
+                                                  Agile     7/10        3/10     5.06 s
+                                           (only π     )
+                                                                                              Peak vel. in simulation            4.0 m/s                 4.1 m/s
+                                                                                             Peak torque in simulation          23.5 Nm                 35.5 Nm
+                                              LAG           8/10        2/10    6.80 s
+    Indoor (a)                                                                              Peak joint vel. in simulation      22.0 rad/s               30.0 rad/s
+                                                                                              Peak vel. in real world            3.1 m/s                 2.5 m/s
+                                                           Success Collision Time Cost          Collision avoidance            as trained      need high-level commands
+                                                                                              Fully unleashed agility           as trained      non-trivial for high level
+                                                                                             Changing vel. for steering      in distribution       out of distribution
+                                              ABS          10/10        0/10     4.75 s         Curriculum learning         straightforward        carefully designed
+                                              ABS
+                                                  Agile     7/10        3/10     3.74 s      w/o illusion          w/ illusion        w/o ERFI-50          w/ ERFI-50
+                                           (only π     )
+
+
+                                              LAG           9/10        1/10     6.13 s
+    Indoor (b)
+
+
+                                                           Success Collision Time Cost
+
+
+                                              ABS          10/10        0/10     4.46 s
+                                                                                          Fig. 11. Effects of illusion and ERFI-50 randomization. The robot will
+                                              ABS                                         tremble near a wall without illusion randomization and will hit the ground
+                                                            9/10        1/10     4.15 s
+                                           (only π
+                                                  Agile
+                                                       )                                  during running without ERFI-50 randomization.
+                                              LAG           9/10        1/10     6.05 s
+     Outdoor
+                                                                                          the fastest running speed at the cost of more collisions. LAG
+                                                                    ABS         LAG       outperforms πAgile in safety but has slower speeds, and falls
+                                                                                          short in both safety and agility compared to ABS. ABS
+                                             Peak Speed            3.1 m/s     2.1 m/s    achieves high speed with high safety, and generalizes to
+    Speed Test
+                                                                                          dynamic obstacles, as shown in Figure 1.
+Fig. 9. We evaluate ABS and other baselines in the real world with two                       3) Robustness: Our ABS system can work on the slippery
+indoor testbeds, one outdoor testbed, and repetitive speed tests. Indoor (a) is           icy snow, bear a 12-kg payload (equal to its own weight), and
+a dim and narrow corridor, Indoor (b) is a hall with furnitures, and Outdoor is
+an open space on the playground with few obstacles. ABS achieves the best                 withstand perturbations, as shown in Figure 10. These tests
+safety across three testbeds, with faster speeds compared to the LAG baseline.            demonstrate the robustness of our system.
+a
+                                                                                                     IX. E XTENSIVE S TUDIES AND A NALYSES
+
+                                                                                          A. Maximizing Agility
+b
+                                                                                             1) Goal-Reaching v.s. Velocity-Tracking: Velocity-tracking
+                                                                                          is the most commonly used formulation of locomotion con-
+c                                      d
+                                                                                          trollers [55, 48, 50, 41], and is also adopted for our recovery
+                                                                                          policy. However, for the agile policy, we claim that goal-
+                                                                                          reaching is a better choice because it does not decouple loco-
+                                                                                          motion and navigation for collision avoidance and can fully
+                                                                                          unleash the agility that is learned. Moreover, we empirically
+Fig. 10. Robustness Tests of our ABS system, a) in snowy terrain,s b) bearing
+a 12-kg payload, c) against a ball hit when running, and d) withstand a kick              find that the goal-reaching formulation benefits sim-to-real
+when standing at the goal.                                                                transfer as it finds a better gait pattern for high-speed running.
+                                                                                             With the SOTA agile velocity-tracking policy in [48] as a
+computation and a ZED Mini Stereo Camera for depth and                                    baseline (referred to as “rapid”), we make detailed compar-
+odometry sensing. We employ the ZED odometry module to                                    isons in Table IV. For fair comparison, we train “rapid” with
+online update the relative goal commands for the agile policy,                            the combination of our regularization rewards and the task
+with its difference as the velocity estimation. We use Unitree’s                          rewards in [48], use the same action space for two policies,
+built-in PD controller, with Kp = 30 and Kd = 0.65.                                       and remove the temporal information and system identification
+   2) Results: Across two indoor and one outdoor testbeds,                                in [48].
+ABS demonstrates superior overall performance as shown in                                    2) Effects of illusion and ERFI-50 randomization: Two key
+Figure 9, achieving the highest success rates and the lowest                              components we add in domain randomization to help sim-
+collision rates. Specifically, ABS consistently scores either 9                           to-real transfer is the illusion and the ERFI-50. As shown
+or 10 out of 10 in success rates across all environments, with                            in Figure 11, without the illusion, the robot will sometimes
+minimal collisions, indicating robustness and reliability in the                          tremble near a wall which it has never seen in simulation.
+real world.                                                                               Without ERFI-50, the robot will hit the ground with its head
+   Without the safety shield, the agile policy πAgile achieves                            during running due to the sim-to-real gap in motor dynamics.
+                                 TABLE V                                                                           TABLE VII
+                E FFECTS OF D IFFERENT VTHRESHOLD ON ABS                                               E FFECTS OF RA S HIELDING ON LAG
+
+           Vthreshold          -0.001        -0.01        -0.05          -0.1                                             ABS        LAG       LAG+RA
+      Success Rate (%)        78.0±2.1    78.1±3.4     79.1±4.4      75.8± 2.0             Success Rate (%)            79.1±4.4   77.4±11.5     70.5±7.7
+     Collision Rate (%)       5.0±0.6      5.8±1.9      5.7±2.9        4.3±0.6            Collision Rate (%)            5.7±2.9    9.1±1.8       2.8±1.2
+  v̄peak of Success (m/s)    3.42±0.06    3.46±0.08    3.48±0.06     3.42±0.05         v̄peak of Success (m/s)        3.48±0.06   2.45±0.07    2.40±0.11
+     v̄ of Success (m/s)     2.08±0.02    2.08±0.01    2.08±0.01     2.05± 0.03           v̄ of Success (m/s)         2.08±0.01   1.41±0.03    1.22±0.08
+                               TABLE VI                                                                     TABLE VIII
+           E FFECTS OF S OFTENED FAILURE I NDICATOR ON ABS                         P ERFORMANCE M ETRICS FOR D IFFERENT N ETWORK A RCHITECTURES
+                                                                                                    AND T RAINING A PPROACHES
+                            ABS w/ softened ζ   ABS w/o softened ζ      π Agile
+     Success Rate (%)           79.1±4.4            81.7±1.3           77.3±4.2
+    Collision Rate (%)          5.7±2.9             14.7±1.5           21.7±3.9    Architecture                          Test Set MSE   Inference Time (ms)
+ v̄peak of Success (m/s)       3.48±0.06           3.45±0.06          3.55±0.04
+    v̄ of Success (m/s)        2.08±0.01           2.27±0.03          2.39±0.04    EfficientNet-B0*                      3.627 × 10−2            19
+                                                                                   MobileNet-V2*                         3.387 × 10−2            15
+                                                                                   ResNet-34                             3.081 × 10−2            14
+                                                                                   ResNet-18                             3.238 × 10−2             9
+B. Extensive Studies on RA Values                                                  ResNet-18 (w/o pretraining)           3.526 × 10−2             9
+   1) Selecting safety threshold: For safety shielding, we                         ResNet-18 (w/o augmentation)          3.393 × 10−2             9
+                                                                                   * We use the PyTorch-ONNX pipeline where the implementations of these network
+choose Vthreshold = −0.05. Theoretically, this threshold cap-
+                                                                                     architectures may be not fully optimized.
+tures the conservativeness of the switching strategy and the
+discrepancy between the true reach-avoid value and its learned
+approximation. Our framework, however, demonstrates robust-                       various tasks, the actual update frequency can be consider-
+ness to the selection of Vthreshold , as evidenced by Table VI                    ably lower. For real-time high-speed locomotion, we opt for
+where scanning Vthreshold from −0.001 to −0.1 brings no                           ResNet-18, balancing accuracy and responsiveness in dynamic
+significant change in the overall performance. For a big value                    environments.
+(0.1 is considered big given that V̂ is bounded between −1 and
+1), the collision rate slightly decreases as expected whereas the                 D. Instant Steering via Commands
+success rate also slightly decreases.                                               As mentioned in Section IV, we can change our goal
+   2) Soft Lipschitz continuity for the failure indicator: In                     commands even in the run time. Thanks to our single-frame
+[20], the Lipschitz continuity is used to prove the existence                     observations and randomization settings, we can easily over-
+and uniqueness of a solution to the value function. In our                        write goal commands to achieve instant agile steering, as
+paper, we soften the discrete collision indicator to approach                     presented in Table IX. This enables direct human involvement
+the Lipschitz continuity, and ablate its effects here. As shown                   similar to the velocity-tracking formulation, and Figure 12
+in Table V, this technique significantly enhances the safety                      showcases such operations in the real world.
+of our system while slightly increasing the conservativeness,
+corroborating the observations made in Figure 4.                                  E. Failure Cases and Limitations
+   3) Can RA values shield LAG baseline: Given that our                              First, when the obstacles are too dense and form a local
+framework is general in shielding the goal-reaching policy                        minimum, our policy can easily fail, which is also reflected by
+with RA values and the recovery policy, it can also shield                        the high timeout rates in the results. This is common in local
+the LAG baseline, which makes a variant of ABS with a cost-                       navigation planners [83, 49] though, and a potential solution
+critic. We present the results of shielded LAG in Table VII,                      can be to add memory [74] or introduce a global hint [70].
+showcasing improved safety over LAG despite slightly re-                             Second, our generalization to dynamic environments are
+duced agility. The LAG+RA setting can still reach an average                      due to the shielding of RA values and the recovery policy.
+speed of > 1 m/s, demonstrating the power of our ABS                              The RA values are learned with static obstacles, and can only
+framework compared to existing works.                                             generalize to quasi-static environments. If a dynamic object
+                                                                                  moves faster than the velocity limit of the recovery policy, the
+C. Enhancing Perception Training                                                  collision may happen. A potential solution is to predict the
+   In refining our ray-prediction network training, we system-                    motions of the obstacles in the future [40, 59].
+atically examine several factors: 1) network architecture, 2)                        Third, we limit the robot behaviors to only 2D locomotion
+pretrained weights, and 3) data augmentation. The comparative                     and constrain the motions to have no flying phase. For 3D
+results, detailed in Table VIII, underscore the significance of                   terrains such as stairs and gaps, the problem can be far more
+both pretrained weights and data augmentation in enhancing                        challenging because the locomotion skills and the collision
+the accuracy of the network.                                                      avoidance are coupled.
+   Regarding the network size, larger networks improve the                           Fourth, implicit system identification techniques [41, 50, 48,
+prediction accuracy at the cost of inference time. Note that the                  39] can leverage temporal information to represent real-world
+reported inference time in Table VIII was measured on Jetson                      dynamics and facilitate sim-to-real transfer, but it is non-trivial
+Orin NX exclusively for perception inference. In practical                        to incorporate them into our system. This requires a latent
+deployment where computational resources are shared among                         embedding of the temporal information, which is hard to deal
+                                                                               various obstacle distributions and states is non-trivial. In
+                                                                               this paper, we guide the recovery policy with RA values
+                                                                               and their gradients to ensure safety.
+                                                                            5) Perception to motion: Visual inputs are high-
+                                                                               dimensional and noisy, while efficient learning of robust
+                                                                               controllers is desired. To this end, we use a low-
+                                                                               dimensional exteroception representation to facilitate
+Fig. 12. Steering the robot with a command sequence “Forward”-“Rapid
+Right Turn”-“Forward”. The robot can reach > 3 m/s when running forward        policy learning and generalization, and train a ray-
+and > 6 rad/s when turning rapidly.                                            prediction network to map raw depth images to the
+                           TABLE IX                                            representation.
+              G OAL C OMMANDS FOR I NSTANT S TEERING
+
+ Steering             Goal x (m)    Goal y (m)    Goal Heading (rad)
+                                                                                              ACKNOWLEDGMENTS
+ Forward                  5             0                 0
+                                                                            We appreciate Wennie Tabib for supporting hardware exper-
+ Stop                     0             0                 0
+ Left Turn                2            1.5                 π              iments, and thank Yuxiang Yang, Yiyu Chen, Yikai Wang and
+                                                           2
+ Rapid Left Turn         −2             0                  3              Xialin He for their advice on hardware debugging, and Arthur
+ Right Turn               2           −1.5                − π2            Allshire for help on software debugging. Special thanks to
+ Rapid Right Turn        −2             0                 −3
+                                                                          Andrea Bajcsy and Ziqiao Ma for their assistance in graphics
+                                                                          design. This work was in part supported by NSF under grant
+with for the RA module. The policy switch can also make the
+                                                                          No. 2144489.
+embedding out of distribution for the policies.
+   Fifth, the vision system needs further improvement. In the
+                                                                                                  R EFERENCES
+Indoor (a) testbed, the only collision of ABS is due to the
+“undetected” objects by the ray-prediction network as the                  [1] Fernando Acero, Kai Yuan, and Zhibin Li. Learning
+corridor is quite dim. Beside the network, the system can also                 perceptual locomotion on uneven terrains using sparse
+be completed by adding more cameras around the body. In                        visual observations. IEEE Robotics and Automation
+this way, the robot may also dodge the obstacles come from                     Letters, 7(4):8611–8618, 2022.
+behind or the side. Event cameras may also help in highly                  [2] Somil Bansal and Claire J Tomlin. Deepreach: A deep
+dynamic scenarios, e.g., when dodging a high-speed ball [19]                   learning approach to high-dimensional reachability. In
+                                                                               2021 IEEE International Conference on Robotics and
+                         X. C ONCLUSION                                        Automation (ICRA), pages 1817–1824. IEEE, 2021.
+   In this paper, we achieve safe high-speed quadrupedal                   [3] Somil Bansal, Mo Chen, Sylvia Herbert, and Claire J
+locomotion in cluttered environments. Our framework ABS                        Tomlin. Hamilton-jacobi reachability: A brief overview
+employs a dual-policy setup where the agile policy enables the                 and recent advances. In 2017 IEEE 56th Annual Confer-
+robot to run fast, and the recovery policy safeguards the robot.               ence on Decision and Control (CDC), pages 2242–2253.
+The learned reach-avoid values govern the policy switch and                    IEEE, 2017.
+guide the recovery policy. A ray-prediction network provides               [4] Shalabh Bhatnagar and K Lakshmanan. An online
+exteroception representation for the agile policy and the RA                   actor–critic algorithm with function approximation for
+value network. Some key takeaways are:                                         constrained markov decision processes. Journal of Opti-
+   1) Advanced agility: Decoupled locomotion and naviga-                       mization Theory and Applications, 153:688–708, 2012.
+      tion constrains the agility of collision-free locomotion             [5] Gerardo Bledt, Matthew J Powell, Benjamin Katz, Jared
+      in existing works. In contrast, we train an end-to-end                   Di Carlo, Patrick M Wensing, and Sangbae Kim. Mit
+      agile policy with the local navigation formulation to                    cheetah 3: Design and control of a robust, dynamic
+      fully unleash the agility while avoiding obstacles.                      quadruped robot. In 2018 IEEE/RSJ International Con-
+   2) Safeguarded agility: The agile policy does not guar-                     ference on Intelligent Robots and Systems (IROS), pages
+      antee safety, while using the Lagrangian-based RL or                     2245–2252. IEEE, 2018.
+      adjusting reward weights only trades off agility and                 [6] Michael Bloesch, Christian Gehring, Péter Fankhauser,
+      safety. In this paper, we use external shielding modules                 Marco Hutter, Mark A Hoepflinger, and Roland Siegwart.
+      to help break the trade-off boundary.                                    State estimation for legged robots on unstable and slip-
+   3) Model-free safety: Model-based methods explicitly                        pery terrain. In 2013 IEEE/RSJ International Conference
+      enforce safety through constraints but struggle with                     on Intelligent Robots and Systems, pages 6058–6064.
+      complex dynamics and high-dimensional states. In this                    IEEE, 2013.
+      paper, we learn RA values in a model-free way and                    [7] Russell Buchanan, Lorenz Wellhausen, Marko Bjelonic,
+      condition them on the policy to simplify learning and                    Tirthankar Bandyopadhyay, Navinda Kottege, and Marco
+      enable offline learning from policy rollouts.                            Hutter. Perceptive whole-body planning for multilegged
+   4) Guided recovery: Designing a recovery policy capable                     robots in confined spaces. Journal of Field Robotics, 38
+      of protecting the robot from potential collisions across                 (1):68–84, 2021.
+ [8] Luigi Campanaro, Siddhant Gangapurwala, Wolfgang                 ics, targets and constraints. In Proceedings of the 18th
+     Merkt, and Ioannis Havoutis. Learning and deploying              international conference on hybrid systems: computation
+     robust locomotion policies with minimal dynamics ran-            and control, pages 11–20, 2015.
+     domization. arXiv preprint arXiv:2209.12878, 2022.          [21] Jaime F Fisac, Neil F Lugovoy, Vicenç Rubies-Royo,
+ [9] Mo Chen, Sylvia Herbert, and Claire J Tomlin. Fast               Shromona Ghosh, and Claire J Tomlin.             Bridging
+     reachable set approximations via state decoupling distur-        hamilton-jacobi safety analysis and reinforcement learn-
+     bances. In 2016 IEEE 55th Conference on Decision and             ing. In 2019 International Conference on Robotics and
+     Control (CDC), pages 191–196. IEEE, 2016.                        Automation (ICRA), pages 8550–8556. IEEE, 2019.
+[10] Richard Cheng, Gábor Orosz, Richard M Murray, and          [22] Kunihiko Fukushima. Visual feature extraction by a
+     Joel W Burdick. End-to-end safe reinforcement learning           multilayered network of analog threshold elements. IEEE
+     through barrier functions for safety-critical continuous         Transactions on Systems Science and Cybernetics, 5(4):
+     control tasks. In Proceedings of the AAAI conference             322–333, 1969.
+     on artificial intelligence, volume 33, pages 3387–3395,     [23] Magnus Gaertner, Marko Bjelonic, Farbod Farshidian,
+     2019.                                                            and Marco Hutter. Collision-free mpc for legged robots
+[11] Xuxin Cheng, Kexin Shi, Ananye Agarwal, and Deepak               in static and dynamic scenes. In 2021 IEEE International
+     Pathak. Extreme parkour with legged robots. arXiv                Conference on Robotics and Automation (ICRA), pages
+     preprint arXiv:2309.14341, 2023.                                 8266–8272. IEEE, 2021.
+[12] Jia-Ruei Chiu, Jean-Pierre Sleiman, Mayank Mittal, Far-     [24] Siddhant Gangapurwala, Mathieu Geisert, Romeo Or-
+     bod Farshidian, and Marco Hutter. A collision-free mpc           solino, Maurice Fallon, and Ioannis Havoutis. Rloc:
+     for whole-body dynamic locomotion and manipulation.              Terrain-aware legged locomotion using reinforcement
+     In 2022 International Conference on Robotics and Au-             learning and optimal control. IEEE Transactions on
+     tomation (ICRA), pages 4686–4693. IEEE, 2022.                    Robotics, 38(5):2908–2927, 2022.
+[13] Gal Dalal, Krishnamurthy Dvijotham, Matej Vecerik,          [25] Ruben Grandia, Farbod Farshidian, Alexey Dosovitskiy,
+     Todd Hester, Cosmin Paduraru, and Yuval Tassa. Safe              René Ranftl, and Marco Hutter. Frequency-aware model
+     exploration in continuous action spaces. arXiv preprint          predictive control. IEEE Robotics and Automation Let-
+     arXiv:1801.08757, 2018.                                          ters, 4(2):1517–1524, 2019.
+[14] Jared Di Carlo, Patrick M Wensing, Benjamin Katz,           [26] Ruben Grandia, Fabian Jenelten, Shaohui Yang, Farbod
+     Gerardo Bledt, and Sangbae Kim. Dynamic locomotion               Farshidian, and Marco Hutter. Perceptive locomotion
+     in the mit cheetah 3 through convex model-predictive             through nonlinear model-predictive control. IEEE Trans-
+     control. In 2018 IEEE/RSJ international conference on            actions on Robotics, 2023.
+     intelligent robots and systems (IROS), pages 1–9. IEEE,     [27] Kaiming He, Xiangyu Zhang, Shaoqing Ren, and Jian
+     2018.                                                            Sun. Deep residual learning for image recognition. In
+[15] Yanran Ding, Abhishek Pandala, and Hae-Won Park.                 Proceedings of the IEEE conference on computer vision
+     Real-time model predictive control for versatile dynamic         and pattern recognition, pages 770–778, 2016.
+     motions in quadrupedal robots. In 2019 International        [28] David Hoeller, Lorenz Wellhausen, Farbod Farshidian,
+     Conference on Robotics and Automation (ICRA), pages              and Marco Hutter. Learning a state representation and
+     8484–8490. IEEE, 2019.                                           navigation in cluttered and dynamic environments. IEEE
+[16] Helei Duan, Bikram Pandit, Mohitvishnu S Gadde,                  Robotics and Automation Letters, 6(3):5081–5088, 2021.
+     Bart Jaap van Marum, Jeremy Dao, Chanho Kim, and            [29] David Hoeller, Nikita Rudin, Dhionis Sako, and Marco
+     Alan Fern. Learning vision-based bipedal locomotion              Hutter. Anymal parkour: Learning agile navigation for
+     for challenging terrain. arXiv preprint arXiv:2309.14594,        quadrupedal robots. arXiv preprint arXiv:2306.14874,
+     2023.                                                            2023.
+[17] Thomas Dudzik, Matthew Chignoli, Gerardo Bledt,             [30] Kai-Chieh Hsu, Vicenç Rúbies Royo, Claire J. Tomlin,
+     Bryan Lim, Adam Miller, Donghyun Kim, and Sangbae                and Jaime F. Fisac. Safety and liveness guarantees
+     Kim. Robust autonomous navigation of a small-scale               through reach-avoid reinforcement learning. In Robotics:
+     quadruped robot in real-world environments. In 2020              Science and Systems XVII, 2021.
+     IEEE/RSJ International Conference on Intelligent Robots     [31] Kai-Chieh Hsu, Allen Z Ren, Duy P Nguyen, Anirudha
+     and Systems (IROS), pages 3664–3671. IEEE, 2020.                 Majumdar, and Jaime F Fisac. Sim-to-lab-to-real: Safe
+[18] Shamel Fahmi, Geoff Fink, and Claudio Semini. On state           reinforcement learning with shielding and generalization
+     estimation for legged locomotion over soft terrain. IEEE         guarantees. Artificial Intelligence, 314:103811, 2023.
+     Sensors Letters, 5(1):1–4, 2021.                            [32] Jemin Hwangbo, Joonho Lee, Alexey Dosovitskiy, Dario
+[19] Davide Falanga, Kevin Kleber, and Davide Scaramuzza.             Bellicoso, Vassilios Tsounis, Vladlen Koltun, and Marco
+     Dynamic obstacle avoidance for quadrotors with event             Hutter. Learning agile and dynamic motor skills for
+     cameras. Science Robotics, 5(40):eaaz9712, 2020.                 legged robots. Science Robotics, 4(26):eaau5872, 2019.
+[20] Jaime F Fisac, Mo Chen, Claire J Tomlin, and S Shankar      [33] Intel. Embree Ray Tracing Library. https://www.embree
+     Sastry. Reach-avoid problems with time-varying dynam-            .org/.
+[34] Fabian Jenelten, Jemin Hwangbo, Fabian Tresoldi,                  Guo, Michelle Lu, Kier Storey, Miles Macklin, David
+     C Dario Bellicoso, and Marco Hutter. Dynamic locomo-              Hoeller, Nikita Rudin, Arthur Allshire, Ankur Handa,
+     tion on slippery ground. IEEE Robotics and Automation             et al. Isaac gym: High performance gpu based physics
+     Letters, 4(4):4170–4176, 2019.                                    simulation for robot learning. In Thirty-fifth Conference
+[35] Fabian Jenelten, Ruben Grandia, Farbod Farshidian, and            on Neural Information Processing Systems Datasets and
+     Marco Hutter. Tamols: Terrain-aware motion optimiza-              Benchmarks Track (Round 2), 2021.
+     tion for legged systems. IEEE Transactions on Robotics,      [48] Gabriel B Margolis, Ge Yang, Kartik Paigwar, Tao Chen,
+     38(6):3395–3413, 2022.                                            and Pulkit Agrawal. Rapid locomotion via reinforcement
+[36] Fabian Jenelten, Junzhe He, Farbod Farshidian, and                learning. arXiv preprint arXiv:2205.02824, 2022.
+     Marco Hutter. Dtc: Deep tracking control. Science            [49] Matias Mattamala, Nived Chebrolu, and Maurice Fallon.
+     Robotics, 9(86):eadh5401, 2024.                                   An efficient locally reactive controller for safe navigation
+[37] Simar Kareer, Naoki Yokoyama, Dhruv Batra, Sehoon                 in visual teach and repeat missions. IEEE Robotics and
+     Ha, and Joanne Truong. ViNL: Visual Navigation and                Automation Letters, 7(2):2353–2360, 2022.
+     Locomotion Over Obstacles. In International Conference       [50] Takahiro Miki, Joonho Lee, Jemin Hwangbo, Lorenz
+     on Robotics and Automation (ICRA), 2023.                          Wellhausen, Vladlen Koltun, and Marco Hutter. Learning
+[38] Donghyun Kim, Daniel Carballo, Jared Di Carlo, Ben-               robust perceptive locomotion for quadrupedal robots in
+     jamin Katz, Gerardo Bledt, Bryan Lim, and Sangbae                 the wild. Science Robotics, 7(62):eabk2822, 2022.
+     Kim. Vision aided dynamic exploration of unstructured        [51] Yashwanth Kumar Nakka, Anqi Liu, Guanya Shi, Anima
+     terrain with a small-scale quadruped robot. In 2020 IEEE          Anandkumar, Yisong Yue, and Soon-Jo Chung. Chance-
+     International Conference on Robotics and Automation               constrained trajectory optimization for safe exploration
+     (ICRA), pages 2464–2470. IEEE, 2020.                              and learning of nonlinear systems. IEEE Robotics and
+[39] Ashish Kumar, Zipeng Fu, Deepak Pathak, and Jitendra              Automation Letters, 6(2):389–396, 2020.
+     Malik. Rma: Rapid motor adaptation for legged robots.        [52] NVIDIA Corporation. NVIDIA Warp repository. https:
+     In Robotics: Science and Systems, 2021.                           //github.com/NVIDIA/warp.
+[40] Frédéric Large, Dizan Vasquez, Thierry Fraichard, and      [53] Alex Ray, Joshua Achiam, and Dario Amodei. Bench-
+     Christian Laugier. Avoiding cars and pedestrians using            marking safe exploration in deep reinforcement learning.
+     velocity obstacles and motion prediction. In IEEE                 https://openai.com/research/benchmarking-safe-explorati
+     Intelligent Vehicles Symposium, 2004, pages 375–379,              on-in-deep-reinforcement-learning, 2019.
+     2004.                                                        [54] Nikita Rudin, David Hoeller, Marko Bjelonic, and Marco
+[41] Joonho Lee, Jemin Hwangbo, Lorenz Wellhausen,                     Hutter. Advanced skills by learning locomotion and local
+     Vladlen Koltun, and Marco Hutter. Learning quadrupedal            navigation end-to-end. In 2022 IEEE/RSJ International
+     locomotion over challenging terrain. Science robotics, 5          Conference on Intelligent Robots and Systems (IROS),
+     (47):eabc5986, 2020.                                              pages 2497–2503. IEEE, 2022.
+[42] Zhongyu Li, Xue Bin Peng, Pieter Abbeel, Sergey              [55] Nikita Rudin, David Hoeller, Philipp Reist, and Marco
+     Levine, Glen Berseth, and Koushil Sreenath. Robust and            Hutter. Learning to walk in minutes using massively
+     versatile bipedal jumping control through reinforcement           parallel deep reinforcement learning. In Conference on
+     learning. In Robotics: Science and Systems, 2023.                 Robot Learning, pages 91–100. PMLR, 2022.
+[43] Qingkai Liang, Fanyu Que, and Eytan Modiano. Accel-          [56] John Schulman, Filip Wolski, Prafulla Dhariwal, Alec
+     erated primal-dual policy optimization for safe reinforce-        Radford, and Oleg Klimov. Proximal policy optimization
+     ment learning. arXiv preprint arXiv:1802.06480, 2018.             algorithms. arXiv preprint arXiv:1707.06347, 2017.
+[44] Qiayuan Liao, Zhongyu Li, Akshay Thirugnanam, Jun            [57] Mingyo Seo, Ryan Gupta, Yifeng Zhu, Alexy Skoutnev,
+     Zeng, and Koushil Sreenath. Walking in narrow spaces:             Luis Sentis, and Yuke Zhu. Learning to walk by steering:
+     Safety-critical locomotion control for quadrupedal robots         Perceptive quadrupedal locomotion in dynamic environ-
+     with duality-based optimization. In 2023 IEEE/RSJ In-             ments. In IEEE International Conference on Robotics
+     ternational Conference on Intelligent Robots and Systems          and Automation (ICRA), 2023.
+     (IROS), pages 2723–2730. IEEE, 2023.                         [58] Young-Ha Shin, Tae-Gyu Song, Gwanghyeon Ji, and
+[45] Minghuan Liu, Menghui Zhu, and Weinan Zhang. Goal-                Hae-Won Park.         Actuator-constrained reinforcement
+     conditioned reinforcement learning: Problems and solu-            learning for high-speed quadrupedal locomotion. arXiv
+     tions. In Proceedings of the Thirty-First International           preprint arXiv:2312.17507, 2023.
+     Joint Conference on Artificial Intelligence, 2022.           [59] Wenwen Si, Tianhao Wei, and Changliu Liu. Agen:
+[46] Yuntao Ma, Farbod Farshidian, and Marco Hutter. Learn-            Adaptable generative prediction networks for au-
+     ing arm-assisted fall damage reduction and recovery for           tonomous driving. In 2019 IEEE Intelligent Vehicles
+     legged mobile manipulators. In 2023 IEEE International            Symposium (IV), pages 281–286. IEEE, 2019.
+     Conference on Robotics and Automation (ICRA), pages          [60] Oswin So, Zachary Serlin, Makai Mann, Jake Gonzales,
+     12149–12155. IEEE, 2023.                                          Kwesi Rutledge, Nicholas Roy, and Chuchu Fan. How
+[47] Viktor Makoviychuk, Lukasz Wawrzyniak, Yunrong                    to train your neural control barrier function: Learning
+     safety filters for complex input-constrained systems. In         bust legged robot navigation in the field. Field Robotics,
+     2024 IEEE International Conference on Robotics and               3(1):413 – 434, 2023-03. ISSN 2771-3989. doi:
+     Automation (ICRA) (Under Review), 2024.                          10.3929/ethz-b-000614683.
+[61] Yunlong Song, Angel Romero, Matthias Müller, Vladlen       [74] Erik Wijmans, Manolis Savva, Irfan Essa, Stefan Lee,
+     Koltun, and Davide Scaramuzza. Reaching the limit                Ari S. Morcos, and Dhruv Batra. Emergence of maps in
+     in autonomous racing: Optimal control versus reinforce-          the memories of blind navigation agents. In International
+     ment learning. Science Robotics, 8(82):eadg1462, 2023.           Conference on Learning Representations, 2023. URL
+[62] Stereolabs Inc. Fill mode - depth settings. https://www.         https://openreview.net/forum?id=lTt4KjHSsyl.
+     stereolabs.com/docs/depth-sensing/depth-settings#fill-m     [75] Wenli Xiao, Tairan He, John Dolan, and Guanya
+     ode, 2024.                                                       Shi. Safe deep policy adaptation. arXiv preprint
+[63] ShangJie Sun, ShuHai Jiang, SongHe Cui, Yue Kang,                arXiv:2310.08602, 2023.
+     YuTang Chen, et al. Path planning of forest fire-fighting   [76] Chuanyu Yang, Kai Yuan, Qiuguo Zhu, Wanming Yu,
+     robots based on deep learning. Forest Engineering, 36            and Zhibin Li. Multi-expert learning of adaptive legged
+     (4):51–57, 2020.                                                 locomotion. Science Robotics, 5(49):eabb2174, 2020.
+[64] Sangli Teng, Yukai Gong, Jessy W. Grizzle, and Maani        [77] Ruihan Yang, Minghao Zhang, Nicklas Hansen, Huazhe
+     Ghaffari. Toward safety-aware informative motion plan-           Xu, and Xiaolong Wang.            Learning vision-guided
+     ning for legged robots. CoRR, abs/2103.14252, 2021.              quadrupedal locomotion end-to-end with cross-modal
+[65] Chen Tessler, Daniel J Mankowitz, and Shie Mannor.               transformers. In International Conference on Learning
+     Reward constrained policy optimization. arXiv preprint           Representations, 2022. URL https://openreview.net/for
+     arXiv:1805.11074, 2018.                                          um?id=nhnJ3oo6AB.
+[66] Brijen Thananjeyan, Ashwin Balakrishna, Suraj Nair,         [78] Tsung-Yen Yang, Tingnan Zhang, Linda Luu, Sehoon
+     Michael Luo, Krishnan Srinivasan, Minho Hwang,                   Ha, Jie Tan, and Wenhao Yu. Safe reinforcement learning
+     Joseph E Gonzalez, Julian Ibarz, Chelsea Finn, and Ken           for legged locomotion. In 2022 IEEE/RSJ International
+     Goldberg. Recovery rl: Safe reinforcement learning with          Conference on Intelligent Robots and Systems (IROS),
+     learned recovery zones. IEEE Robotics and Automation             pages 2454–2461. IEEE, 2022.
+     Letters, 6(3):4915–4922, 2021.                              [79] Yuxiang Yang, Guanya Shi, Xiangyun Meng, Wenhao
+[67] Josh Tobin, Rachel Fong, Alex Ray, Jonas Schneider,              Yu, Tingnan Zhang, Jie Tan, and Byron Boots. Cajun:
+     Wojciech Zaremba, and Pieter Abbeel. Domain ran-                 Continuous adaptive jumping using a learned centroidal
+     domization for transferring deep neural networks from            controller. arXiv preprint arXiv:2306.09557, 2023.
+     simulation to the real world. In 2017 IEEE/RSJ in-          [80] Naoki Yokoyama, Alex Clegg, Joanne Truong, Eric Un-
+     ternational conference on intelligent robots and systems         dersander, Tsung-Yen Yang, Sergio Arnaud, Sehoon Ha,
+     (IROS), pages 23–30. IEEE, 2017.                                 Dhruv Batra, and Akshara Rai. Asc: Adaptive skill
+[68] Marco Tranzatto, Takahiro Miki, Mihir Dharmadhikari,             coordination for robotic mobile manipulation. IEEE
+     Lukas Bernreiter, Mihir Kulkarni, Frank Mascarich, Olov          Robotics and Automation Letters, 9(1):779–786, 2023.
+     Andersson, Shehryar Khattak, Marco Hutter, Roland           [81] Chong Zhang, Wanming Yu, and Zhibin Li.
+     Siegwart, et al. Cerberus in the darpa subterranean              Accessibility-based clustering for efficient learning
+     challenge. Science Robotics, 7(66):eabp9742, 2022.               of locomotion skills. In 2022 International Conference
+[69] Joanne Truong, Max Rudolph, Naoki Harrison                       on Robotics and Automation (ICRA), pages 1600–1606.
+     Yokoyama, Sonia Chernova, Dhruv Batra, and Akshara               IEEE, 2022.
+     Rai. Rethinking sim2real: Lower fidelity simulation         [82] Chong Zhang, Nikita Rudin, David Hoeller, and Marco
+     leads to higher sim2real transfer in navigation. In              Hutter. Learning agile locomotion on risky terrains. arXiv
+     Conference on Robot Learning, pages 859–870. PMLR,               preprint arXiv:2311.10484, 2023.
+     2023.                                                       [83] Chong Zhang, Jin Jin, Jonas Frey, Nikita Rudin, Ma-
+[70] Joanne Truong, April Zitkovich, Sonia Chernova, Dhruv            tias Eduardo Mattamala Aravena, Cesar Cadena, and
+     Batra, Tingnan Zhang, Jie Tan, and Wenhao Yu.                    Marco Hutter. Resilient legged local navigation: Learning
+     Indoorsim-to-outdoorreal: Learning to navigate outdoors          to traverse with compromised perception end-to-end.
+     without any outdoor experience. In arXiv preprint                In 41st IEEE Conference on Robotics and Automation
+     arXiv:2305.01098, 2023.                                          (ICRA 2024), 2024.
+[71] USA Today. Robots taking on tasks from mundane to           [84] Weiye Zhao, Tairan He, and Changliu Liu. Model-free
+     dangerous: Police robot dog shot by suspect. https://ww          safe control for zero-violation reinforcement learning. In
+     w.usatoday.com/story/tech/2024/03/28/what-to-know-a              5th Annual Conference on Robot Learning, 2021.
+     bout-spot-the-robotic-dog/73118781007/, 2024.               [85] Weiye Zhao, Tairan He, Rui Chen, Tianhao Wei, and
+[72] Yikai Wang, Mengdi Xu, Guanya Shi, and Ding Zhao.                Changliu Liu. State-wise safe reinforcement learning: A
+     Guardians as you fall: Active mode transition for safe           survey. In Edith Elkind, editor, Proceedings of the Thirty-
+     falling. arXiv preprint arXiv:2310.04828, 2023.                  Second International Joint Conference on Artificial Intel-
+[73] Lorenz Wellhausen and Marco Hutter. Artplanner: Ro-              ligence, IJCAI-23, pages 6814–6822. International Joint
+     Conferences on Artificial Intelligence Organization, 8
+     2023. URL https://doi.org/10.24963/ijcai.2023/763.
+[86] Ziwen Zhuang, Zipeng Fu, Jianren Wang, Christo-
+     pher Atkeson, Soeren Schwertfeger, Chelsea Finn, and
+     Hang Zhao. Robot parkour learning. arXiv preprint
+     arXiv:2309.05665, 2023.
+                                  A PPENDIX                                D. Explanations for Regularization Terms
+A. Training Costs                                                            We explain why we add so many regularization terms in
+   On an NVIDIA RTX 4090, each iteration of the agile policy               Table XI, which follows [55, 54, 48, 82, 29] and has some
+learning takes 1.5 sec. The π Agile policy needs ∼ 800 iterations          adaptations based on our tuning experiences.
+(∼ 20 min) to converge, and the LAG policy needs ∼ 2500                                                  TABLE XI
+iterations (∼ 1 h) to converge. Yet, to fully unleash their                               E XPLAINING R EGULARIZATION R EWARDS
+performance and make a fair comparison, all of the policies are
+                                                                                        Term                            Reason
+tested with the checkpoints of 10000 iterations (∼ 4 h). The
+                                                                                          vz2                           To reduce vertical oscillation
+recovery policy is far more efficient and converges within 500                        ωx2 + ωy2                         To reduce rotational oscillation
+iterations, becoming near-optimal within 10 min. The GPU                             (gx2 + gy2 )                       To reduce tilting
+memory usage during training is below 5GB.                                              ∥τ ∥22                          To reduce mechanical stress and
+                                                                                                                        power consumption of motions
+   We train the RA value network in parallel with the agile                 P12                                     
+                                                                              i=1 ReLU    |τi | − 0.85 · τi,lim         To avoid large torques that can
+policy rollout to save time, and the procedure takes ∼ 40 min.                                                          lead to sim-to-real gaps
+   The ray-prediction network can use collected data from                                 ∥q̇∥22                        To reduce aggressive motions that
+different trained policies as the prediction in ideal cases is                                                          may damage the hardware
+                                                                            P12                                     
+                                                                               i=1 ReLU    |q̇i | − 0.9 · q̇i,lim       To avoid large joint velocities that
+not conditioned on the policy. The network training time can                                                            can lead to inaccurate simulation
+vary for different settings. As a reference, we collected 250k              P12
+                                                                              i=1 ReLU    |qi | − 0.95 · qi,lim
+                                                                                                                    
+                                                                                                                        To avoid joint positions near the
+labelled images for training.                                                                                           limit that can lead to inaccurate
+                                                                                                                        simulation
+B. Obtaining Ray Distances in Simulation                                                  ∥q̈∥22                        To reduce jerky motions
+                                                                                          ∥ȧ∥22                        To encourage smooth actions
+   Ideally, we should use ray tracing tools such as Embree [33]                           1(fly)                        To constrain #. uncontrollable
+and Warp [52] to obtain accurate ray distances. However, these                                                          DoFs and improve maneuverabil-
+                                                                                                                        ity
+tools are time-consuming and GPU-intensive for our separated
+parallel environments with multiple objects. To enable efficient
+training, we implement an analytical ray tracing calculation,
+which, while efficient, is limited to simple geometries such
+as cylinders. Therefore, we are unable to use diverse objects
+during training, and have to choose the objects with meshes
+that can be approximated during ray-prediction data collection.
+   Despite this limitation, our design of the low-dimensional
+exteroception representation, together with domain randomiza-
+tion and data augmentation, enables the system to generalize
+to a variety of real-world objects, as demonstrated in the
+Figure 1.
+C. RL Hyperparameters
+
+                                TABLE X
+                          RL H YPERPARAMETERS
+
+        Hyperparameter                            Value
+         Agile Policy
+     #. steps per iteration                        48
+      Entropy coefficient                         0.003
+           Actor NN                MLP with hidden units [512, 256, 128]
+           Critic NN               MLP with hidden units [512, 256, 128]
+              Others                          Same as [55]
+     Agile Policy - LAG
+        Cost-critic NN             MLP with hidden units [512, 256, 128]
+   Cost-critic loss coefficient                    1.0
+          Cost gamma                               0.99
+          Cost lambda                             0.97
+           Cost limit                              0.0
+    Multiplier learning rate                      0.001
+       Recovery Policy
+     #. steps per iteration                        24
+      Entropy coefficient                         0.003
+           Actor NN                MLP with hidden units [512, 256, 128]
+           Critic NN               MLP with hidden units [512, 256, 128]
+              Others                          Same as [55]
+

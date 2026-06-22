@@ -1,0 +1,597 @@
+                                                  Resilient Legged Local Navigation: Learning to Traverse with
+                                                              Compromised Perception End-to-End
+                                          Jin Jin†1 , Chong Zhang†1 , Jonas Frey1,2 , Nikita Rudin1 , Matı́as Mattamala3 , Cesar Cadena1 , Marco Hutter1
+
+                                                                                                                  A. Ours / Classical planner
+                                           Abstract— Autonomous robots must navigate reliably in un-
+                                        known environments even under compromised exteroceptive                                 Detect the obstacle!
+                                        perception, or perception failures. Such failures often occur
+                                        when harsh environments lead to degraded sensing, or when
+                                                                                                                                                                                  Success!
+                                        the perception algorithm misinterprets the scene due to limited
+                                        generalization. In this paper, we model perception failures as
+
+
+
+
+arXiv:2310.03581v1 [cs.RO] 5 Oct 2023
+                                        invisible obstacles and pits, and train a reinforcement learning                                Visible obstacle
+
+                                        (RL) based local navigation policy to guide our legged robot.
+                                                                                                                   B. Classical planner                 C. Ours
+                                        Unlike previous works relying on heuristics and anomaly
+                                        detection to update navigational information, we train our                                                                                  Success!
+
+                                        navigation policy to reconstruct the environment information
+                                        in the latent space from corrupted perception and react to
+                                                                                                                          Get stuck..
+                                        perception failures end-to-end. To this end, we incorporate
+                                        both proprioception and exteroception into our policy inputs,                                   Invisible obstacles
+                                        thereby enabling the policy to sense collisions on different body
+                                        parts and pits, prompting corresponding reactions. We validate
+                                                                                                                   D. Ours on real robot                                Perception disabled
+                                        our approach in simulation and on the real quadruped robot
+                                        ANYmal running in real-time (<10 ms CPU inference). In a
+                                        quantitative comparison with existing heuristic-based locally
+                                        reactive planners, our policy increases the success rate over
+                                        30 % when facing perception failures. Project Page: https:
+                                        //bit.ly/45NBTuh.
+
+                                                                I. I NTRODUCTION
+                                           Reliable local navigation is essential for autonomous
+                                        robots in the wild, which typically involves building a real-                  Start                                       Time              Goal
+                                        time local traversability map [1]–[3] or cost map [4], [5]
+                                                                                                                 Fig. 1. An illustration of what happens under perception failures, exem-
+                                        for path planning. Generally, given an accurate map, it                  plified by an invisible obstacle case. (A) Without perception failures, both
+                                        is not difficult for existing navigation planners to guide               classical planners and our navigation policy can function well. (B) When
+                                        the robot towards the local goal safely. For legged robots               perception failure happens, classical planners get stuck. (C) Our proposed
+                                                                                                                 policy can react to perception failures and reach the target. (D) Our proposed
+                                        that can robustly traverse various terrains [6], such local              policy functions on a real ANYmal-C robot being fully blind to obstacles.
+                                        planners have become a routine and demonstrated remarkable
+                                                                                                                    Existing navigation methods struggle with perception fail-
+                                        performance in different tasks [7], [8].
+                                                                                                                 ures, as they typically rely solely on exteroceptive sensors to
+                                           However, real-world scenarios are complex, and near-
+                                                                                                                 interpret the environment. Most of them construct an explicit
+                                        perfect perception (i.e., the map representation accurately
+                                                                                                                 map for path planning based on traversability [1], [8] or ge-
+                                        reflects the environment, with negligible noises or drifts) is
+                                                                                                                 ometry information [10], [11] of the surroundings, and some
+                                        not always available. Cameras and LiDARs may not work
+                                                                                                                 generate twist commands based on raw observations [12],
+                                        in dark, rainy, and foggy environments. The vision system
+                                                                                                                 [13]. When perception failure happens, these methods can
+                                        may not generalize to the experienced data especially when
+                                                                                                                 have undesired behaviors, as illustrated in Fig. 1. Few
+                                        it is based on neural networks [9]. Transparent objects and
+                                                                                                                 recent works recognize these risks and achieve notable
+                                        obscured pits are untraversable and difficult to recognize.
+                                                                                                                 initial success by using anomaly detection and heuristic rules
+                                        All these cases lead to invisible obstacles and pits for the
+                                                                                                                 for replanning [14], [15]. However, such manually-designed
+                                        navigation module, which we call perception failures.
+                                                                                                                 rules cannot scale well to diverse situations.
+                                          † Equal Contribution, listed randomly                                     To tackle perception failures, we intuitively need certain
+                                          1 Robotic Systems Lab, ETH Zurich, Zurich, Switzerland
+                                                                                                                 feedback to recognize the discrepancies between perceived
+                                          2 Max Planck Institute for Intelligent Systems, Tübingen, Germany.
+                                          3 Oxford Robotics Institute, the University of Oxford, UK.
+                                                                                                                 and real environments. In this work, we propose to incorpo-
+                                           This work was supported by the Swiss National Science Foundation      rate locomotion-level observations into navigation, contrast-
+                                        (SNSF) through project 188596, the National Centre of Competence in      ing existing methods that typically decouple navigation from
+                                        Research Robotics (NCCR Robotics), the European Union’s Horizon 2020     locomotion. These observations include both proprioception
+                                        research and innovation program under grant agreement No 101016970, No
+                                        101070405, and No 852044, and an ETH Zurich Research Grant. Jonas        and exteroception used by the locomotion module, inspired
+                                        Frey is supported by the Max Planck ETH Center for Learning Systems.     by Fu et al. [14] using proprioception for collision detection
+                                                                                           Privileged Map              Corrupted Map
+and Ji et al. [15] using exteroception for anomaly detection.
+   We use end-to-end reinforcement learning (RL) to learn
+local navigation skills for legged robots. The learned navi-
+                                                                                                                Invisible obstacles
+
+
+                                                                        Obstacles
+gation policy generates velocity commands to a pre-existing
+low-level locomotion policy, and takes low-level observations
+as part of its inputs. We employ an asymmetric actor-
+critic design where the actor has corrupted exteroception
+and memory allowing it to infer the environment, while
+the critic can access privileged information including the
+external forces and the perfect map. Compared to heuristic-
+                                                                                                                Invisible pits
+based local planners [3], our learned policy exhibits com-
+parable performance under near-perfect perception, and far
+outperforms the baseline planner under heavily corrupted
+perception. We also show that legged robots can navigate                Pits
+in the real world even being fully blind.
+   Our main contributions are:
+  1) The methodology to learn local navigation strategies
+      that can react to and recover from perception failures;
+                                                                                    High              Traversability Value             Low
+  2) The design of simulation environments and reward
+                                                                   Fig. 2.     An illustration of the privileged map and the corrupted map.
+      functions to train our policy;                               The map (visualized by colored dots) provides the terrain traversability
+  3) Experimental validation of our method both in simula-         around the robot. With corrupted perception, part of the obstacles or pits are
+      tion and real world.                                         invisible to the robot, making their part on the map recognized as traversable.
+
+                                                                   C. Perception Failures
+                    II. R ELATED W ORKS
+                                                                      Some recent works tackle perception failures in the context
+A. Planning-Based Local Navigation
+                                                                   of navigation [14], [15], [35]–[37]. Antonante et al. [36]
+   Classical local planners for legged robots typically use        propose risk estimation of perception failures for autonomous
+heuristics (for sampling [16], [17], optimization [3], or          driving. Jin et al. [37] propose to incorporate anomaly
+rules [14]) or model-based techniques [18], [19] to guide          detection into multi-sensor fusion for autonomous driving.
+the robot towards a local goal. A representation of the            Sun et al. [35] and Ji et al. [15] use perception data to predict
+environment must be built from perception, based on ge-            potential failures. Fu et al. [14] study how proprioceptive
+ometric information [10], [17], [20]–[24] or semantics [1],        data can predict collisions and thereby labeling transparent
+[25], [26]. These planners assume near-perfect perception          obstacles in the prebuilt map for navigation planning. In this
+and plan the path with minimal cost based on the provided          paper, we explore how legged robots can automatically dis-
+representation. However, if the perception system fails to         cover local navigation skills to overcome perception failures
+identify an obstacle, these planners cannot handle it correctly.   in a data-driven manner without heuristic rules.
+In this paper, we assume that perfect perception cannot be            Another way around is to improve the perception system.
+guaranteed, and therefore resign to learning a robust local        Examples are [1] where the perception module is continu-
+planner that can handle these failure cases while exploiting       ously updated via self-supervision during deployment, and
+the provided environment representation when it is reliable.       [38] where the exteroception can be updated by semantic
+                                                                   perceptual feedbacks. However, such methods cannot support
+B. RL-Based Local Navigation                                       real-time reaction to perception failures, as they need to first
+   RL-based local navigation has recently emerged as it is         update their perception module.
+powerful for behavior learning [27]–[29], computationally
+efficient and suitable for mapless navigation [12], [13], [30]–                                      III. M ETHOD
+[32]. However, the lack of a map and the reliance on
+                                                                   A. Overview
+vision make them vulnerable to local minima and perception
+failures. For example, Faust et al. [27] and Khaled et al. [33]       The objective of our method is to guide the robot to a local
+train map-based policies, but assume a near-perfect prebuilt       target within the given time. To simulate perception failures,
+map. Joanne et al. [34] uses a context map complimentary           we mask part of the obstacles and pits on the terrain to be
+to the vision, but cannot handle visual perception failures.       invisible to the robot’s exteroceptive sensing, as shown in
+   In this paper, we use a traversability map [10] that can be     Fig. 2. Besides reaching the target in time, the robot should
+imperfect, i.e., the map representation can be inconsistent        also reduce base collisions and avoid falls.
+with the environment. We also utilize the proprioceptive              An overview of our system is in Fig. 3. Given a pre-
+information (e.g., joint torques) and the scanned terrain          established low-level locomotion policy [6], we train a navi-
+geometry (i.e., the exteroceptive data of the locomotion           gation policy that generates velocity commands to be tracked
+module) to sense and react to perception failures.                 in a hierarchical RL structure. We use the PPO algorithm [39]
+   Training Pipeline                                                                                    Control System
+                                           Observations with Corrupted Information
+      Actor                                                                                             High-Level Navigation           10 Hz
+                                                                                                            Navigation                 Navigation
+     Low-Level Exteroception        Encoder                                                                Observations                  Policy
+                                                   LSTM          Latent Features
+          Proprioception                          Memory
+         Previous Action
+                                    Encoder
+        Position Command                                                                            Environment
+                                                                                  Navigation
+        Heading Command                                                 MLP                                               Position &
+                                                                                   Action
+                                                                                                                           Heading       Navigation
+          Corrupted Map             Encoder                                                                               Command         Action
+                                                    L2 Regularization
+     Critic                                                               Velocity Limit                                     Locomotion
+                                                                        Episode Time Left                                    Observations
+     Privileged Proprioception
+           Previous Action
+                                    Encoder
+        Position Command
+                                                   Feature
+        Heading Command                                         Latent Features
+                                                   Mixing                                                                          Locomotion
+          Privileged Map                                                              MLP      Values    Locomotion                  Policy
+                                    Encoder
+                                                                                                           Action
+                                           Observations with Privileged Information                                                     50 Hz
+                                                                                                        Low-Level Locomotion
+
+Fig. 3. An overview of our learning system. Left The actor-critic design of the navigation policy. Right: Our high-level navigation policy generates
+velocity commands tracked by a low-level locomotion policy. Middle: The simulation environment. The colored points around the robot are the visualized
+traversability map (as explained in Fig. 2), which makes the exteroceptive observation of the high-level policy.
+to automatically discover end-to-end navigation strategies                    C. Asymmetric Actor-Critic with Memory
+capable to cope with perception failures.                                        We apply asymmetric actor-critic following [41]. The critic
+                                                                              network takes privileged proprioception without the joint
+B. Observations
+                                                                              torques, the privileged map, and other navigation-related
+   There are four kinds of observations for our navigation                    states as the inputs. The actor network receives the corrupted
+policy: the low-level exteroception, the proprioception, the                  map along with the corrupted low-level exteroception, the
+map, and other navigation-related states.                                     available proprioception from the state estimator, and other
+   Low-Level Exteroception: The low-level exteroception is                    navigation-related states.
+the sampled height scan ht used for the locomotion policy,                       Both networks have a layer that mixes all features from
+representing the local terrain perception. Around each foot,                  different observations in the latent space. The critic network
+there are 52 scanned points, making ht a 208-dim vector. We                   uses an MLP given that all information is observable from
+refer the readers to [6] for details.                                         the privileged information. On the other hand, for the actor
+   Proprioception: The proprioception consists of the base                    network, we use an LSTM layer to recurrently infer the
+linear velocity vt , the base angular velocity ωt , the last five             partially observable environment following [32].
+frames of the base acceleration captured at 20 ms intervals
+  history                                                                     D. Implicit State Inference via Regularization
+βt        , the projected gravity on the base gt , the joint
+positions qt , the joint velocities q̇t , and the last eight frames              As the actor has no access to the ground truth perception,
+                                                      history
+of joint torques captured at 2.5 ms intervals τt              . All of        we would like to reconstruct the real information from the
+the aforementioned observations are obtained from the state                   physical interactions and the corrupted perception. However,
+estimator [40], and we use the raw IMU data for acceleration                  our cases do not fit in the popular techniques such as teacher-
+measurement. Additional privileged proprioception is pro-                     student [6], [42], [43] and supervised reconstruction [6].
+vided to the critic consisting of the horizontal external force               First, in the teacher-student scheme, the privileged teacher
+directions on the base and thighs Ftext , represented by unit                 can observe and avoid all of the obstacles, which differs from
+vectors when forces are applied or zero vectors otherwise.                    the expected student’s behavior of first touching the unseen
+   Traversability Map: We use the traversability map of a                     obstacle and then sidestepping it. Second, the supervised re-
+3 m-wide square area around the robot with 4 cm resolution,                   construction scheme involves training decoders to reconstruct
+using the method in [10]. Such a traversability map is down-                  the raw privileged information. Yet, in a large map with many
+sampled to a resolution of 12 cm as the map observations mt .                 unperceived areas, the robot can only reconstruct the very
+The map is illustrated in Fig. 2.                                             limited part with which it has interacted, making the training
+   Navigation-Related States: Other navigation-related                        of the decoder tricky and hard to generalize.
+states include the previous action output at−1 , the position                    In this paper, we propose to use regularization to achieve
+command ptc (i.e., the target position in the base frame),                    implicit state inference. We assume that the critic’s latent
+the heading command ψtc (i.e., the target yaw angle in the                    features contain all essential and relevant information for
+base frame), the left time of the episode T − t following                     decision-making and that trying to replicate this information
+[28] where T is the episode length, and the velocity limit v̄                 can help the actor understand the scene. Therefore, we
+allowing users to condition the robot velocity.                               regularize the LSTM layer’s outputs in the actor network
+                   Hard                          Easy
+
+
+
+
+Fig. 4. We employ a terrain curriculum to facilitate learning. The terrains
+from top to bottom are obstacles on hilly, obstacles on boxes, pits on hilly,
+                                                                                                Obstacles                           Pits
+and pits on boxes. The difficulty increases from right to left.
+                                                                                Fig. 5. Test terrains in simulation. The red boxes are the targets. 100 robots
+towards the latent feature embeddings of the critic network,                    are tested together.
+as is illustrated in Fig. 3.
+                                                                                                    IV. E XPERIMENTAL S ETUP
+E. Rewards
+                                                                                A. Environments
+   There are three types of reward terms involved: the task
+performance terms, the event penalties, and the regularization                     We verify our methodology on the quadruped ANYmal
+terms. All terms are summed up to make the reward function.                     robot both in simulation and in the real world. We use
+   The task performance terms consist of two position track-                    the Isaac Gym [46] for simulation. To simulate perception
+ing terms, one heading tracking term, one standing still term.                  failure scenarios, we control the ratio of visible obstacles and
+They are based on the ones in [28] and dominate the rewards.                    pits (also called ”visibility”) during training and evaluation,
+Given a short duration Tr , these rewards are only received                     where 100 % indicates that all obstacles or pits are correctly
+when t > T − Tr regardless of what happens before, thereby                      reflected within the traversability map and the height scan.
+avoiding local minima introduced by human priors. They are
+all in the form of                                                              B. Training Settings
+                                  c1                                               For training, we consider the following settings:
+                     rtask =               ,                 (1)
+                             1 + ∥ error
+                                    c2 ∥
+                                         2
+                                                                                1) Ours: As is presented in Sec. III, we use all the ob-
+   where c1 and c2 are positive constants, and the error                            servations we list in the methodology, and also all the
+is the distance-to-target for position tracking, the heading                        techniques including the memory and the implicit state
+difference for heading tracking, and the velocity scalar for                        inference via regularization. 50 % of the obstacles and
+standing still. We have a small c2 for a rigid position tracking                    pits are visible during training.
+term with a large c1 so that the position tracking can be                       2) Oracle: This setting is the same as Ours except that
+accurate, and a large c2 for a soft position tracking term                          100 % of the obstacles and pits are visible during training.
+with a small c1 so that the rewards are less sparse. The                        3) No Proprioception (NoPro): This setting differs from
+heading tracking term and the standing still term are only                          Ours in that we set the base acceleration, the projected
+activated when the distance-to-target is below a threshold                          gravity, and the joint states (positions, velocities, and
+besides t > T − Tr .                                                                torques) in proprioception to zero. These observations are
+   Regarding event penalties, we have constant negative                             typically not used in traditional navigation modules.
+rewards to penalize the robot when it falls and terminates,                     4) No Low-Level Exteroception (NoExt): This setting
+or has a collision on the base or thighs. We also constantly                        differs from Ours in that we mask the low-level exte-
+penalize the robot for each timestep unless it is close to the                      roception with zeros.
+target.                                                                         5) No LSTM Memory (NoMem): This setting differs from
+   The regularization terms include the ones for energy con-                        Ours in that we replace the LSTM layer in the actor
+sumption, action changes and magnitude, velocity tracking                           network with an MLP layer.
+errors of the locomotion policy, the overspeeding above the                     6) No Regularization (NoReg): This setting differs from
+limit, yaw rates, the directional discrepancy between the                           Ours in that we cancel the regularization proposed in
+velocity and the heading, and the velocity commands being                           Sec. III-D for implicit state inference.
+too small when the target is distant.                                           Each setting is run 3 times with different random seeds for
+F. Terrain Curriculum                                                           statistics, which supports the significance of our performance
+   We employ curriculum learning to tackle challenging                          by P Values. Besides these trained policies, we also use a
+scenarios following [44] and [28]. We have discrete boxes                       heuristic-based local planner in [3], a representative for clas-
+in [44] and realistic hilly terrains in [45] as the basic terrains              sicial local planners, as a baseline (abbreviated as Planner).
+to avoid overfitting the flat terrain, and add obstacles and pits
+on them, as shown in Fig. 4. With increasing difficulty, the                    C. Evaluation and Metrics
+roughness and step height of the terrain increases as well as                      In simulation, we build two test terrains (one for obstacles
+the number of obstacles and pits. A robot gets promoted to                      and one for pits) for quantitative evaluation of policies, as
+higher difficulty levels if it reaches the target position within               shown in Fig. 5. The visibility of the obstacles and pits is
+the episode, and gets demoted otherwise.                                        selected from {100 %, 50 %, 0 %}, making 6 simulated test
+                                                                                       100
+  A                  B                C                 D
+                                                                              Success      80
+
+                                                                              Rate (%)     60
+
+                                                                                                Obstacles   Obstacles   Obstacles    Pits   Pits   Pits
+                                                                                                                                                   Ours
+
+                                                                              Avg. Base
+                                                                                           20    100%         50%         0%        100%    50%     0%
+                A            B                 C             D                                                                                     NoPro
+                                                                                                                                                   NoExt
+
+                                                                              Collisions
+                                                                                           10
+                                                                                                                                                   NoMem
+                                                                                                                                                   NoReg
+                                                                                            0
+                                                                                           20   Obstacles   Obstacles   Obstacles    Pits   Pits   Pits
+
+                                                                              Avg. Time
+                                                                                                 100%         50%         0%        100%    50%    0%
+
+                                                                                           10
+                                                                               Cost (s)
+                                                                                            0
+                                                                                                Obstacles   Obstacles   Obstacles    Pits   Pits   Pits
+Fig. 6.   Emergent behaviors of obstacle avoidance after a collision in                          100%         50%         0%        100%    50%    0%
+simulation. The policy can react to the collision and make a sidestep.
+                                                                              Fig. 8. Results of ablation studies. Ours outperforms others in the metrics.
+ A                  B                 C                  D
+                                                                              commands directing away from the pit until the robot regains
+                                                                              stability.
+
+                                                                              B. Comparison Results
+                         A        B        C           D
+                                                                                 We compare the proposed Ours with the baselines Oracle
+                                                                              and Planner in simulation. The results are presented in
+                                                                              Table I, with the mean, std, and P values of the metrics. A P
+                                                                              value smaller than 0.05 indicates that Ours is significantly
+                                                                              better than Oracle regarding the metric in the environment.
+                                                                                 According to the results, all of the policies perform well
+                                                                              when the visibility is 100 %, and the Planner achieves
+Fig. 7. Emergent behaviors of recovery from an invisible pit in simulation.
+The policy can react to the missed step and drag the robot out of the pit.    a perfect 100 % success rate. However, as the visibility
+                                                                              decreases, i.e., when perception failures increase, Ours drop
+environments: Obstacles-100 %, Obstacles-50 %, Obstacles-                     performance much slower than the other two, and signifi-
+0 %, Pits-100 %, Pits-50 %, Pits-0 %.                                         cantly outperform them. Ours can have > 80 % success rates
+  We use the following metrics for quantitative comparison:                   even when the perception is fully corrupted, and generalize
+1) Success Rate. We count the proportion of robots that can                   well to 0 % and 100 % visibility despite being trained with
+   reach the target within 18 s which is the episode length.                  50 % visibility. These results indicate that the navigation
+2) Average Base Collisions. We count the base collisions                      policy cannot learn to react to perception failures without
+   per 0.1 s for each robot and sum these values over time.                   being exposed to them, and the locomotion policy cannot
+   This metric is only applicable to obstacles.                               overcome perception failures by its own.
+3) Average Time Cost. We count the average time cost for                         It is also worth mentioning that, the Planner receives a
+   each robot to reach the target. For failed episodes, the                   8 m × 8 m map, but our policies only receives a 3 m × 3 m
+   time cost is calculated as 30 s (the qualitative results hold              one, which makes our policies more vulnerable to local
+   for any value ≥18 s).                                                      minima and fail in rare cases even with perfect perception.
+                                                                              However, expanding the map observation is non-trivial as it
+D. Randomized Collision Bodies for Obstacles                                  increases the dimensionality and can make the training data-
+  To trigger different collision cases during training and                    inefficient or even failed.
+enhance our policy’s generalization ability, we randomize the
+collison body of the base on obstacle terrains. By doing so,                  C. Ablation Studies
+we can learn policies that can react to collisions on different                  We evaluate different settings for ablation studies in sim-
+parts of the body in different directions, as demonstrated in                 ulation. The results are presented in Fig. 8, with error bars
+Sec. V-D and video attachment.                                                describing the std values. We draw the following conclusions
+                                                                              based on the ablation results:
+                    V. R ESULTS AND A NALYSES
+                                                                              1) The proprioception as part of the observations is generally
+A. Emergent Behaviors in Simulation                                              beneficial to the robustness against perception failures, as
+   Our learned policy demonstrates reactive behaviors against                    shown by the NoPro results.
+perception failures on rough terrains in simulation, as shown                 2) The locomotion-level exteroception can help improve the
+in Fig. 6 and Fig. 7. When colliding with an unseen obstacle,                    performance on pits, but demonstrates fewer effects for
+our policy gives a backward longitudinal velocity and a large                    obstacles, as shown by NoExt results. We hypothesize
+lateral velocity to sidestep the obstacle. When the robot                        that other observations are sufficient to detect the col-
+missteps into an invisible pit, the policy generates velocity                    lisions, but insufficient to detect a missed step in time,
+                                                                         TABLE I
+                                                            C OMPARISON R ESULTS IN S IMULATION
+                                 Success Rate (%)                                  Avg. Base Collisions                           Avg. Time Cost (s)
+   Environment
+                     Oracle       Ours       P Value   Planner          Oracle         Ours     P Value   Planner        Oracle      Ours    P Value   Planner
+  Obstacles-100 %   93.3±1.5    93.7±5.5      0.538      100           1.4±2.1         0±0        0.156     0.2         9.5±0.4    9.9±0.8    0.750      6.9
+  Obstacles-50 %    54.0±6.9    92.0±1.7     <0.001       61          32.1±4.3       1.9±0.9    <0.001     23.8        18.1±1.3   10.5±0.8   <0.001     15.7
+   Obstacles-0 %    33.3±6.4    84.0±1.7     <0.001       53         48.3 ± 13.6     4.6±1.2      0.003    24.9        22.5±1.5   12.3±0.7   <0.001      18
+    Pits-100 %      99.7±0.6    98.0±1.0      0.967      100                                                            7.4±0.4    8.7±0.3    0.995      6.1
+     Pits-50 %      74.0±4.4    92.7±2.3      0.001       77              0             0          None     0          13.0±1.3    9.8±0.9    0.013     11.5
+     Pits-0 %       57.3±3.1    93.0±5.3     <0.001       57                                                           18.7±0.6    9.8±1.5   <0.001     16.4
+
+
+  A                                                       Perception disabled
+
+
+
+
+                                                                                            0.0s                           2.3s
+
+
+
+
+  B                                                       Perception enabled
+
+
+
+                                                                                            3.5s                           9.2s
+
+                                                                                                                Goal                      Velocity
+
+                                                                                    Fig. 10. Snapshots of our policy recovering from an invisible pit. After
+                                                                                    one missed step in the pit, the policy reacts with velocity commands to the
+                                                                                    right, and guides the robot slowly towards the target after recovery. Red
+                                                                                    arrows indicate the moving direction of the robot.
+       Start                                       Time               Goal
+Fig. 9. (A) Our proposed policy can reach the target when the robot is              invisible obstacles (motions in our video attachment).
+blind. It can react to collisions on the thighs, the base front, the legs, and         Our policy can also recover from an invisible pit, as shown
+the base side. (B) Our proposed policy can traverse rough terrains when
+perception is enabled.
+                                                                                    in Fig. 10. It can react at the moment when the robot’s foot
+                                                                                    goes deep under the perceived terrain and tries to drag the
+    while the exteroception may show some discrepancy with                          robot out of the pit with lateral velocity commands. After
+    other observations.                                                             the recovery, the policy can keep guiding the robot toward
+3) The memory only slightly contributes to robustness, as                           the target. In comparison, the Planner cannot react to such
+    shown by NoMem results. This does not comply with                               cases and the locomotion policy cannot recover by itself.
+    the conclusions in [32] that memory is the key to blind
+    navigation. This can be explained by that memory is not                                        VI. L IMITATIONS AND F UTURE W ORKS
+    necessary when collisions can be detected by other ob-                             Despite our policy’s generalization to different collision
+    servations, e.g., the bug algorithm [47] without memory.                        geometries, we find it cannot handle out-of-distribution map-
+4) The regularization for implicit state inference is critical to                   ping noises. Real world mapping corruption is hard to model.
+    the performance in every scene, as shown by the NoReg                           They are dependent on the SLAM module as well as on the
+    results. Without such regularization to guide the learning,                     various sensor modalities used to measure the environment.
+    the policy may converge to a suboptimal solution.                                  Besides, our policy always avoids untraversable regions
+Briefly speaking, both the locomotion-level observations and                        on the map. However, the perception module can generate
+all techniques we propose contribute to the navigational                            artifacts, i.e., non-existent obstacles or pits which can stop
+robustness against perception failures.                                             the robot from approaching the target. Hence, it is of great
+                                                                                    interest if we can train a policy to actively explore these areas
+D. Real-World Results                                                               and explicitly revise the map allowing it to take into account
+   In the real world, we compare Ours against Planner in our                        false positive and false negative perception failures. There-
+lab. Our policy can perform well around obstacles not only                          fore, a closer coupling of the locomotion and navigation
+when there is near-perfect perception, but also when being                          policy may be desirable to achieve certain probing patterns
+fully blind, as shown in Fig. 9. Under perception failures,                         to safely explore the traversability of the environment.
+the robot first collides with the obstacle and then tries to                           Further research is needed to identify the optimal map rep-
+sidestep around it. Such reactions can happen with collisions                       resentation provided to the local planner, which is currently
+on different parts of the robot and in different directions,                        limited to a 2D map, as well as improving the performance
+including the base, the thighs, and the legs (including feet).                      under perfect perception. Further, we will investigate scaling
+In comparison, the Planner always gets stuck in front of                            the proposed approach to fully rough terrains in the wild.
+                             R EFERENCES                                       [21] J. Frey, D. Hoeller, S. Khattak, and M. Hutter, “Locomotion policy
+                                                                                    guided traversability learning using volumetric representations of
+ [1] J. Frey, M. Mattamala, N. Chebrolu, C. Cadena, M. Fallon, and
+                                                                                    complex environments,” in 2022 IEEE/RSJ International Conference
+     M. Hutter, “Fast Traversability Estimation for Wild Visual Naviga-
+                                                                                    on Intelligent Robots and Systems (IROS). IEEE, 2022, pp. 5722–
+     tion,” in Robotics: Science and Systems, Daegu, South Korea, July
+                                                                                    5729.
+     2023.
+                                                                               [22] H. Oleynikova, A. Millane, Z. Taylor, E. Galceran, J. Nieto, and
+ [2] L. Wellhausen and M. Hutter, “Artplanner: Robust legged robot
+                                                                                    R. Siegwart, “Signed distance fields: A natural representation for
+     navigation in the field,” Field Robotics, vol. 3, no. 1, pp. 413 – 434,
+                                                                                    both mapping and planning,” in RSS 2016 workshop: geometry and
+     2023-03.
+                                                                                    beyond-representations, physics, and scene understanding for robotics.
+ [3] M. Mattamala, N. Chebrolu, and M. Fallon, “An efficient locally
+                                                                                    University of Michigan, 2016.
+     reactive controller for safe navigation in visual teach and repeat
+                                                                               [23] J. Mainprice, N. Ratliff, M. Toussaint, and S. Schaal, “An interior point
+     missions,” IEEE Robotics and Automation Letters, vol. 7, no. 2, pp.
+                                                                                    method solving motion planning problems with narrow passages,”
+     2353–2360, 2022.
+                                                                                    in 2020 29th IEEE International Conference on Robot and Human
+ [4] D. Wooden, M. Malchano, K. Blankespoor, A. Howardy, A. A. Rizzi,
+                                                                                    Interactive Communication (RO-MAN). IEEE, 2020, pp. 547–552.
+     and M. Raibert, “Autonomous navigation for bigdog,” in 2010 IEEE
+                                                                               [24] H. Oleynikova, Z. Taylor, M. Fehr, R. Siegwart, and J. Nieto,
+     international conference on robotics and automation. Ieee, 2010, pp.
+                                                                                    “Voxblox: Incremental 3d euclidean signed distance fields for on-
+     4736–4741.
+                                                                                    board mav planning,” in 2017 IEEE/RSJ International Conference on
+ [5] B. Yang, L. Wellhausen, T. Miki, M. Liu, and M. Hutter, “Real-time
+                                                                                    Intelligent Robots and Systems (IROS). IEEE, 2017, pp. 1366–1373.
+     optimal navigation planning using learned motion costs,” in 2021 IEEE
+                                                                               [25] L. Nardi and C. Stachniss, “Actively improving robot navigation on
+     International Conference on Robotics and Automation (ICRA). IEEE,
+                                                                                    different terrains using gaussian process mixture models,” in 2019
+     2021, pp. 9283–9289.
+                                                                                    International Conference on Robotics and Automation (ICRA). IEEE,
+ [6] T. Miki, J. Lee, J. Hwangbo, L. Wellhausen, V. Koltun, and M. Hutter,
+                                                                                    2019, pp. 4104–4110.
+     “Learning robust perceptive locomotion for quadrupedal robots in the
+                                                                               [26] L. Wellhausen, A. Dosovitskiy, R. Ranftl, K. Walas, C. Cadena, and
+     wild,” Science Robotics, vol. 7, no. 62, p. eabk2822, 2022.
+                                                                                    M. Hutter, “Where should i walk? predicting terrain properties from
+ [7] M. Tranzatto, T. Miki, M. Dharmadhikari, L. Bernreiter, M. Kulkarni,
+                                                                                    images via self-supervised learning,” IEEE Robotics and Automation
+     F. Mascarich, O. Andersson, S. Khattak, M. Hutter, R. Siegwart, et al.,
+                                                                                    Letters, vol. 4, no. 2, pp. 1509–1516, 2019.
+     “Cerberus in the darpa subterranean challenge,” Science Robotics,
+                                                                               [27] A. Faust, K. Oslund, O. Ramirez, A. Francis, L. Tapia, M. Fiser,
+     vol. 7, no. 66, p. eabp9742, 2022.
+                                                                                    and J. Davidson, “Prm-rl: Long-range robotic navigation tasks by
+ [8] D. D. Fan, K. Otsu, Y. Kubo, A. Dixit, J. Burdick, and
+                                                                                    combining reinforcement learning and sampling-based planning,” in
+     A. Agha-mohammadi, “STEP: stochastic traversability evaluation and
+                                                                                    2018 IEEE International Conference on Robotics and Automation
+     planning for risk-aware off-road navigation,” in Robotics: Science
+                                                                                    (ICRA), 2018, pp. 5113–5120.
+     and Systems XVII, Virtual Event, July 12-16, 2021, D. A. Shell,
+                                                                               [28] N. Rudin, D. Hoeller, M. Bjelonic, and M. Hutter, “Advanced skills
+     M. Toussaint, and M. A. Hsieh, Eds., 2021. [Online]. Available:
+                                                                                    by learning locomotion and local navigation end-to-end,” in 2022
+     https://doi.org/10.15607/RSS.2021.XVII.021
+                                                                                    IEEE/RSJ International Conference on Intelligent Robots and Systems
+ [9] C. Kamann and C. Rother, “Benchmarking the robustness of semantic
+                                                                                    (IROS), 2022, pp. 2497–2503.
+     segmentation models,” in Proceedings of the IEEE/CVF Conference
+                                                                               [29] D. Hoeller, N. Rudin, D. Sako, and M. Hutter, “Anymal parkour:
+     on Computer Vision and Pattern Recognition, 2020, pp. 8828–8838.
+                                                                                    Learning agile navigation for quadrupedal robots,” arXiv preprint
+[10] T. Miki, L. Wellhausen, R. Grandia, F. Jenelten, T. Homberger, and
+                                                                                    arXiv:2306.14874, 2023.
+     M. Hutter, “Elevation mapping for locomotion and navigation using
+                                                                               [30] L. Xie, S. Wang, A. Markham, and N. Trigoni, “Towards monocular
+     gpu,” 2022.
+                                                                                    vision based obstacle avoidance through deep reinforcement learning,”
+[11] Y. Kim, C. Kim, and J. Hwangbo, “Learning Forward Dynamics Model
+                                                                                    in Robotics: Science and Systems Workshop 2017: New Frontiers for
+     and Informed Trajectory Sampler for Safe Quadruped Navigation,” in
+                                                                                    Deep Learning in Robotics, 2017.
+     Proceedings of Robotics: Science and Systems, New York City, NY,
+                                                                               [31] X. Zhao, H. Agrawal, D. Batra, and A. G. Schwing, “The surprising
+     USA, June 2022.
+                                                                                    effectiveness of visual odometry techniques for embodied pointgoal
+[12] D. Hoeller, L. Wellhausen, F. Farshidian, and M. Hutter, “Learning
+                                                                                    navigation,” in Proceedings of the IEEE/CVF International Conference
+     a state representation and navigation in cluttered and dynamic envi-
+                                                                                    on Computer Vision (ICCV), October 2021, pp. 16 127–16 136.
+     ronments,” IEEE Robotics and Automation Letters, vol. 6, no. 3, pp.
+                                                                               [32] E. Wijmans, M. Savva, I. Essa, S. Lee, A. S. Morcos, and D. Batra,
+     5081–5088, 2021.
+                                                                                    “Emergence of maps in the memories of blind navigation agents,” in
+[13] J. Truong, M. Rudolph, N. H. Yokoyama, S. Chernova, D. Batra, and
+                                                                                    The Eleventh International Conference on Learning Representations,
+     A. Rai, “Rethinking sim2real: Lower fidelity simulation leads to higher
+                                                                                    2023.
+     sim2real transfer in navigation,” in Conference on Robot Learning.
+                                                                               [33] K. Nakhleh, M. Raza, M. Tang, M. Andrews, R. Boney, I. Hadzic,
+     PMLR, 2023, pp. 859–870.
+                                                                                    J. Lee, A. Mohajeri, and K. Palyutina, “Sacplanner: Real-world
+[14] Z. Fu, A. Kumar, A. Agarwal, H. Qi, J. Malik, and D. Pathak,
+                                                                                    collision avoidance with a soft actor critic local planner and polar
+     “Coupling vision and proprioception for navigation of legged robots,”
+                                                                                    state representations,” arXiv preprint arXiv:2303.11801, 2023.
+     in CVPR, 2022.
+                                                                               [34] J. Truong, A. Zitkovich, S. Chernova, D. Batra, T. Zhang, J. Tan,
+[15] T. Ji, A. N. Sivakumar, G. Chowdhary, and K. Driggs-Campbell,
+                                                                                    and W. Yu, “Indoorsim-to-outdoorreal: Learning to navigate outdoors
+     “Proactive anomaly detection for robot navigation with multi-sensor
+                                                                                    without any outdoor experience,” arXiv preprint arXiv:2305.01098,
+     fusion,” IEEE Robotics and Automation Letters, vol. 7, no. 2, pp.
+                                                                                    2023.
+     4975–4982, 2022.
+                                                                               [35] B. Sun, J. Xing, H. Blum, R. Siegwart, and C. Cadena, “See yourself
+[16] M. Wermelinger, P. Fankhauser, R. Diethelm, P. Krüsi, R. Siegwart,
+                                                                                    in others: Attending multiple tasks for own failure detection,” in 2022
+     and M. Hutter, “Navigation planning for legged robots in challenging
+                                                                                    International Conference on Robotics and Automation (ICRA). IEEE,
+     terrain,” in 2016 IEEE/RSJ International Conference on Intelligent
+                                                                                    2022, pp. 8409–8416.
+     Robots and Systems (IROS). IEEE, 2016, pp. 1184–1189.
+                                                                               [36] P. Antonante, S. Veer, K. Leung, X. Weng, L. Carlone, and M. Pavone,
+[17] L. Wellhausen and M. Hutter, “Rough terrain navigation for legged
+                                                                                    “Task-aware risk estimation of perception failures for autonomous
+     robots using reachability planning and template learning,” in 2021
+                                                                                    vehicles,” arXiv preprint arXiv:2305.01870, 2023.
+     IEEE/RSJ International Conference on Intelligent Robots and Systems
+                                                                               [37] K. Jin, F. Mu, X. Han, G. Wang, and Z. Liu, “Anomaly detection for ro-
+     (IROS). IEEE, 2021, pp. 6914–6921.
+                                                                                    bust autonomous navigation,” in 2023 IEEE International Conference
+[18] S. Bansal, V. Tolani, S. Gupta, J. Malik, and C. Tomlin, “Combining
+                                                                                    on Robotics and Automation (ICRA). IEEE, 2023, pp. 10 026–10 032.
+     optimal control and learning for visual navigation in novel environ-
+                                                                               [38] V. Vasilopoulos, G. Pavlakos, K. Schmeckpeper, K. Daniilidis, and
+     ments,” 2019.
+                                                                                    D. E. Koditschek, “Reactive navigation in partially familiar planar
+[19] M. Gaertner, M. Bjelonic, F. Farshidian, and M. Hutter, “Collision-
+                                                                                    environments using semantic perceptual feedback,” The International
+     free mpc for legged robots in static and dynamic scenes,” in 2021
+                                                                                    Journal of Robotics Research, vol. 41, no. 1, pp. 85–126, 2022.
+     IEEE International Conference on Robotics and Automation (ICRA).
+                                                                               [39] J. Schulman, F. Wolski, P. Dhariwal, A. Radford, and O. Klimov,
+     IEEE, 2021, pp. 8266–8272.
+[20] P. Fankhauser and M. Hutter, “A universal grid map library: Imple-             “Proximal policy optimization algorithms,” arXiv preprint
+     mentation and use case for rough terrain navigation,” Robot Operating          arXiv:1707.06347, 2017.
+     System (ROS) The Complete Reference (Volume 1), pp. 99–120, 2016.
+[40] M. Bloesch, M. Hutter, M. A. Hoepflinger, S. Leutenegger, C. Gehring,        Conference on Robot Learning. PMLR, 2022, pp. 91–100.
+     C. D. Remy, and R. Siegwart, “State estimation for legged robots-       [45] C. Zhang and L. Yang, “Generating a terrain-robustness benchmark
+     consistent fusion of leg kinematics and imu,” Robotics, vol. 17, pp.         for legged locomotion: A prototype via terrain authoring and active
+     17–24, 2013.                                                                 learning,” in 2023 IEEE International Conference on Robotics and
+[41] Y. Ma, F. Farshidian, and M. Hutter, “Learning arm-assisted fall             Automation (ICRA), 2023.
+     damage reduction and recovery for legged mobile manipulators,” in       [46] V. Makoviychuk, L. Wawrzyniak, Y. Guo, M. Lu, K. Storey,
+     2023 IEEE International Conference on Robotics and Automation                M. Macklin, D. Hoeller, N. Rudin, A. Allshire, A. Handa, and
+     (ICRA). IEEE, 2023, pp. 12 149–12 155.                                       G. State, “Isaac gym: High performance GPU based physics simulation
+[42] J. Lee, J. Hwangbo, L. Wellhausen, V. Koltun, and M. Hutter,                 for robot learning,” in Thirty-fifth Conference on Neural Information
+     “Learning quadrupedal locomotion over challenging terrain,” Science          Processing Systems Datasets and Benchmarks Track (Round 2), 2021.
+     robotics, vol. 5, no. 47, p. eabc5986, 2020.                                 [Online]. Available: https://openreview.net/forum?id=fgFBtYgJQX
+[43] A. Kumar, Z. Fu, D. Pathak, and J. Malik, “Rma: Rapid motor             [47] J. Ng and T. Bräunl, “Performance comparison of bug navigation
+     adaptation for legged robots,” 2021.                                         algorithms,” Journal of Intelligent and Robotic Systems, vol. 50, pp.
+[44] N. Rudin, D. Hoeller, P. Reist, and M. Hutter, “Learning to walk             73–84, 2007.
+     in minutes using massively parallel deep reinforcement learning,” in
+

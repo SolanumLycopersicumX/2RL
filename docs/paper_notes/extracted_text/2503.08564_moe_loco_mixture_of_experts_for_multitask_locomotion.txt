@@ -1,0 +1,646 @@
+                                                        MoE-Loco: Mixture of Experts for Multitask Locomotion
+                                                                          Runhan Huang*1,2 , Shaoting Zhu*1,2 , Yilun Du3 , Hang Zhao†1,2
+                                                                                                    MoE-Loco.github.io/
+                                                          Quadrupedal Bar                 Quadrupedal Baffle    Quadrupedal Stair            Bipedal walking
+
+
+
+
+arXiv:2503.08564v2 [cs.RO] 21 May 2025
+                                                         Quadrupedal Slope                                                                  Bipedal Slope Up
+
+
+
+
+                                                          Quadrupedal Pit                 All with only                                   Bipedal Slope Down
+                                                                                          single MoE
+                                                                                              policy
+
+
+
+
+                                                        Quadrupedal Baffle                  Quadrupedal Pit    Bipedal Stair Down            Bipedal Uneven
+
+
+
+
+                                         Fig. 1: We introduce MoE-Loco. With a single MoE policy, quadruped robot can traverse a variety of challenging terrains
+                                         and perform different locomotion modes, including bipedal and quadrupedal gaits.
+
+                                            Abstract— We present MoE-Loco, a Mixture of Experts (MoE)          [3]–[7]. However, while single-task RL has demonstrated
+                                         framework for multitask locomotion for legged robots. Our             remarkable success, learning a unified policy that general-
+                                         method enables a single policy to handle diverse terrains,            izes across multiple tasks, terrains, and locomotion modes
+                                         including bars, pits, stairs, slopes, and baffles, while supporting
+                                         quadrupedal and bipedal gaits. Using MoE, we mitigate the             remains a significant challenge.
+                                         gradient conflicts that typically arise in multitask reinforcement       Recent research has explored training locomotion policies
+                                         learning, improving both training efficiency and performance.         with diverse skills by having diverse terrains in simulation
+                                         Our experiments demonstrate that different experts natu-              for parallel training [8]–[10]. However, multitask RL with
+                                         rally specialize in distinct locomotion behaviors, which can          a simple neural network architecture often suffers from
+                                         be leveraged for task migration and skill composition. We
+                                         further validate our approach in both simulation and real-world       gradient conflicts [11], [12], which leads to inferior model
+                                         deployment, showcasing its robustness and adaptability.               performance. What is worse, training a policy across multiple
+                                                                                                               terrains with different gaits poses further challenges, leading
+                                                                 I. INTRODUCTION                               to model divergence.
+                                            Robots are often required to traverse diverse terrains and            In this work, we enable a quadruped robot to traverse
+                                         demonstrate various skills [1], [2]. Recent advancements in           various terrains—including bars, pits, stairs, slopes, and baf-
+                                         reinforcement learning (RL) algorithms and physics-based              fles—while also supporting gait switching between bipedal
+                                         simulators have enabled RL-based approaches to become the             and quadrupedal modes, using only one policy. We integrate
+                                         dominant paradigm for training robot locomotion policies              the Mixture of Experts (MoE) framework [13]–[16] as a
+                                                                                                               modular network structure for multitask locomotion rein-
+                                           1 IIIS, Tsinghua University, Beijing, China
+                                                                                                               forcement learning. We demonstrate that the MoE frame-
+                                           2 Shanghai Qi Zhi Institute, Shanghai, China
+                                           3 Massachusetts Institute of Technology, MA, USA                    work alleviates gradient conflicts by directing gradients to
+                                           * These authors contributed equally to this work.                   specialized experts, thus improving training efficiency and
+                                           † Corresponding at: hangzhao@mail.tsinghua.edu.cn                   overall performance. Furthermore, we analyze the roles of
+different experts within the MoE model and observe that             C. Mixture of Experts (MoE)
+they naturally specialize in distinct behaviors. Leveraging this       The concept of Mixture of Experts (MoE), originally
+property, we can manually adjust the ratios between different       introduced in [13], [44], has received extensive attention in
+experts to compose new skills, underscoring the adaptability        recent years [45], [46]. It has found widespread application
+and reusability of our modular approach for novel tasks.            in fields such as natural language processing [47], [48],
+   In summary, our contributions are as follows.                    computer vision [49], [50], and multi-modal learning [51],
+   • We train and deploy a single neural network policy that        [52]. MoE has also been applied in reinforcement learning
+     enables a quadruped robot to cross challenging terrains        and robotics. DeepMind [14] has explored using MoE to scale
+     and perform fundamentally different locomotion modes,          reinforcement learning. MELA [39] proposed a Multi-Expert
+     including bipedal and quadrupedal gaits.                       Learning Architecture to generate adaptive skills from a set
+   • We integrate the MoE architecture into locomotion              of representative expert skills, but their focus is primarily on
+     policy training to mitigate gradient conflicts, improve        simple actions.
+     training efficiency, and overall model performance.
+   • We conduct qualitative and quantitative analysis of MoE,                                 III. METHOD
+     uncovering expert specialization patterns. Using these         A. Task Definition
+     insights, we explore the potential of MoE for task
+                                                                       In this paper, we focus on 9 challenging locomotion
+     migration and skill composition.
+                                                                    tasks, encompassing both quadrupedal and bipedal gaits. The
+                   II. RELATED WORKS                                quadrupedal gait tasks include bar crossing, pit crossing, baffle
+                                                                    crawling, stair climbing, and slope walking. The bipedal gait
+A. Reinforcement Learning for Robot Locomotion                      tasks consist of standing up, plane walking, slope walking, and
+    Using reinforcement learning for robot locomotion control       stair descending. Our terrains in the simulation environment
+has become increasingly popular in recent years. It has demon-      are shown in Figure 2. The robot is controlled via velocity
+strated the ability to learn legged locomotion behaviors in both    commands from a joystick, where a one-hot vector is used to
+simulation [17], [18] and the real world [3], [19]. Not only can    indicate whether to walk in the quadrupedal or bipedal gait.
+it traverse a variety of complex terrains [8], [20], [21], but it
+can also achieve high-speed running [22], [23]. Furthermore,
+reinforcement learning has enabled robots to perform extreme
+tasks and master skills such as bipedal walking [24], [25],
+opening doors [1], [4], navigating rocky terrains [26], and even    Fig. 2: A snapshot of the terrain settings. From left to right:
+executing high-speed parkour in challenging environments [7],       bar, pit, baffle, slope, and stairs.
+[9], [10], [27]. However, most of these works focus on specific        We define multitask locomotion as a Markov Decision
+skills and a limited number of terrains, rarely considering         Process (MDP), represented by the tuple ⟨𝑆 𝜏 , 𝐴 𝜏 ,𝑇𝜏 , 𝑅 𝜏 , 𝛾 𝜏 ⟩.
+multitask learning.                                                 In our training framework, the multitask nature is characterized
+                                                                    by several key aspects. First, different locomotion terrains
+B. MultiTask Learning
+                                                                    correspond to distinct subsets of the state space, denoted as
+   Multitask learning (MTL) aims to train a unified network         𝑆 𝜏 , where 𝑆 𝜏 ⊆ 𝑆 represents the states relevant to a specific
+that can perform across different tasks [28]–[30]. MTL allows       task. However, the full state space 𝑆 remains unknown to the
+multiple tasks to benefit from shared knowledge [31], [32],         robot. For instance, the task of walking on slopes involves a
+but some works highlight the challenge of negative gradient         state space that differs from those required for stair climbing
+conflicts during training [33]–[35]. Multitask Reinforcement        or bar traversal.
+Learning (MTRL) is one of the most popular areas of research           Moreover, the reward function 𝑅 varies across different
+in this domain. Many algorithms have been developed to              gaits, reflecting task-specific objectives. Additionally, the
+improve the effectiveness of MTRL [36]–[38]. Moreover,              termination conditions depend on the type of gait, leading
+MTRL is widely applied in the robotics field, though much of        to distinct transition dynamics 𝑇. The robot learns a policy
+the focus has been on manipulation tasks [16], [35], [39], [40].    𝜋(𝑎|𝑠) that selects actions based on both the terrain and gait,
+In the context of locomotion, works like ManyQuadrupeds [41]        aiming to maximize the cumulative reward across tasks:
+focus on learning a unified policy for different categories                                 "                                  #
+of quadruped robots. MELA [42] employs pretrained expert                                      ∑︁ ∞
+                                                                                                ∑︁
+models to construct a locomotion policy, although it primarily                    𝐽 (𝜋) = E         𝛾 𝑡 𝑅 𝜏 (𝑠𝑡 , 𝑎 𝑡 , 𝑠𝑡+1 )      (1)
+                                                                                               𝜏 𝑡=0
+concentrates on basic skill acquisition. Moreover, the pretrain-
+ing process for specialized neural network policies requires           The goal is to learn a single universal policy that gener-
+substantial reward engineering efforts. MTAC [43] attempts          alizes across various tasks. We demonstrate our method in
+to train a policy across different terrains using hierarchical      the condition of blind locomotion (only use proprioception
+RL, but their approach can only handle one gait with three          as input). In fact, our approach can also be incorporated
+relatively simple terrains and has not been deployed on a real      into visual RL locomotion settings, further enhancing their
+robot.                                                              multitask locomotion capabilities.
+                Explicit                                                                 Actor MoE
+             Privileged State
+                                et                             ct
+
+
+
+ Estimator
+                                                                                                              fi     Weighted
+               Implicit                                                ht                                                             at   Action
+                                 it               lt        LSTM                         Critic MoE                   Sum
+             Privileged State
+
+                                                                                                                          li
+                Proprio-
+                                pt                                                     Gating Network
+                ception
+
+Fig. 3: Overview of our MoELoco pipeline. With the design of MoE architecture, our policy achieves robust multitask
+locomotion ability on various challenging terrains with multiple gaits.
+B. MoE Based Multitask Locomotion Learning                                     multiple tasks in multitask reinforcement learning (MTRL)
+    In this section, we introduce our MoE based multitask                      often leads to gradient conflicts. To address this issue, we in-
+locomotion learning. We incorporate a two-stage training                       corporate the Mixture of Experts (MoE) architecture into both
+framework following [20], and use PPO [53] as our reinforce-                   the actor and critic networks, effectively mitigating gradient
+ment learning algorithm.                                                       conflicts and improving learning efficiency. Specifically, each
+    State Space: The entire process includes four types of                     MoE module 𝑓 operates as follows:
+observations: proprioception 𝒑 𝑡 , explicit privileged state 𝒆 𝑡 ,
+                                                                                                    𝒈ˆ𝑖 = softmax(𝑔(𝒉𝑡 )) [𝑖],                   (2)
+implicit privileged state 𝒊 𝑡 , and command 𝒄 𝑡 . 1) Propriocep-
+                                                                                                               𝑁
+tion 𝒑 𝑡 includes projected gravity and base angular velocity                                                 ∑︁
+from the IMU, joint positions, joint velocities, and the last                                          𝒂𝑡 =         𝒈ˆ𝑖 · 𝑓𝑖 (𝒉𝑡 ),              (3)
+                                                                                                              𝑖=1
+action. 2) Explicit privileged state 𝒆 𝑡 contains the base
+linear velocity (IMU data is too noisy to use) and ground                         Here, 𝒉𝑡 is the output of the low-level LSTM module,
+friction. 3) Implicit privileged state 𝒊 𝑡 includes contact force              𝑔 is the gating network that outputs the gating scores, and
+of different robot link, which must be encoded into a low-                     𝑓𝑖 denotes expert 𝑖. Additionally, we pretrain the estimator
+dimensional latent representation to mitigate the sim-to-real                  module in this stage using a L2 loss 𝐿 recon to reconstruct
+gap [20]. 4) Command 𝒄 𝑡 consists of a velocity command 𝑉 =                    Estimator( 𝒑 𝑡 , 𝒄 𝑡 ) into [Enc(𝒊 𝑡 ), 𝒆 𝑡 ]. In summary, the overall
+(𝑣 𝑥 , 𝑣 𝑦 , 𝑣 yaw ) and a one-hot vector 𝑔, where 𝑔 = 0 represents            optimization objective is:
+a quadrupedal gait and 𝑔 = 1 represents a bipedal gait in the
+                                                                                                     𝐿 surro + 𝐿 value + 𝐿 recon ,               (4)
+context of multitask reinforcement learning.
+    Action Space: The action space 𝒂 𝑡 ∈ R12 consists of the                   where 𝐿 surro and 𝐿 value are surrogate loss and value loss in
+desired joint positions for all 12 joints.                                     PPO algorithm.
+    Reward Design: Under the setting of the multitask learning,                   In the second training stage, the policy can only access
+the robot receives different rewards based on the gait command                 [ 𝒑 𝑡 , 𝒄 𝑡 ] as observations. The weights of the estimator, the low-
+𝑔. For quadrupedal locomotion (𝑔 = 0), the total reward is                     level LSTM, and the MoE modules are initialized by copying
+                           quad       quad
+defined as 𝑟 quad = 𝑟 track + 𝑟 reg . For bipedal locomotion (𝑔 =              them from the first training stage. Probability Annealing
+                                                     bip     bip     bip
+1), the total reward is given by 𝑟 bip = 𝑟 track + 𝑟 stand + 𝑟 reg . The       Selection [54] is then employed to gradually adapt the policy
+detailed reward functions can be found in Appendix V-A.                        to inaccurate estimates with minimal degradation of the Oracle
+    Termination: The robot terminates under different circum-                  policy performance. Detailed pseudocode is in subsection V-B
+stances under different gait modes. When 𝑔 = 0, the robot                         The MoE architecture facilitates the coordination of similar
+terminates when 𝜃 roll > 1.0 or 𝜃 pitch > 1.6. When 𝑔 = 1, the                 task skills while minimizing conflicts between heterogeneous
+robot terminates when any other links except rear feet and calf                tasks by dynamically routing tasks to appropriate experts.
+contacts the ground after 1 second.                                            This automatic routing enables specialization, improving both
+    Training: Our training primarily follows the Probability                   efficiency and task performance. Additionally, we incorporate
+Annealing Selection (PAS) paradigm [54]. Overall, the robot                    MoE into the critic network to better capture diverse task
+utilizes both privileged and proprioceptive information in the                 reward structures. The actor MoE and critic MoE shares
+first stage; but in the second stage, it learns to rely exclusively            the same gating network. By using a shared gating network,
+on proprioception for locomotion, using an estimator to                        we ensure consistency between policy evaluation and action
+estimate the privileged latent. In the first training stage, all ob-           generation.
+servation states [ 𝒑 𝑡 , 𝒆 𝑡 , 𝒊 𝑡 , 𝒄 𝑡 ] are accessible to train an Oracle
+policy. The implicit state 𝒊 𝑡 is first encoded through an encoder             C. Skill Decomposition and Composition
+network into a latent representation, which is then concate-                      A key challenge in multitask learning is how to efficiently
+nated with the explicit privileged state 𝒆 𝑡 and proprioception                utilize previous acquired locomotion skills to form new loco-
+ 𝒑 𝑡 to form the dual-state representation 𝒍 𝑡 = [Enc(𝒊 𝑡 ), 𝒆 𝑡 , 𝒑 𝑡 ].      motion tasks. The MoE framework offers a natural solution
+Then, the downstream LSTM integrates historical information                    by dynamically decompose tasks into expert of different
+into state 𝒉𝑡 . As discussed in subsection IV-C, jointly learning              skills. Specifically, we conduct quantitative analyses on expert
+TABLE I: Quantitative Comparison in Simulation. Metrics include success rate, average travel distance, and average passing
+time.
+                                                                       Success Rate ↑
+          Method
+                         Mix      Bar (q)     Baffle (q)   Stair (q)     Pit (q)    Slope (q)       Walk (b)       Slope (b)      Stair (b)
+           Ours         0.879       0.886       0.924       0.684        0.902         0.956          0.932          0.961         0.964
+       Ours w/o MoE     0.571       0.848       0.264       0.568        0.698         0.988          0.826          0.504         0.453
+           RMA          0.000       0.871       0.058       0.017        0.017         0.437          0.000          0.000         0.000
+                                                                 Average Pass Time (s) ↓
+           Ours         230.98     102.42        87.84      179.14        91.86        76.75           92.37         86.14         86.44
+       Ours w/o MoE     315.47     125.46       318.68      214.52       161.38        65.28          156.76        236.67         253.62
+           RMA          400.00     107.84       385.25      395.34       394.49        272.06         400.00        400.00         400.00
+                                                              Average Travel Distance (m) ↑
+           Ours         89.41       28.05       28.02       20.42        27.82         27.62          27.20          27.99         28.04
+       Ours w/o MoE     57.12       27.59       17.41       22.66        25.59         28.49          22.73          26.21         14.23
+           RMA          13.40       27.39       11.31        3.92        12.48         21.33          2.00           2.00           2.00
+
+coordination across various tasks. Detailed experiments and               • Ours w/o MoE [20]: Uses the same framework as ours
+results are presented in subsection IV-E.                                   but replaces the MoE module with a simple MLP. We
+   With the automatic decomposition of expert skills, we can                control the total parameter to be the same as our MoE
+recombine them with adjustable weights to synthesize new                    policy.
+skills and gaits. Formally, we leverage pretrained experts and            • RMA [3]: Employs a 1D-CNN as an asynchronous
+modify the gating weights as follows:                                       adaptation module within a teacher-student training
+                                                                            framework, without using an MoE module.
+                𝒈ˆ𝑖 = 𝑤 [𝑖] · softmax(𝑔(𝒉𝑡 )) [𝑖],             (5)
+                                                                          We constructed a benchmark for quadrupedal robot loco-
+where 𝑤 [𝑖] can be manually defined or dynamically adjusted            motion across different tasks. Our benchmark consists of a
+by a neural network. This formulation enables controlled skill         5𝑚 × 100𝑚 runway with various obstacles evenly distributed
+blending, allowing the robot to adapt and generalize to novel          along the path. The obstacles include:
+locomotion patterns.
+   Each expert naturally specializes in different aspects of              TABLE II: Benchmark tasks for simulation experiments
+movement, such as balancing, crawling, or obstacle crossing.                  Obstacle Type             Specification              Gait Mode
+By selectively adjusting the contributions of these experts,                     Bars            5 bars, height: 0.05m – 0.2m     Quadrupedal
+we can construct new locomotion strategies without requiring                      Pits            5 pits, width: 0.05m – 0.2m     Quadrupedal
+additional training. This recomposition process highlights the                  Baffles         5 baffles, height: 0.3m – 0.22m   Quadrupedal
+                                                                               Up Stairs        3 sets, step height: 5cm – 15cm   Quadrupedal
+interpretability of MoE-based policies, as each expert’s role                 Down Stairs       3 sets, step height: 5cm – 15cm   Quadrupedal
+can be explicitly identified and manipulated. Detailed experi-                 Up Slopes           3 sets, incline: 10◦ – 35◦     Quadrupedal
+ments are provided in subsection IV-F and subsection IV-G.                    Down Slopes          3 sets, incline: 10◦ – 35◦     Quadrupedal
+                                                                                 Plane                   10m flat surface           Bipedal
+                                                                               Up Slopes           3 sets, incline: 10◦ – 35◦       Bipedal
+                      IV. EXPERIMENTS                                         Down Slopes          3 sets, incline: 10◦ – 35◦       Bipedal
+A. Experiment Setup                                                           Down Stairs       3 sets, step height: 5cm – 15cm     Bipedal
+
+   We conduct our simulation training in IsaacGym [17],                   We also conducted experiments for each challenging tasks,
+utilizing 4096 robots concurrently on an NVIDIA RTX 3090               each track is 30 meters long. We consider three metrics:
+GPU. Training begins with 40,000 iterations for plane walking          Success Rate, Average Pass Time, and Average Travel
+in both gaits, followed by 80,000 iterations on challenging            Distance. A trial is considered successful if the robot reaches
+terrain tasks. Finally, we apply PAS for 10,000 iterations to          within 1m of the target point within 400 seconds. Upon
+adapt the policy to pure proprioception input. The control             completion, we record the travel time. Failure cases include
+frequency in both the simulation environment and the real              falling off the runway, getting stuck, or meeting the termination
+world is 50Hz. Our policy is deployed on the Unitree Go2               conditions outlined in subsection III-B. For failed trials,
+quadruped robot, with an NVIDIA Jetson Orin serving as the             the pass time is recorded as 400 seconds. We compute the
+onboard computing device. We use PD control for low-level              overall success rate and average pass time across all trials.
+joint execution (𝐾 𝑝 = 40.0, 𝐾 𝑑 = 0.5). We select expert number       Additionally, we measure the average lateral travel distance of
+𝑁exp as 6. In all experiment results, q represents quadrupedal         all robots at the end of the evaluation.
+gait, and b represents bipedal gait.                                      As shown in Table I, our MoE policy achieves the best
+                                                                       performance in the mixed-task benchmark across all three
+B. Multitask Performance                                               metrics. In all single-task evaluations, except for quadrupedal
+   1) Simulation Experiment: We conduct comparative sim-               slope walking, our policy outperforms others. This exception
+ulation experiments with the following baselines:                      may be attributed to the relative simplicity of quadrupedal
+slope walking. Furthermore, policy without MoE struggles to           gradient throughout the process. We consider two metrics to
+effectively traverse the challenging multitask terrain setting,       measure the gradient conflict of robot locomotion. 1) Cosine
+as it is significantly affected by gradient conflicts, as discussed   Similarity: We compute the normalized dot product of all
+in subsection IV-C. Regarding RMA, we adhere to its original          parameters’ gradients of different tasks. Smaller cosine simi-
+implementation, which utilizes only an MLP backbone and               larity indicates larger gradient conflicts. 2) Negative gradient
+a CNN encoder. This design choice leads to its suboptimal             ratio: We compute negative gradient update ratio for each
+performance on multiple challenging terrains.                         pair of task gradients. Larger negative gradient ratio indicates
+   2) Real World Experiments: We deploy our MoE policy                larger gradient conflict. We test the gradient conflict between
+zero-shotly on real robots and conduct real world experiments.        5 different tasks: quadrupedal bar crossing, quadrupedal baffle
+We test mix terrain that contains all challenging tasks, as well      crawling, quadrupedal stair walking, bipedal plane walking
+as each separated terrains. For the mix terrain, our robot first      and bipedal slope walking.
+need to consequently cross 20cm bar, 22cm baffle, 15cm stairs,
+                                                                      TABLE III: Cosine similarity of gradients of different tasks.
+20cm pits and 30 degree slopes in a quadrupedal gait. Then
+                                                                      Left represents MoE policy and right represents standard
+it receives a bipedal command to stand up, walk up the 30
+                                                                      policy.
+degree slope, turn around and walk down. For each tests, we
+test for 20 trails and record the average success rate. We also                                       Gradient Cosine Similarity ↑
+                                                                      MoE/Standard
+                                                                                       Bar (q) Baffle (q) Stair (q) Slope Up (b) Slope down (b)
+test different policies for single tasks.
+                                                                          Bar (q)        -    0.519/0.474 0.606/0.592 0.278/-0.132   0.091/-0.128
+                                                                         Baffle (q)      -         -      0.369/0.384 0.062/-0.091   0.061/-0.101
+                                                                         Stair (q)       -         -           -      0.046/-0.023   0.052/0.015
+                                                                       Slope up (b)      -         -           -           -         0.806/0.709
+                                                                      Slope down (b)     -         -           -           -               -
+
+
+                                                                      TABLE IV: Negative entry ratio of MoE and Standard
+                                                                      policy on different tasks. Left represents MoE policy and
+                                                                      right represents standard policy.
+                                                                                                     Gradient Negative Entries (%) ↓
+                                                                      MoE/Standard
+                                                                                       Bar (q) Baffle (q) Stair (q) Slope Up (b) Slope down (b)
+Fig. 4: Real world success rate over multiple terrains and
+gaits.                                                                    Bar (q)        -    35.72/37.33 32.67/32.62 45.50/ 55.12   49.83/50.80
+                                                                         Baffle (q)      -         -      39.90/38.52 49.86/55.91    49.91/51.68
+  As shown in Figure 4, our method achieves better perfor-               Stair (q)       -         -           -      49.52/50.15    50.04/50.34
+mance across all types of tasks and demonstrates a significantly       Slope up (b)      -         -           -            -        23.17/30.91
+                                                                      Slope down (b)     -         -           -            -             -
+higher success rate in mix terrain. Additionally, we conduct ex-
+periments in more outdoor environments, as shown in Figure 5,            As shown in Table III and Table IV, the MoE policy
+further demonstrating its robustness and generalization.              significantly reduces gradient conflict between bipedal and
+                                                                      quadrupedal tasks. It also minimizes gradient conflict even
+ 1                     2                     3
+                                                                      between quadrupedal tasks that require fundamentally differ-
+                                                                      ent skills, such as quadrupedal bar crossing and quadrupedal
+                                                                      baffle crawling.
+ 4                     5                     6
+                                                                      D. Training Performance
+
+
+
+ 7                     8                     9
+
+
+
+
+Fig. 5: Real-world experiments over multiple terrains and             Fig. 6: Training curve of our multitask policy in the
+gaits: 1. Bar (Quad), 2. Pit (Quad), 3. Baffle (Quad), 4. Stair       pretraining stage.
+(Quad), 5. Slope (Quad), 6. Stand up (Bip), 7. Walk (Bip), 8.            In terms of training performance, we focus on the mean
+Slope (Bip), 9. Stair (Bip).                                          reward and mean episode length. The mean reward reflects
+                                                                      the policy’s ability to exploit the environment, while the
+C. Gradient Conflict Alleviation                                      mean episode length indicates how well the robot learns to
+   In order to unveil whether gradient conflict can be reduced        stand and walk. We present the training curve during the
+by applying mixture of experts, we conducted gradient conflict        plane pretraining stage, where the robot learns both bipedal
+experiments. We resume from the checkpoints after pretraining         and quadrupedal plane walking. As shown in Figure 6, our
+for 15000 epochs and run the training process of multitask            MoE policy outperforms the standard policy with similar total
+for 500 epochs of 4096 quadrupedal robots. We average the             parameters across both metrics.
+Fig. 7: Expert usage in different tasks. From left to right is: Bipedal walking, Quadrupedal Baffle crawling, Front Leg Crossing
+Bars and Rear Leg Crossing Bars.
+                                                                    responsible for lifting one of the front legs to perform crossing
+                                                                    tasks, enabling the robot to execute basic movement skills. By
+                                                                    selecting the balancing expert and the crossing expert, we are
+                                                                    able to zero-shot transfer to a new dribbling pattern. In this gait,
+                                                                    we select the two experts mentioned above, manually double
+                                                                    the gating weight of the crossing expert, and mask out all other
+                                                                    experts. As shown in Figure 9, the new dribbling gait allows
+                                                                    the robot to walk effectively while periodically using one of its
+                                                                    front legs to kick the ball. This skill composition results from
+                                                                    the automatic skill decomposition and interpretability inherent
+                                                                    in the MoE architecture. In contrast, a standard neural network
+                                                                    would function as a black box, lacking such interpretable skill
+                                                                    decomposition.
+Fig. 8: t-SNE result of gating network output on different          G. Additional Experiment
+terrains and gaits.
+                                                                     1                     2                      3
+E. Expert Specialization Analysis
+   We conduct both qualitative and quantitative experiments
+to analyze the emergent composition of skills. As shown in
+Figure 7, we plot the mean weight of different experts across
+various tasks. It is evident that the distribution of gating        Fig. 10: MoE-Loco can quickly adapt to a three-footed gait
+weights varies significantly from task to task, demonstrating       by training a new expert. 1) ground plane, 2) slope up, and
+the expertise and differentiation of various experts.               3) slope down.
+   To further analyze the composition of different experts
+across various tasks, we use t-SNE to visualize the output of          We conduct an adaptation learning experiment to demon-
+the gating network for different tasks (i.e., the weight of each    strate how our pretrained experts can be recomposed and
+expert). As shown in Figure 8, the bipedal and quadrupedal          adapted to new tasks. In this experiment, we design the robot
+tasks form distinct clusters. Quadrupedal slope walking and         to walk on three feet. We introduce a newly initialized expert,
+quadrupedal pit crossing tasks are performed using a gait           freeze the parameters of the original experts, and update only
+similar to quadrupedal plane walking, and thus, they cluster        the gating network. As shown in Figure 10, the robot can
+closely together. In contrast, bar crossing, baffle crawling, and   walk on both flat ground and a slope using only three feet.
+stair climbing exhibit a gait that differs more significantly,      The newly added expert only needs to learn how to lift one
+resulting in them clustering further apart.                         leg, while leveraging the walking and slope capabilities of the
+                                                                    original experts.
+F. Skill Composition
+ 1                     2                    3                                              V. CONCLUSION
+
+                                                                       We introduced MoE-Loco, a multitask locomotion frame-
+                                                                    work that utilizes a Mixture of Experts architecture to
+                                                                    train a single policy for quadrupedal robots. Our approach
+Fig. 9: Manually designed new dribbling gait by selecting           effectively mitigates gradient conflicts, leading to improved
+two experts.                                                        training efficiency and task performance. Through extensive
+   During our training, we found that our experts not only          evaluations in both simulated and real-world environments, we
+specialize and cooperate across different tasks, but they also      demonstrated the capability of our method to handle a variety
+emerge with specific, human-interpretable skills. We discov-        of terrains and gaits. Future work will explore extending this
+ered that one expert specializes in balancing, which helps          approach to incorporate sensory perception such as camera
+lift the robot’s body but limits its agility. Another expert is     and Lidar to enhance adaptability in more complex tasks.
+                                                 APPENDIX
+                                                                                                                                             Algorithm 2 Training Stage 2
+                                                                                                                                              1: Copy parameters from Oracle Policy
+A. Reward Functions                                                                                                                           2: for total iteration do
+  The robots in bipedal gait receives different reward to the                                                                                 3:     Initialize rollout buffer D ← ∅
+                                                                                                                                              4:     for num steps do
+robots in quadrupedal gait. Detailed explanation is shown in                                                                                  5:         l̂𝑡 ← [Estimator(p𝑡 , c𝑡 ), p𝑡 ]
+Table V.                                                                                                                                      6:         l𝑡 ← [z𝑡 , e𝑡 , p𝑡 ]
+               TABLE V: Reward functions                                                                                                      7:         P𝑡 ← 𝛼 t
+                                                                                                                                              8:         l̄𝑡 ← Probability Selection(P𝑡 , l̂𝑡 , l𝑡 )
+           Type                      Item                                              Formula                                    Weight
+                                                                                                                                              9:         h𝑡 ← LSTM( [ l̄𝑡 , c𝑡 ] )
+                                                                                                                                           10:          ĝ ← softmax(𝑔 (h𝑡 ) )
+                                                                                 ∥ v −v ∥ 2
+                                                                          exp − 𝑐, 𝑥 𝑦 𝜎 𝑏, 𝑥 𝑦
+                                                                                                                                                                 Í𝑁
+                                Tracking lin vel
+                                                                                               
+                                                                                                                                    7.0      11:          a𝑡 ← 𝑖=1    ĝ𝑖 · 𝑓𝑖 (h𝑡 )
+                                                                                  (c − 𝜔 ) 2
+   Quadrupedal Tracking         Tracking ang vel                           exp − yaw 𝜎 yaw                                          2.5      12:          Execute a𝑡 , observe reward 𝑟𝑡 and next state
+                                  Termination                                               −1                                     −1.0      13:          Reset if terminated
+                                     Alive                                                  1                                      1.0
+                                                                                                                                             14:          𝑡 ← 𝑡 +1
+                                   Joint pos                                         (q − qdefault ) 2                            −0.05      15:          Store rollout in D
+                                   Joint vel                                             ∥ ¤q∥ 2                                  −0.002
+                                   Joint acc                                             ∥ q¥ ∥ 2                                −2 × 10−6
+                                                                                                                                             16:      end for
+                                                                                                          
+                                Ang vel stability                              𝜔𝑡, 𝑥 2 + 𝜔𝑡,𝑦 2                                    −0.2      17:      Compute PPO losses: 𝐿surro , 𝐿value
+                                                     ÎN         n              o               n              o n     o
+                                                                    foot < 1 + ÍN I Ffoot < 1 I Fcalf ≥ 1                         −0.05
+ Quadrupedal Regularization
+                                   Feet in air            𝑖=1 I   F 𝑖,𝑧                  𝑖=1       𝑖,𝑧            𝑖,𝑧                        18:      Compute reconstruction loss:
+                                                                                                           2                                                    Í                   2
+                                                                                                                                                        𝐿recon = l̂𝑖 , l𝑖 ∈D l̂𝑖 − l𝑖
+                                                                         Í
+                                                                           𝑖 ∈Ifront hip q𝑖 − q𝑖                                   −0.2
+                                                                                                    default
+                                 Front hip pos
+                                                                                                           2
+                                                                                                                                             19:
+                                                                                                                                                      𝐿 = 𝐿surro + 𝐿value + 𝐿𝑟𝑒𝑐𝑜𝑛
+                                                                         Í
+                                                                            𝑖 ∈Irear hip q𝑖 − q𝑖                                   −0.5
+                                                                                                   default
+                                  Rear hip pos
+                                                                                                              2
+                                                                                                                                             20:
+                                                                        zbase − N1 N
+                                                                                        Í
+                                  Base height                                              𝑖=1 h 𝑖 −  h target                     −0.1      21:      Update policy and value network
+                                                                        + Ffeet,2 − F
+                                                                    Ffeet,0            feet,1 − Ffeet,3                         −2 × 10−5
+                                    Balance                                                             2                                   22: end for
+                                   Joint limit                          q < qmin ∨ q > qmax                                       −0.01
+                                                                   ÍNsub Í12      n                   1 o                                    23: return Final Policy
+                              Torque exceed limit                   𝑖=1    𝑗=1 max | 𝜏𝑖 𝑗 | − 𝜏 𝑗
+                                                                                                limit , 0                          −2.0
+
+                                                                                      2                       
+       Bipedal Stand
+                                  Orientation                    0.5 cos 𝜃 + 0.5 , 𝜃 = arccos ∥g∥g·t∥t∥
+                                                                               
+                                                                                     −𝑇min
+                                                                                               
+                                                                                                                                    1.0      C. Network Architecture Details
+                               Base height linear                     min max 𝑇zroot
+                                                                                  max −𝑇min
+                                                                                            ,0 ,1                                   0.8
+
+                                Tracking lin vel
+                                                                
+                                                            exp − ∥v𝑐 −v    𝑎∥
+                                                                                2
+                                                                                     n            o
+                                                                                                      base −slow
+                                                                                     I cos 𝜃 > 0.95 zshigh                          3.0         The architecture of different modules used in our experiment
+                                                                         𝜎           n             o −slow
+                                                                  (croll − 𝜔roll ) 2                    base −slow
+      Bipedal Tracking          Tracking ang vel           exp −       𝜎𝑎𝑛𝑔           I cos 𝜃 > 0.95 zshigh  −slow                  2.5      is shown in Table VI.
+                                  Termination                                               −1                                     −1.0
+                                     Alive                                                  1                                      1.0                 TABLE VI: Network architecture details
+                                                     Î        n              o       Í        n          o n                 o
+                                    Rear air                     rear
+                                                         𝑖 ∈R I f𝑖,𝑧 < 1         +         rear
+                                                                                 𝑖 ∈R I f𝑖,𝑧 < 1 I f𝑖,𝑧
+                                                                                                             rear−calf ≥ 1         −0.5                                Network              Type           Dims
+                                                                             Í                     2
+                                                                          𝑖 ∈F 𝐻 q𝑖 − q𝑖                                           −0.1
+                                 Front hip pos                                              default
+
+                                                                        Í                          2                                                                Actor RNN            LSTM             [256]
+                                                                          𝑖 ∈R 𝐻 q𝑖 − q𝑖                                          −0.18
+                                  Rear hip pos                                              default
+                                                                                                                                                                      Critic RNN           LSTM             [256]
+                                Rear pos balance                          qrear left − qrear right                                −0.05
+                                                                            𝑖            𝑖           2                                                             Estimator Module        LSTM             [256]
+                                                                    n            oÍ                         2
+                                                                                     𝑖 ∈F q𝑖 − q𝑖                                  −0.2
+                                 Front joint pos                   1 t > Tallow                      default
+                                                                            n            oÍ                                                                    Estimator Latent Encoder    MLP           [256, 128]
+   Bipedal Regularization                                                                                                        −1 × 10−3
+                                 Front joint vel                          1 t > Tallow       𝑖 ∈F ¤q2𝑖                                                             Implicit Encoder        MLP            [32, 16]
+                                                                         n           oÍ               2
+                                                                                                 Δ ¤q𝑖
+                                 Front joint acc                       1 t > Tallow       𝑖 ∈F Δt                                −2 × 10−6                           Expert Head           MLP         [256, 128, 128]
+                                                                                                      2
+                              Legs energy substeps                       1 ÍN𝑠 ÍNdof
+                                                                                            𝜏    ¤
+                                                                                                 q
+                                                                                              𝑖𝑗 𝑖𝑗                              −1 × 10−6                          Standard Head          MLP         [640, 640, 128]
+                                                                        N𝑠     𝑗=1 n 𝑖=1                  o
+                                                                     Í Í                                                                                            Gating Network         MLP              [128]
+                                                                        𝑗 𝑖 max | 𝜏𝑖 𝑗 | − 𝜏𝑖                                      −2.0
+                              Torque exceed limits                                              limit , 0
+                                                                                  n                          o
+                                                                     1 Í Í
+                                  Joint limits                      N𝑠     𝑗 𝑖 I q𝑖 𝑗 ∉ [q𝑖 , q𝑖
+                                                                                              min      max ]                      −0.06
+                                                                              Í n               o
+                                   Collision                                    𝑘 I ∥f 𝑘 ∥ > 1                                     −2.0
+                                  Action rate                                           𝑖 − a𝑖 2
+                                                                                       alast                                      −0.03      D. Domain Randomization
+                                   Joint vel                                              ∥ ¤q∥ 2                                −2 × 10−3
+                                   Joint acc                                              ∥ q¥ ∥ 2                               −3 × 10−6
+                                                                                                                                               We introduce dynamic randomization to ensure our policy
+                                                                                                                                             can be safely transfered to real environment. The random
+B. Algorithm Pseudocode                                                                                                                      ranges are shown in the Table VII.
+Algorithm 1 Training Stage 1
+ 1: for total iteration do                                                                                                                                    TABLE VII: Domain randomization
+ 2:     Initialize rollout buffer D ← ∅                                                                                                                         Parameters                     Range                  Unit
+ 3:     for num steps do
+ 4:         z𝑡 ← Enc(i𝑡 )                                                                                                                                         Base mass                        [1, 3]                𝑘𝑔
+                                                                                                                                                           Mass position of X axis              [-0.2, 0.2]              𝑚
+ 5:         l̂𝑡 ← [Estimator(p𝑡 , c𝑡 ) , p𝑡 ]
+                                                                                                                                                           Mass position of Y axis              [-0.1, 0.1]              𝑚
+ 6:         l𝑡 ← [z𝑡 , e𝑡 , p𝑡 ]                                                                                                                           Mass position of Z axis            [-0.05, 0.05]              𝑚
+ 7:         h𝑡 ← LSTM( [l𝑡 , c𝑡 ] )                                                                                                                                 Friction                       [0, 2]                  -
+ 8:         ĝ ← softmax(𝑔 (h𝑡 ) )                                                                                                                          Initial joint positions   [0.5, 1.5] × nominal value      𝑟 𝑎𝑑
+                                                                                                                                                                                      [0.9, 1.1] × nominal value
+                   Í𝑁
+ 9:         a𝑡 ← 𝑖=1     ĝ𝑖 · 𝑓𝑖 (h𝑡 )                                                                                                                        Motor strength                                              -
+10:          Execute a𝑡 , observe reward 𝑟𝑡 and next state                                                                                                 Proprioception latency            [0.005, 0.045]                𝑠
+11:          Reset if terminated
+12:          𝑡 ← 𝑡 +1
+                                                                                                                                               Gaussian noise are added to the input observation to
+13:          Store rollout in D
+14:      end for                                                                                                                             simulate the noise in the real world, as shown in Table VIII.
+15:      Compute PPO losses: 𝐿surro , 𝐿value                                                                                                                        TABLE VIII: Gaussian noise
+16:      Compute reconstruction loss:
+                     Í                   2
+17:        𝐿recon = l̂𝑖 , l𝑖 ∈D l̂𝑖 − l𝑖                                                                                                                      Observation         Gaussian Noise Amplitude          Unit
+18:      𝐿 = 𝐿surro + 𝐿value + 𝐿𝑟𝑒𝑐𝑜𝑛                                                                                                                        Linear velocity                0.05                     𝑚/𝑠
+19:      Update policy and value network                                                                                                                     Angular velocity               0.2                    𝑟 𝑎𝑑/𝑠
+20: end for                                                                                                                                                      Gravity                    0.05                    𝑚/𝑠 2
+21: return Oracle Policy                                                                                                                                      Joint position                0.01                    𝑟 𝑎𝑑
+                                                                                                                                                              Joint velocity                1.5                    𝑟 𝑎𝑑/𝑠
+E. Training Details                                                               [16] O. Celik, A. Taranovic, and G. Neumann, “Acquiring diverse skills
+                                                                                       using curriculum reinforcement learning with mixture of experts,” arXiv
+  In order to prevent legs dragging on the floor, and achieve                          preprint arXiv:2403.06966, 2024. 1, 2
+a robust performance on uneven terrains, we apply fractal                         [17] V. Makoviychuk, L. Wawrzyniak, Y. Guo, M. Lu, K. Storey, M. Macklin,
+noise [7] to the ground. We use maximum noise scale z𝑚𝑎𝑥 =                             D. Hoeller, N. Rudin, A. Allshire, A. Handa, et al., “Isaac gym: High
+                                                                                       performance gpu-based physics simulation for robot learning,” arXiv
+0.1. We use PPO as our reinforcement learning algorithm. The                           preprint arXiv:2108.10470, 2021. 2, 4
+hyperparameters are shown in Table IX.                                            [18] M. Mittal, C. Yu, Q. Yu, J. Liu, N. Rudin, D. Hoeller, J. L. Yuan, R. Singh,
+               TABLE IX: PPO hyperparameters                                           Y. Guo, H. Mazhar, A. Mandlekar, B. Babich, G. State, M. Hutter, and
+                                                                                       A. Garg, “Orbit: A unified simulation framework for interactive robot
+                        Hyperparameter           Value                                 learning environments,” IEEE Robotics and Automation Letters, vol. 8,
+                           clip min std           0.05
+                                                                                       no. 6, pp. 3740–3747, 2023. 2
+                            clip param            0.2                             [19] J. Hwangbo, J. Lee, A. Dosovitskiy, D. Bellicoso, V. Tsounis, V. Koltun,
+                              gamma               0.99                                 and M. Hutter, “Learning agile and dynamic motor skills for legged
+                                lam               0.95                                 robots,” Science Robotics, vol. 4, no. 26, p. eaau5872, 2019. 2
+                            desired kl            0.01                            [20] S. Zhu, R. Huang, L. Mou, and H. Zhao, “Robust robot walker: Learning
+                          entropy coef            0.01                                 agile locomotion over tiny traps,” arXiv preprint arXiv:2409.07409,
+                          learning rate          0.001
+                                                                                       2024. 2, 3, 4
+                         max grad norm              1
+                         num mini batch             4                             [21] J. Lee, J. Hwangbo, L. Wellhausen, V. Koltun, and M. Hutter, “Learning
+                        num steps per env          24                                  quadrupedal locomotion over challenging terrain,” Science robotics,
+                                                                                       vol. 5, no. 47, p. eabc5986, 2020. 2
+                                 References                                       [22] G. B. Margolis, G. Yang, K. Paigwar, T. Chen, and P. Agrawal, “Rapid
+                                                                                       locomotion via reinforcement learning,” The International Journal of
+ [1] K. N. Kumar, I. Essa, and S. Ha, “Cascaded compositional residual learn-          Robotics Research, vol. 43, no. 4, pp. 572–587, 2024. 2
+     ing for complex interactive behaviors,” IEEE Robotics and Automation         [23] T. He, C. Zhang, W. Xiao, G. He, C. Liu, and G. Shi, “Agile but safe:
+     Letters, vol. 8, no. 8, pp. 4601–4608, 2023. 1, 2                                 Learning collision-free high-speed legged locomotion,” arXiv preprint
+ [2] A. Klipfel, N. Sontakke, R. Liu, and S. Ha, “Learning a single policy             arXiv:2401.17583, 2024. 2
+     for diverse behaviors on a quadrupedal robot using scalable motion           [24] Y. Li, J. Li, W. Fu, and Y. Wu, “Learning agile bipedal motions
+     imitation,” in 2023 IEEE/RSJ International Conference on Intelligent              on a quadrupedal robot,” in 2024 IEEE International Conference on
+     Robots and Systems (IROS). IEEE, 2023, pp. 2768–2775. 1                           Robotics and Automation (ICRA). IEEE, 2024, pp. 9735–9742. 2
+ [3] A. Kumar, Z. Fu, D. Pathak, and J. Malik, “Rma: Rapid motor adaptation       [25] L. Smith, J. C. Kew, T. Li, L. Luu, X. B. Peng, S. Ha, J. Tan, and
+     for legged robots,” arXiv preprint arXiv:2107.04034, 2021. 1, 2, 4                S. Levine, “Learning and adapting agile locomotion skills by transferring
+ [4] Z. Su, X. Huang, D. Ordoñez-Apraez, Y. Li, Z. Li, Q. Liao, G. Turrisi,           experience,” arXiv preprint arXiv:2304.09834, 2023. 2
+     M. Pontil, C. Semini, Y. Wu, et al., “Leveraging symmetry in rl-based        [26] Y. Cheng, H. Liu, G. Pan, L. Ye, H. Liu, and B. Liang, “Quadruped
+     legged locomotion control,” arXiv preprint arXiv:2403.17320, 2024. 1,             robot traversing 3d complex environments with limited perception,”
+     2                                                                                 arXiv preprint arXiv:2404.18225, 2024. 2
+ [5] G. Ji, J. Mun, H. Kim, and J. Hwangbo, “Concurrent training of a control     [27] D. Hoeller, N. Rudin, D. Sako, and M. Hutter, “Anymal parkour:
+     policy and a state estimator for dynamic and robust legged locomotion,”           Learning agile navigation for quadrupedal robots,” Science Robotics,
+     IEEE Robotics and Automation Letters, vol. 7, no. 2, pp. 4630–4637,               vol. 9, no. 88, p. eadi7566, 2024. 2
+     2022. 1                                                                      [28] R. Caruana, “Multitask learning,” Machine learning, vol. 28, pp. 41–75,
+ [6] J. Long, J. Ren, M. Shi, Z. Wang, T. Huang, P. Luo, and J. Pang,                  1997. 2
+     “Learning humanoid locomotion with perceptive internal model,” arXiv
+                                                                                  [29] R. Collobert and J. Weston, “A unified architecture for natural language
+     preprint arXiv:2411.14386, 2024. 1
+                                                                                       processing: Deep neural networks with multitask learning,” in Proceed-
+ [7] Z. Zhuang, Z. Fu, J. Wang, C. Atkeson, S. Schwertfeger, C. Finn, and
+                                                                                       ings of the 25th international conference on Machine learning, 2008,
+     H. Zhao, “Robot parkour learning,” arXiv preprint arXiv:2309.05665,
+                                                                                       pp. 160–167. 2
+     2023. 1, 2, 8
+                                                                                  [30] S. Vandenhende, S. Georgoulis, W. Van Gansbeke, M. Proesmans,
+ [8] J. Wu, G. Xin, C. Qi, and Y. Xue, “Learning robust and agile
+                                                                                       D. Dai, and L. Van Gool, “Multi-task learning for dense prediction
+     legged locomotion using adversarial motion priors,” IEEE Robotics and
+                                                                                       tasks: A survey,” IEEE transactions on pattern analysis and machine
+     Automation Letters, 2023. 1, 2
+                                                                                       intelligence, vol. 44, no. 7, pp. 3614–3633, 2021. 2
+ [9] S. Luo, S. Li, R. Yu, Z. Wang, J. Wu, and Q. Zhu, “Pie: Parkour with
+     implicit-explicit learning framework for legged robots,” arXiv preprint      [31] P. Liu, X. Qiu, and X. Huang, “Recurrent neural network for text clas-
+     arXiv:2408.13740, 2024. 1, 2                                                      sification with multi-task learning,” arXiv preprint arXiv:1605.05101,
+[10] X. Cheng, K. Shi, A. Agarwal, and D. Pathak, “Extreme parkour with                2016. 2
+     legged robots,” in 2024 IEEE International Conference on Robotics            [32] L. Pinto and A. Gupta, “Learning to push by grasping: Using multiple
+     and Automation (ICRA). IEEE, 2024, pp. 11 443–11 450. 1, 2                        tasks for effective learning,” in 2017 IEEE international conference on
+[11] S. Liu, Z. Chen, Y. Liu, Y. Wang, D. Yang, Z. Zhao, Z. Zhou, X. Yi,               robotics and automation (ICRA). IEEE, 2017, pp. 2161–2168. 2
+     W. Li, W. Zhang, et al., “Improving generalization in visual reinforce-      [33] T. Yu, S. Kumar, A. Gupta, S. Levine, K. Hausman, and C. Finn, “Gra-
+     ment learning via conflict-aware gradient agreement augmentation,” in             dient surgery for multi-task learning,” Advances in Neural Information
+     Proceedings of the IEEE/CVF International Conference on Computer                  Processing Systems, vol. 33, pp. 5824–5836, 2020. 2
+     Vision, 2023, pp. 23 436–23 446. 1                                           [34] B. Liu, X. Liu, X. Jin, P. Stone, and Q. Liu, “Conflict-averse gradient
+[12] S. Zhou, W. Zhang, J. Jiang, W. Zhong, J. Gu, and W. Zhu, “On the                 descent for multi-task learning,” Advances in Neural Information
+     convergence of stochastic multi-objective gradient manipulation and               Processing Systems, vol. 34, pp. 18 878–18 890, 2021. 2
+     beyond,” Advances in Neural Information Processing Systems, vol. 35,         [35] S. Huang, Z. Zhang, T. Liang, Y. Xu, Z. Kou, C. Lu, G. Xu,
+     pp. 38 103–38 115, 2022. 1                                                        Z. Xue, and H. Xu, “Mentor: Mixture-of-experts network with task-
+[13] R. A. Jacobs, M. I. Jordan, S. J. Nowlan, and G. E. Hinton, “Adaptive             oriented perturbation for visual reinforcement learning,” arXiv preprint
+     mixtures of local experts,” Neural computation, vol. 3, no. 1, pp. 79–87,         arXiv:2410.14972, 2024. 2
+     1991. 1, 2                                                                   [36] C. Finn, P. Abbeel, and S. Levine, “Model-agnostic meta-learning for fast
+[14] J. Obando-Ceron, G. Sokar, T. Willi, C. Lyle, J. Farebrother, J. Foerster,        adaptation of deep networks,” in International conference on machine
+     G. K. Dziugaite, D. Precup, and P. S. Castro, “Mixtures of experts unlock         learning. PMLR, 2017, pp. 1126–1135. 2
+     parameter scaling for deep rl,” arXiv preprint arXiv:2402.08609, 2024.       [37] Y. Duan, J. Schulman, X. Chen, P. L. Bartlett, I. Sutskever, and P. Abbeel,
+     1, 2                                                                              “Rl2 : Fast reinforcement learning via slow reinforcement learning,”
+[15] K. Li, M. Cucuringu, L. Sánchez-Betancourt, and T. Willi, “Mixtures              arXiv preprint arXiv:1611.02779, 2016. 2
+     of experts for scaling up neural networks in order execution,” in            [38] S. Sodhani, A. Zhang, and J. Pineau, “Multi-task reinforcement learning
+     Proceedings of the 5th ACM International Conference on AI in                      with context-based representations,” in International Conference on
+     Finance, 2024, pp. 669–676. 1                                                     Machine Learning. PMLR, 2021, pp. 9767–9779. 2
+[39] C. Yang, K. Yuan, Q. Zhu, W. Yu, and Z. Li, “Multi-expert learning              “Mixtral of experts,” arXiv preprint arXiv:2401.04088, 2024. 2
+     of adaptive legged locomotion,” Science Robotics, vol. 5, no. 49, p.       [48] A. Liu, B. Feng, B. Xue, B. Wang, B. Wu, C. Lu, C. Zhao, C. Deng,
+     eabb2174, 2020. 2                                                               C. Zhang, C. Ruan, et al., “Deepseek-v3 technical report,” arXiv preprint
+[40] Y. Ze, G. Yan, Y.-H. Wu, A. Macaluso, Y. Ge, J. Ye, N. Hansen,                  arXiv:2412.19437, 2024. 2
+     L. E. Li, and X. Wang, “Gnfactor: Multi-task real robot learning with      [49] Z. Zhang, S. Liu, J. Yu, Q. Cai, X. Zhao, C. Zhang, Z. Liu, Q. Liu,
+     generalizable neural feature fields,” in Conference on Robot Learning.          H. Zhao, L. Hu, et al., “M3oe: Multi-domain multi-task mixture-
+     PMLR, 2023, pp. 284–301. 2                                                      of experts recommendation framework,” in Proceedings of the 47th
+[41] M. Shafiee, G. Bellegarda, and A. Ijspeert, “Manyquadrupeds: Learning           International ACM SIGIR Conference on Research and Development
+     a single locomotion policy for diverse quadruped robots,” in 2024 IEEE          in Information Retrieval, 2024, pp. 893–902. 2
+     International Conference on Robotics and Automation (ICRA). IEEE,
+                                                                                [50] J. Jiang, P. Zhang, Y. Luo, C. Li, J. B. Kim, K. Zhang, S. Wang,
+     2024, pp. 3471–3477. 2
+                                                                                     X. Xie, and S. Kim, “Adamct: adaptive mixture of cnn-transformer
+[42] C. Yang, K. Yuan, Q. Zhu, W. Yu, and Z. Li, “Multi-expert learning
+                                                                                     for sequential recommendation,” in Proceedings of the 32nd ACM
+     of adaptive legged locomotion,” Science Robotics, vol. 5, no. 49, p.
+                                                                                     international conference on information and knowledge management,
+     eabb2174, 2020. 2
+                                                                                     2023, pp. 976–986. 2
+[43] N. Shah, K. Tiwari, and A. Bera, “Mtac: Hierarchical reinforcement
+     learning-based multi-gait terrain-adaptive quadruped controller,” arXiv    [51] Y. Gou, Z. Liu, K. Chen, L. Hong, H. Xu, A. Li, D.-Y. Yeung, J. T.
+     preprint arXiv:2401.03337, 2023. 2                                              Kwok, and Y. Zhang, “Mixture of cluster-conditional lora experts for
+                                                                                     vision-language instruction tuning,” arXiv preprint arXiv:2312.12379,
+[44] M. I. Jordan and R. A. Jacobs, “Hierarchical mixtures of experts and the
+                                                                                     2023. 2
+     em algorithm,” Neural computation, vol. 6, no. 2, pp. 181–214, 1994. 2
+[45] M. Deisenroth and J. W. Ng, “Distributed gaussian processes,” in           [52] S. Chen, Z. Jie, and L. Ma, “Llava-mole: Sparse mixture of lora experts
+     International conference on machine learning. PMLR, 2015, pp.                   for mitigating data conflicts in instruction finetuning mllms,” arXiv
+     1481–1490. 2                                                                    preprint arXiv:2401.16160, 2024. 2
+[46] D. Lepikhin, H. Lee, Y. Xu, D. Chen, O. Firat, Y. Huang, M. Krikun,        [53] J. Schulman, F. Wolski, P. Dhariwal, A. Radford, and O. Klimov, “Proxi-
+     N. Shazeer, and Z. Chen, “Gshard: Scaling giant models with                     mal policy optimization algorithms,” arXiv preprint arXiv:1707.06347,
+     conditional computation and automatic sharding,” arXiv preprint                 2017. 3
+     arXiv:2006.16668, 2020. 2                                                  [54] S. Zhu, D. Li, L. Mou, Y. Liu, N. Xu, and H. Zhao, “Saro: Space-aware
+[47] A. Q. Jiang, A. Sablayrolles, A. Roux, A. Mensch, B. Savary, C. Bam-            robot system for terrain crossing via vision-language model,” arXiv
+     ford, D. S. Chaplot, D. d. l. Casas, E. B. Hanna, F. Bressand, et al.,          preprint arXiv:2407.16412, 2024. 3
+

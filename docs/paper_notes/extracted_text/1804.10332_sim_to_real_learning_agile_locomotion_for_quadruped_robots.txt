@@ -1,0 +1,648 @@
+                                                 Sim-to-Real: Learning Agile Locomotion For
+                                                              Quadruped Robots
+                                                                        Jie Tan1 , Tingnan Zhang1 , Erwin Coumans1 , Atil Iscen1 ,
+                                                                  Yunfei Bai2 , Danijar Hafner1 , Steven Bohez3 , and Vincent Vanhoucke1
+                                                                                                   1
+                                                                                                    Google Brain
+                                                                                                        2
+                                                                                                          X
+                                                                                                3
+                                                                                                  Google DeepMind
+
+
+
+
+arXiv:1804.10332v2 [cs.RO] 16 May 2018
+                                            Abstract—Designing agile locomotion for quadruped robots
+                                         often requires extensive expertise and tedious manual tuning.
+                                         In this paper, we present a system to automate this process by
+                                         leveraging deep reinforcement learning techniques. Our system
+                                         can learn quadruped locomotion from scratch using simple
+                                         reward signals. In addition, users can provide an open loop
+                                         reference to guide the learning process when more control over
+                                         the learned gait is needed. The control policies are learned in a
+                                         physics simulator and then deployed on real robots. In robotics,
+                                         policies trained in simulation often do not transfer to the real
+                                         world. We narrow this reality gap by improving the physics
+                                         simulator and learning robust policies. We improve the simulation
+                                         using system identification, developing an accurate actuator
+                                         model and simulating latency. We learn robust controllers by
+                                         randomizing the physical environments, adding perturbations
+                                         and designing a compact observation space. We evaluate our          Fig. 1: The simulated and the real Minitaurs learned to gallop
+                                         system on two agile locomotion gaits: trotting and galloping.       using deep reinforcement learning.
+                                         After learning in simulation, a quadruped robot can successfully
+                                         perform both gaits in the real world.
+
+                                                               I. I NTRODUCTION                              to locomotion tasks due to the difficulties of automatically
+                                            Designing agile locomotion for quadruped robots is a long-       resetting the experiments and continuously collecting data. In
+                                         standing research problem [1]. This is because it is difficult to   addition, every falling during learning can potentially damage
+                                         control an under-actuated robot performing highly dynamic           the robot. Thus for locomotion tasks, learning in simulation is
+                                         motion that involve intricate balance. Classical approaches         more appealing because it is faster, cheaper and safer.
+                                         often require extensive experience and tedious manual tuning           In this paper, we present a complete learning system for
+                                         [2, 3]. Can we automate this process?                               agile locomotion, in which control policies are learned in
+                                            Recently, we have seen tremendous progress in deep rein-         simulation and deployed on real robots. There are two main
+                                         forcement learning (deep RL) [4, 5, 6]. These algorithms can        challenges: 1) learning controllable locomotion policies; and
+                                         solve locomotion problems from scratch without much human           2) transferring the policies to the physical system.
+                                         intervention. However, most of these studies are conducted             While learning from scratch can lead to better policies than
+                                         in simulation, and a controller learned in simulation often         incorporating human guidance [10], in robotics, having control
+                                         performs poorly in the real world. This reality gap [7, 8]          of the learned policy sometimes is preferred. Our learning
+                                         is caused by model discrepancies between the simulated and          system provides users a full spectrum of controllability over
+                                         the real physical system. Many factors, including unmodeled         the learned policies. The user can choose from letting the
+                                         dynamics, wrong simulation parameters, and numerical errors,        system learn completely by itself to specifying an open-loop
+                                         contribute to this gap. Even worse, this gap is greatly amplified   reference gait as human guidance. Our system will keep the
+                                         in locomotion tasks. When a robot performs agile motion with        learned gait close to the reference while, at the same time,
+                                         frequent contact changes, the switches of contact situations        maintain balance, increase speed and energy efficiency.
+                                         break the control space into fragmented pieces. Any small              To narrow the reality gap, we perform system identification
+                                         model discrepancy can be magnified and generate bifurcated          to find the correct simulation parameters. Besides, we improve
+                                         consequences. Overcoming the reality gap is challenging.            the fidelity of the physics simulator by adding a faithful
+                                            An alternative is to learn the task directly on the physical     actuator model and latency handling. To further narrow the
+                                         system. While this has been successfully demonstrated in            gap, we experiment with three approaches to increase the
+                                         robotic grasping [9], it is challenging to apply this method        robustness of the learned controllers: dynamics randomization,
+perturbation forces, and compact design of observation space.       phase-parametric policies. Note that in most of these latest
+   We evaluate our system on a quadruped robot with two             work, learning and evaluation were exclusively performed in
+locomotion tasks, trotting and galloping, in Section VI. We         simulation. It is not clear whether these learned policies can be
+show that with deep RL, highly agile locomotion gaits can           safely and successfully deployed on the robots. In this paper,
+emerge automatically. We also demonstrate how users can             while we also train in simulation, more importantly, we test
+easily specify the style of locomotion using our system. When       the policies on the real robot and explore different approaches
+comparing with the gaits handcrafted by experts, we find            to narrow the reality gap.
+that our learned gaits are more energy efficient at the same
+running speed. We demonstrate that with an accurate physics         B. Overcoming the Reality Gap
+simulator and robust control policies, we can successfully             Reality gap is the major obstacle to applying deep RL in
+deploy policies learned in simulation to the physical system.       robotics. Neunert et al. [31] analyzed potential causes of the
+The main contributions of this paper are:                           reality gap, some of which can be solved by system identi-
+   1) We propose a complete learning system for agile lo-           fication [32]. Li et al. [33] showed that the transferability of
+      comotion. It provides users a full spectrum (from fully       open loop locomotion could be increased if carefully measured
+      restricted to a user-specified gait to fully learned from     physical parameters were used in simulation. These physical
+      scratch) of controllability over the learned policies.        parameters can also be optimized by matching the robot
+   2) We show that the reality gap can be narrowed by               behaviors in the simulated and the real world [34, 35]. Bongard
+      a variety of approaches and conduct comprehensive             et al. [36] used the actuation-sensation relationship to build
+      evaluations on their effectiveness.                           and refine a simulation through continuous self-modeling, and
+   3) We demonstrate that agile locomotion gaits, such as           later used this model to plan forward locomotion. Ha et al.
+      trotting and galloping, can be learned automatically and      [37] used Gaussian Processes, a non-parametric model, to
+      these gaits can work on robots directly without further       minimize the error between simulation and real physics. Yu
+      training on the physical system.                              et al. [38] performed online system identification explicitly on
+                                                                    physical parameters, while Peng et al. [39] embedded system
+                     II. R ELATED W ORK                             identification implicitly into a recurrent policy. In addition
+                                                                    to system identification, we identify that inaccurate actuator
+A. Legged Locomotion Control                                        models and lack of latency modeling are two major causes of
+   Optimizing controllers [11] automatically is an appealing        the reality gap. We improve our simulator with new models.
+alternative to tedious manual tuning. Popular optimization             A robust controller is more likely to be transferred to the
+methods for locomotion control include black-box [12] and           real world. Robustness can be improved by injecting noise
+Bayesian optimization [13]. Bayesian optimization is often          [40], perturbing the simulated robot [41], leveraging multiple
+data efficient enough to be applied directly on real robots         simulators [8], using domain randomization [42] and dynamics
+[14, 15]. However, it is challenging to scale these methods         randomization [43, 44, 39]. Although not explicitly using
+to high-dimensional control space. For this reason, feature         real-world data for training, these methods have been shown
+engineering and controller architecture design are needed.          effective to increase the success rate of sim-to-real transfer.
+   On the other hand, recent advances in deep RL have                  Another way to cross the reality gap is to learn from both
+significantly reduced the requirement of human expertise [6].       simulation and real-world data. A policy can be pre-trained
+We have witnessed intense competitions among deep RL                in simulation and then fine-tuned on robots [45]. Hanna and
+algorithms in the simulated benchmark environments [16, 17].        Stone [46] adapted the policy using a learned action space
+In this paper, we choose to use Proximal Policy Optimization        transformation from simulation to the real world. In visuo-
+(PPO) [5] because it is a stable on-policy method and can be        motor learning, domain adaptation were applied at feature
+easily parallelized [18].                                           level [47, 48] or pixel level [49] to transfer the controller.
+   Much research has applied reinforcement learning to loco-        Bousmalis et al. [49] reduced the real world data requirement
+motion tasks [19, 20, 21, 22, 23]. More recently, Gay et al. [24]   by training a generator network that converts simulated images
+learned a neural network that modified a Central Pattern Gen-       to real images. While some of these methods were successfully
+erator controller for stable quadruped locomotion. Levine et al.    demonstrated in robotic grasping, it is challenging to apply
+[25] applied guided policy search to learn bipedal locomotion       them to locomotion due to the difficulties to continuously and
+in simulation. Peng et al. [26] developed a CACLA-inspired          safely collect enough real world data. Furthermore, we need
+algorithm to control a simulated dog to navigate complex 1D         to narrow the reality gap of dynamics rather than perception.
+terrains. It was further improved using a mixture of actor-critic
+experts [27]. Peng et al. [28] learned a hierarchical controller        III. ROBOT P LATFORM AND P HYSICS S IMULATION
+to direct a 3D biped to walk in a simulated environment. Heess         Our robot platform is the Minitaur from Ghost Robotics
+et al. [29] showed that complex locomotion behaviors, such as       (Figure 1 bottom), a quadruped robot with eight direct-drive
+running, jumping and crouching, can be learned directly from        actuators [50]. Each leg is controlled by two actuators that
+simple reward signals in rich simulated environments. Sharma        allow it to move in the sagittal plane. The motors can be
+and Kitani [30] exploited the cyclic nature of locomotion with      actuated through position control or through a Pulse Width
+                                                                      eight motor angles. Note that we do not include all available
+                                                                      sensor measurements in the observation space. For example,
+                                                                      the IMU also provides the yaw of the base. We exclude it
+                                                                      because the measurement drifts quickly. The motor velocities
+                                                                      can also be calculated but can be noisy. We find that our
+Fig. 2: The customized hardware architecture enables the              observation space is sufficient to learn the tasks demonstrated
+Minitaur to perform deep neural network inference.                    in this paper. More importantly, a compact observation space
+                                                                      helps to transfer the policy to the real robot. More analysis on
+                                                                      this is presented in Section VI.
+Modulation (PWM) signal. The Minitaur is equipped with                   When designing the action space, we choose to use the
+motor encoders that measure the motor angles and an IMU               position control mode of the actuators for safety and ease
+that measures the orientation and the angular velocity of its         of learning [52]. The actions consist of the desired pose of
+base. An STM32 ARM microcontroller sends commands to                  each leg in the leg space [50, 12]. The pose of each leg
+actuators, receives sensor readings and can perform simple            is decomposed into the swing and the extension components
+computations. However, this microcontroller is not powerful           (s, e) (Figure 3). They are mapped into the motor space as
+enough to execute neural network policies learned from deep
+RL. For this reason, we installed an Nvidia Jetson TX2 to                                     θ1   =e+s
+perform neural network inference. The TX2 is interfaced with                                  θ2   =e−s
+the microcontroller through UART communication. At every              where θ1 and θ2 are the angles of the two motors controlling
+control step, the sensor measurements are collected at the            the same leg; s and e are the swing and the extension
+microcontroller and sent back to the TX2, where they are fed          components in the leg space.
+into a neural network policy to decide the actions to take.              An alternative action space is the eight desired motor
+These actions are then transmitted to the microcontroller and         angles. However, in this motor space, many configurations
+executed by the actuators (Figure 2). Since the TX2 does not          are invalid due to self collisions between body parts. This
+run a real time operating system, the control loop runs at            results in an action space where valid actions are scattered
+variable control frequencies of approximately 150-200Hz.              nonconvex regions, which significantly increases the difficulty
+   We build a physics simulation of the Minitaur (Figure 1 top)       of learning. In contrast, in the leg space, we can easily set a
+using PyBullet [51], a Python module that extends the Bullet          rectangle bound that prunes out all the invalid actions while
+Physics Engine with robotics and machine learning capabili-           still covering most of the valid configurations.
+ties. Bullet solves the equations of motion for articulated rigid
+bodies in generalized coordinates while simultaneously satis-         C. Reward Function
+fying physical constraints including contact, joint limits and          We design a reward function to encourage faster forward
+actuator models. Then the state of the system is numerically          running speed and penalize high energy consumption.
+integrated over time using a semi-implicit scheme.
+                                                                                  r = (pn − pn−1 ) · d − w∆t|τ n · q̇n |           (2)
+       IV. L EARNING L OCOMOTION C ONTROLLERS
+                                                                      where pn and pn−1 are the positions of the Minitaur’s base
+A. Background                                                         at the current and the previous time step respectively; d is the
+   We formulate locomotion control as a Partially Observable          desired running direction; ∆t is the time step; τ are the motor
+Markov Decision Process (POMDP) and solve it using a policy           torques and q̇ are the motor velocities. The first term measures
+gradient method. An MDP is a tuple (S, A, r, D, Psas0 , γ),           the running distance towards the desired direction and the
+where S is the state space; A is the action space; r is the           second term measures the energy expenditure. w is the weight
+reward function; D is the distribution of initial states s0 , Psas0   that balances these two terms. Since the learning algorithm
+is the transition probability; and γ ∈ [0, 1] is the discount         is robust to a wide range of w, we do not tune it and use
+factor. Our problem is partially observable because certain
+states such as the position of the Minitaur’s base and the foot
+contact forces are not accessible due to lack of corresponding
+sensors. At every control step, a partial observation o ∈ O,
+rather than a complete state s ∈ S, is observed. Reinforcement
+learning optimizes a policy π : O 7→ A that maximizes the
+expected return (accumulated rewards) R.
+                π ∗ = arg maxπ Es0 ∼D [Rπ (s0 )]               (1)
+                                                                      Fig. 3: Representation of the leg pose in motor space and leg
+B. Observation and Action Space                                       space. Extension (e) sets the length of the leg by rotating both
+   In our problem, the observations include the roll, pitch, and      motors in opposite directions while swing (s) sets the overall
+the angular velocities of the base along these two axes, and the      rotation of the leg by rotating both motors in same direction.
+w = 0.008 in all our experiments. During training, the rewards                     URDF file. Measuring inertia is difficult. Instead, we estimate
+are accumulated at each episode. An episode terminates after                       it for each link given its shape and mass, assuming uniform
+1000 steps or when the simulated Minitaur loses balance: its                       density. We also design experiments to measure motor frictions
+base tilts more than 0.5 radians.                                                  [50]. In addition to system identification, we augment the
+                                                                                   simulator with a more faithful actuator model and latency
+D. Policy Representation
+                                                                                   handling.
+   Although learning from scratch can eliminate the need of                              a) Actuator Model: We use position control to actuate
+human expertise, and sometimes achieve better performance,                         the motors of the Minitaur. Bullet also provides position con-
+having control of the learned policies is important for robotic                    trol for simulated motors. In its implementation, one constraint
+applications. For example, we may want to specify details                          en+1 = 0 is formulated for each motor where en+1 is an error
+of a gait (e.g. style or ground clearance). For this reason,                       at the end of current time step. The error is defined as
+we decouple the locomotion controller into two parts, an
+open loop component that allows a user to provide reference                                    en+1 = kp (q̄ − qn+1 ) + kd (q̇¯ − q̇n+1 )       (4)
+trajectories and a feedback component that adjusts the leg                         where q̄ and ¯q̇ are the desired motor angle and velocity, qn+1
+poses on top of the reference based on the observations.                           and q̇n+1 are the motor angle and velocity at the end of current
+                         a(t, o) = ā(t) + π(o)                             (3)    time step, kp is the proportional gain and kd is the derivative
+                                                                                   gain. Despite its similarity to the Proportional-Derivative (PD)
+where ā(t) is the open loop component, which is typically a                       servo, a key difference is that eq. (4) guarantees that the motor
+periodic signal, and π(o) is the feedback component. In this                       angle and velocity at the end of the time step satisfy the
+way, users can easily express the desired gait using an open                       constraint while PD servo uses the current motor angle and
+loop signal and learning will figure out the rest, such as the                     velocity to decide how to actuate the motors. As a result, if
+balance control, which is tedious to design manually.                              large gains are used, the motors can remain stable in simulation
+   This hybrid policy (eq. (3)) is a general formulation that                      but oscillate in reality.
+gives users a full spectrum of controllability. It can be varied                      To eliminate the model discrepancy for actuators, we de-
+continuously from fully user-specified to entirely learned from                    velop an actuator model according to the dynamics of an ideal
+scratch. If we want to use a user-specified policy, we can set                     DC motor. Given a PWM signal, the torque of the motor is
+both the lower and the upper bounds of π(o) to be zero. If we
+                                                                                                         τ   = Kt I
+want a policy that is learned from scratch, we can set ā(t) = 0
+                                                                                                               Vpwm − Vemf
+and give the feedback component π(o) a wide output range.                                                I   =                                  (5)
+By varying the open loop signal and the output bound of the                                                          R
+                                                                                                     Vemf    = Kt q̇                           (6)
+feedback component, we can decide how much user control
+is applied to the system. In Section VI, we will illustrate two                    where I is the armature current, Kt is the torque constant
+examples, learning to gallop from scratch and learning to trot                     or back electromotive force (EMF) constant, Vpwm is the
+with a user provided reference.                                                    supplied voltage which is modulated by the PWM signal, Vemf
+   We represent the feedback component π with a neural                             is the back EMF voltage, and R is the armature resistance. The
+network and solve the above POMDP using Proximal Policy                            parameters Kt and R are provided in the actuator specification.
+Optimization [5]. The neural network has two fully-connected                          Using the above model, we observe that the real Minitaur
+hidden layers. Its size is determined via hyperparameter                           often sinks to its feet or cannot lift them while the same
+search. Refer to Section VI for more details.                                      controller works fine in simulation. This is because the linear
+                                                                                   torque-current relation only holds for ideal motors. In reality,
+                V. NARROWING THE R EALITY G AP
+                                                                                   the torque saturates as the current increases. For this reason,
+   Due to the reality gap, robotic controllers learned in simu-                    we construct a piece-wise linear function to characterize this
+lation usually do not perform well in the real environments.                       nonlinear torque-current relation [54]. In simulation, once the
+We propose two approaches to narrow the gap: improving                             current is computed from PWM (eq. (5) and (6)), we use this
+simulation fidelity and learning robust controllers.                               piece-wise function to look up the corresponding torque.
+A. Improving Simulation Fidelity                                                      In position control, PWM is controlled by a PD servo.
+   Since the reality gap is caused by model discrepancies                                      Vpwm = V (kp (q̄ − qn ) + kd (¯q̇ − q̇n ))       (7)
+between the simulation and the real dynamics, a direct way
+                                                                                   where V is the battery voltage. Note that we use the angle
+to narrow it is to improve the simulation. We first create
+                                                                                   and velocity at the current time step. In addition, we set the
+an accurate Unified Robot Description Format (URDF) [53]
+                                                                                   target velocity q̇¯ = 0 after consulting Ghost Robotics’s PD
+file for the simulated Minitaur. We disassemble a Minitaur1 ,
+                                                                                   implementation on the microcontroller.
+measure the dimension, weigh the mass, find the center of
+                                                                                      We performed an experiment to validate the new actuator
+mass of each link and incorporate this information into the
+                                                                                   model. We actuated a motor with a desired trajectory of sine
+ 1 For robots that are difficult to dissemble, traditional system identification   curve. With this actuator model, the simulated trajectory agrees
+methods could be applied.                                                          with the ground truth (Figure 4).
+                                                            desired                 TABLE I: Randomized physical parameters and their ranges.
+                                                            observed (real)
+                             2.4                            observed (sim)
+                                                                                               parameter          lower bound    upper bound
+
+
+
+         Motor Angle (rad)
+                                                                                               mass                   80%              120%
+                                                                                               motor friction         0Nm            0.05Nm
+                             2.0                                                               inertia                50%              150%
+                                                                                               motor strength         80%              120%
+                                                                                               control step           3ms               20ms
+                                                                                               latency                0ms               40ms
+                             1.6                                                               battery voltage       14.0V             16.8V
+                                                                                               contact friction        0.5               1.25
+                               3.0   3.2    3.4       3.6           3.8       4.0              IMU bias           -0.05 radian    0.05 radian
+                                           Time (s)                                            IMU noise (std)      0 radian      0.05 radian
+
+Fig. 4: Comparison of the simulated motor trajectory (red)
+with the ground truth (blue).
+                                                                                    certain ranges. The complete list of randomized parameters
+                                                                                    and their ranges of randomization is summarized in Table I.
+      b) Latency: Latency is one of the main causes of in-                             Since dynamics randomization trades optimality for robust-
+stability for feedback control. It is the time delay between                        ness [55], we choose the parameters and their ranges in Table
+when a motor command is sent that causes the state of the                           I carefully to prevent learning overly conservative running
+robot to change and when the sensor measurement of this                             gaits. Mass and motor friction are commonly randomized
+change is reported back to the controller. In Bullet, the motor                     parameters [44, 39]. While we give them conservative ranges
+commands take effect immediately and the sensors report back                        since we have measured them during system identification,
+the state instantaneously. This instantaneous feedback makes                        we are less certain about inertia because it is estimated based
+the stability region of a feedback controller in simulation much                    on a uniform density assumption. Also some quantities can
+larger than its implementation on hardware. For this reason,                        change over time. For example, the motor strength can vary
+we often see a feedback policy learned in simulation starts to                      due to wear and tear. The control step and latency can fluctuate
+oscillate, diverge and ultimately fail in the real world.                           because of the non real-time system. The battery voltage can
+   To model latency, we keep a history of observations and                          change based on whether it is fully charged. For the reasons
+their measurement time {(ti , Oi )i=0,1,...,n−1 }, where ti = i∆t                   stated above, we choose to randomize these parameters and
+and ∆t is the time step. At the current step n, when the                            their ranges based on the actual measurements plus small
+controller needs an observation, we search the history for                          safety margins. Performing accurate identification for contact
+two adjacent observations Oi and Oi+1 where ti ≤ n∆t −                              parameters is challenging. While the Bullet physics library
+tlatency ≤ ti+1 and linearly interpolate them.                                      uses an LCP-based contact model and provides a number of
+   To measure the latency on the physical system, we send                           tunable parameters, we choose to focus on the lateral friction
+a spike of PWM signal that lasts for one time step, which                           and leave others in their default values. We randomly sample
+causes a small movement of the motor. We measure the                                the friction coefficient between 0.5 and 1.25 because this is
+time delay between when the spike is sent and when the                              the typical range of friction coefficient between the Minitaur’s
+resultant motor movement is reported. Note that we have two                         rubber feet and various carpet floors [56]. Since the real IMU
+different latencies for the microcontroller and Nvidia Jetson                       measurement often carries bias and noise, we also add a small
+TX2. The PD servo running on the microcontroller has a                              amount of Gaussian noise to the simulated IMU readings.
+lower latency (3ms) while the locomotion controller executed
+                                                                                       Another popular method to improve the robustness of a
+on TX2 has a higher latency (typically 15-19ms). We use these
+                                                                                    learned controller is to add random perturbations [41]. During
+measurements to set the correct latencies in simulation.
+                                                                                    training, we add a perturbation force to the base of the
+                                                                                    simulated Minitaur every 200 steps of simulation (1.2s). The
+B. Learning Robust Controllers                                                      perturbation force lasts for ten steps (0.06s), has a random
+   Robust control aims at achieving robust performance in the                       direction and a random magnitude ranging from 130N to
+presence of model error. Thus, it is easier to transfer a robust                    220N. The perturbations can knock the simulated Minitaur
+controller to the real world even if the simulated dynamics are                     out of balance so that it needs to learn how to recover balance
+not identical to their real-world counterparts. In this paper,                      from different situations.
+we experiment with three different ways to learn a robust                              We find that the design of the observation space also plays
+controller: randomizing dynamic parameters, adding random                           an important role to narrow the reality gap. If the observation
+perturbations and using a compact observation space.                                space is high dimensional, the learned policy can easily overfit
+   Prior studies showed that randomizing the dynamic param-                         the simulated environment, which makes it difficult to transfer
+eters during training can increase the robustness of the learned                    to the real robots. In this paper, we use a compact observation
+controller [39, 44]. At the beginning of each training episode,                     space (Section IV-B) that leaves less room for overfitting to
+we randomly sample a set of physical parameters and use them                        unimportant details of the simulation. A detailed analysis on
+in the simulation. The samples are drawn uniformly within                           the choice of observation space is presented in Section VI-B.
+                                                                                        simulation (no actuator model and latency), our system did
+                      2
+                                                                                        not come up with an agile gait. Instead, a slow walking
+                                                                                        gait was learned in simulation. This might be caused by
+             return
+                                                                                        the default constraint-based actuator model in Bullet, which
+                      1                                                                 seems to be overdamped and limits the agility of the motion.
+                                                                                        Moreover, the real Minitaur fell to the ground immediately
+                                                                                        due to the reality gap. After we improved the simulation
+                                                                  trotting
+                      0
+                                                                                        (Section V-A), an agile galloping gait emerged automatically.
+                          0          2                4               6
+                                                                                        Galloping is the fastest gait for quadrupeds in nature. The
+                                                                                        running speed of the Minitaur reaches roughly 1.34 m/s (2.48
+                      8
+                                                                                        body lengths per second) in simulation and 1.18 m/s (2.18
+                                                                                        body lengths per second) in the real world. We repeated the
+                                                                                        training with different hyperparameters and random seeds,
+             return
+                      4                                                                 and found that the majority of the solutions converged to
+                                                                                        galloping. We also observed a small number of other gaits,
+                                                                                        including trotting, pacing, and gaits that are uncommon among
+                                                                  galloping
+                      0                                                                 quadruped animals.
+                          0          2                4               6
+                                                                                           In the second experiment, we would like the Minitaur to
+                                 # simulation steps (millions)                          learn trotting, an intermediate-speed running gait commonly
+    Fig. 5: The learning curves of trotting and galloping.                              adopted by horses (and many other quadrupeds) in which the
+                                                                                        diagonally opposite legs move together. While it is unclear
+ TABLE II: Parameters of learning algorithm for each task.                              how to use reward shaping to learn such a gait, we can directly
+                                                                                        control the learned gait by providing an open loop signal (ā(t)
+     Gait              Observation       Policy Net       Value Net         Learning    in eq. (3)). The signal consists of two sine curves.
+                       Dimension            Size             Size         Time (Hour)
+   Trotting                4              (125, 89)        (89, 55)           4.35                       s̄(t)   =   0.3 sin(4πt)
+  Galloping                12             (185, 95)        (95, 85)           3.25
+                                                                                                         ē(t)   =   0.35 sin(4πt) + 2
+                                                                                        where s̄(t) is the signal for the swing and the ē(t) is for
+                      VI. E VALUATION AND D ISCUSSION                                   the extension. One diagonal pair of legs shares the same
+   We tested our system with two locomotion tasks: galloping                            curves and the other diagonal pair’s are 180 degree out of
+and trotting. Please watch the accompanying video2 for the                              phase. Note that while this open loop controller expresses
+learned locomotion gaits. We first learned the locomotion con-                          the user’s preference of the locomotion style, by itself, it
+trollers in simulation. The simulated Minitaur environments                             cannot produce any forward movement in the real world: The
+are open-sourced in Bullet physics library3 . We represented                            Minitaur loses balance immediately and sits down on its rear
+both the policy and the value functions as fully connected                              legs. To maintain balance and keep the learned gait similar to
+neural networks, each of which had two hidden layers. Their                             the user-specified signal, we used small output bounds of the
+sizes were determined using hyperparameter search. At each it-                          feedback controller: [−0.25, 0.25] radians for both the swing
+eration of policy update, we collected the simulated experience                         and the extension degrees of freedom. After training with the
+by running 25 roll-outs (up to 1000 steps each) in parallel. The                        improved simulator and random perturbations, the Minitaur is
+training terminated after the maximum number of simulation                              able to trot stably in simulation. However, when the policies
+steps (7 million) had been reached. The learning curves of                              were deployed on the robot, we had mixed results due to the
+trotting and galloping are shown in Figure 5, and the parameter                         reality gap: Some policies can transfer while others cannot.
+settings are summarized in Table II. After the policies were                            We further reduced the observation space to four dimensional,
+learned, we deployed them on the real robot. The controllers                            keeping only the IMU readings (the roll, pitch and the angular
+worked directly in the real world without additional fine tuning                        velocities of the base along these two axes) and retrained
+on the physical system.                                                                 in simulation. This time, we observed stable, comparable
+                                                                                        movements in both simulation and on the real robot. The
+A. Locomotion Tasks                                                                     trotting speed is roughly 0.50 m/s (0.93 body lengths per
+   In the first experiment, we let the system learn from scratch:                       second) in simulation and 0.60 m/s (1.11 body lengths per
+We set the open loop component ā(t) = 0 and gave the                                   second) in the real world.
+feedback component large output bounds: The bounds for                                     We compared the learned gaits with the handcrafted ones
+swing are [−0.5, 0.5] radians and the bounds for extension                              from Ghost Robotics [3]. Table III summarizes the speed and
+are [ π2 − 0.5, π2 + 0.5] radians. Initially, with the baseline                         the energy consumption of these gaits on the real robots. While
+                                                                                        our learned gaits are as fast as the ones carefully tuned by
+  2 https://www.youtube.com/watch?v=lUZUr7jxoqM                                         experts, they consume significantly less power (35% and 23%
+  3 https://git.io/vp0V3                                                                reduction for galloping and trotting respectively).
+                                                                                                                 3                               sim
+B. Narrowing the Reality Gap                                                                                                                     real
+
+
+
+   As discussed in Section V-B, we narrow the reality gap
+
+
+                                                                                               expected return
+                                                                                                                 2
+by improving the simulation fidelity and learning robust
+controllers. Using trotting as a test case, we performed
+comprehensive evaluations to understand how each of these                                                        1
+techniques, improving simulation, adding randomization and
+using compact observation space, can narrow the reality gap.
+                                                                                                                 0
+   First, we defined a quantitative measure of the reality gap.                                                  baseline sim    baseline sim       our method
+                                                                                                                                 perturbation
+One common choice is the success rate [43]: The percentage of
+the controllers that can balance in the real world for the entire    Fig. 6: Controller performance in simulation (blue) and on the
+episode (1000 steps, about 6 seconds). However, the binary           robot (red). From left to right, the controllers are trained using
+outcome of success or failure does not capture the key char-         baseline simulation, using baseline simulation with random
+acteristics of locomotion, such as running speed and energy          perturbations, and using improved simulation with random
+consumption. For this reason, we adopt a continuous measure          perturbations. Error bars indicate one standard error.
+used by Koos et al. [7]. We compute the expected return from
+eq. (2), both in simulation and in the real experiments. Their                                 5
+                                                                                                                                                  no randomization
+difference measures the reality gap.                                                                                                              randomized
+                                                                                               4
+   We observed a large variance of the controller performance
+
+
+
+                                                                             expected return
+in the real experiments due to the randomness of the learning                                  3
+algorithm, the stochastic nature of the real world, and the
+differences in robustness of the learned controllers. To increase                              2
+the confidence of our conclusions, we performed a large
+number of learning trials and robot experiments before a                                       1
+
+conclusion is reached. In each of the experiments below, we
+                                                                                               0
+trained 100 controllers with different hyperparameters and                                     40%                           80%              120%              160%
+random seeds. We deployed the top three controllers on the                                                             body inertia (% of default value)
+
+Minitaur based on their returns in simulation. Each controller       Fig. 7: Performance comparison of controllers that are trained
+was run three times. The average return of these nine runs was       with (red) and without (blue) randomization and tested with
+reported as the expected return.                                     different body inertia.
+   To examine how improving the simulation can narrow the
+reality gap, we trained three groups of controllers, all using
+the four-dimensional observations space. In the first group, the     We also found that both accurate actuator model and latency
+controllers were trained using the baseline simulation (no ac-       simulation are important. Without either of them, the learned
+tuator model and latency handling). The second group used the        controllers do not work on the real robot.
+baseline simulation with random perturbations during training.          Next, we evaluated the impact of randomizing physical
+The last group was our method, which used the improved               parameters and adding random perturbations on the robustness
+simulation and random perturbations. The top three controllers       and transferability of controllers. Experiments showed that
+in each group all performed well in simulation. However, when        these two approaches had similar effects. In fact, as pointed
+they were deployed on the robot, the controllers in group I          out in the prior work [41], uncertainties of the physical
+and II performed poorly. From the left and the center bars of        parameters can be viewed as extra forces/torques applied to the
+Figure 6, we can clearly see a large reality gap (the difference     system. For this reason, we grouped their results and reported
+between the blue and the red bars). In contrast, the controllers     them under the common name of “randomization”. We first
+in group III performed comparably in simulation and in the           evaluated the trade-off between robustness and optimality
+real world (the right bars in Figure 6). This indicates that the     using randomization. Given a trained controller, we computed
+improvement of the simulation is essential to our system. If the     its expected return in a set of different test environments in
+model discrepancy is too big, even a robust controller trained       simulation: For each parameter in Table I, we evenly sampled
+with random perturbations cannot overcome the reality gap.           10 values within its range while keeping other parameters
+                                                                     unchanged. We used these samples to construct different test
+TABLE III: Comparisons between learned and handcrafted               environments. We computed the return of the controller in
+gaits.                                                               each test environment and observed how the performance
+                                                                     changed across environments. For example, we tested two
+   Gait                      Speed (m/s)   Avg. Mech. Power (watt)   controllers, trained with or without randomization, in the
+   Trotting (handcrafted)       0.56                        92.72
+   Trotting (learned)           0.60                        71.78    environments that the inertia of the robot ranges from 50% to
+   Galloping (handcrafted)      1.21                       290.00    150% of its default value. Figure 7 shows that the controller
+   Galloping (learned)          1.18                       188.79    trained with randomization (red) performs similarly across
+                                                                                   transferability of controllers. Figure 9 shows that regardless
+                           6
+                                                                                   of the choice of observations, randomization helps to narrow
+                                                                                   the reality gap. When combining it with the small observation
+
+
+
+
+     expected return
+                                                                                   space, we achieved the best results in the real world: All nine
+                           4
+                                                                                   runs of the top three controllers in this group can trot more
+                                                                                   than three meters and balance for the entire episode.
+                           2
+                                                                                      Lastly, we examined the relation between the reality gap
+                                                                                   and the choice of observations. In this experiment, we trained
+                                                                                   controllers with two different observation space. The small
+                           0
+                                                                                   space (4D) only consists of the IMU information: the roll,
+                          small          small          large          large       pitch, and the angular velocities of the base along these
+                       observation    observation    observation    observation
+                                     randomization                 randomization   two axes. The large space (12D) consists of both the IMU
+                                                                                   information and the motor angles. We found that in simulation,
+Fig. 8: Performance of controllers when they are tested in
+                                                                                   when the observation space is large, the performance of the
+different simulation environments. Error bars indicate one
+                                                                                   learned controllers is higher (Compare the blue bars between
+standard deviation.
+                                                                                   1st and 3rd, and between 2nd and 4th in Figure 9). We
+                                                                                   suspect that the tasks become easier to learn because the
+                                                                       sim
+                       6                                                           policy can take advantage of the more information in the
+                                                                       real
+                                                                                   large observation space. However, when these policies are
+                                                                                   deployed on the robot, the result is the opposite. Controllers
+
+
+
+     expected return
+                       4                                                           with the large observation space perform worse in the real
+                                                                                   world and the reality gap is wider (compare the red bars
+                                                                                   between 1st and 3rd, and between 2nd and 4th in Figure 9). We
+                       2                                                           believe that this is caused by the mismatch of the observation
+                                                                                   distributions between training in simulation and testing on the
+                                                                                   physical system. When the space is large, the observations
+                                                                                   encountered in training become relatively sparse. Encountering
+                       0
+                          small          small          large          large       similar observations in the real world is less likely, which can
+                       observation    observation    observation    observation
+                                     randomization                 randomization   cause the robot to fall. In contrast, when the observation space
+                                                                                   is small, the observation distributions in training and testing
+Fig. 9: Comparison of controllers trained with different obser-
+                                                                                   are more likely to overlap, which narrows the reality gap.
+vation spaces and randomization. The blue and red bars are the
+performance in simulation and in the real world respectively.
+Error bars indicate one standard error.
+                                                                                                        VII. C ONCLUSION
+
+all these environments. In contrast, the performance of the                           We have shown that deep RL can be applied to learn agile
+controller trained without randomization can drop significantly                    locomotion automatically for robots. We have presented a
+if the actual inertia is different from what it was trained for.                   complete system that applies deep RL in simulated environ-
+However, it has a higher peak performance.                                         ments, which can learn from scratch or can allow users to
+   We aggregated these results and calculated the mean and the                     guide the learning process. With an accurate physical model
+standard deviation of the returns across all the test environ-                     and robust controllers, we have successfully deployed the
+ments. It is obvious in Figure 8 that regardless of the choice                     controllers learned in simulation on the real robots. Using this
+of observation space, the returns of the controllers trained                       system, we are able to develop two agile locomotion gaits,
+using randomization have a lower mean and a lower standard                         trotting and galloping, for a quadruped robot.
+deviation (Refer to the first two bars in Figure 8 for the case                       The focus of our paper is on learning transferable loco-
+of small observation space, and last two bars for the case                         motion policies. For this purpose, we used a simple reward
+of large observation space). Lower mean indicates suboptimal                       function and a simple environment: maximizing the running
+performance. The controllers learn to behave conservatively                        speed on a flat ground. In real-world scenarios, robots need
+in the stochastic environments. Lower standard deviation in-                       to see the environment, adjust its speed and turn agilely to
+dicates robustness. The performance varies less even when                          navigate the complex physical world. This points us to two
+the controllers are tested in different environments. These                        interesting avenues for future work. First, we would like to
+results demonstrate a clear trade-off between robustness and                       learn locomotion policies that can dynamically change running
+optimality when randomization is used. Since randomization                         speed and direction. Second, it would be interesting to extend
+is not a free meal, we should use it only when necessary.                          this work to handle complex terrain structures by integrating
+   We then evaluated the impact of randomization on the                            vision as part of sensory input.
+                        R EFERENCES                                   Marc Peter Deisenroth. Bayesian optimization for learn-
+                                                                      ing gaits under uncertainty. Annals of Mathematics and
+ [1] Marc H. Raibert. Legged Robots That Balance. Mas-                Artificial Intelligence, 76(1-2):5–23, 2016.
+     sachusetts Institute of Technology, Cambridge, MA,          [15] Rika Antonova, Akshara Rai, and Christopher G. Atke-
+     USA, 1986. ISBN 0-262-18117-7.                                   son. Deep kernels for optimizing locomotion controllers.
+ [2] Jerry Pratt and Gill Pratt. Intuitive control of a planar        In 1st Annual Conference on Robot Learning, CoRL,
+     bipedal walking robot. In Robotics and Automation,               pages 47–56, 2017.
+     1998. Proceedings. 1998 IEEE International Conference       [16] Greg Brockman, Vicki Cheung, Ludwig Pettersson, Jonas
+     on, volume 3, pages 2014–2021. IEEE, 1998.                       Schneider, John Schulman, Jie Tang, and Wojciech
+ [3] Avik De. Modular hopping and running via parallel                Zaremba. OpenAI Gym, 2016.
+     composition, 2017.                                          [17] Yuval Tassa, Yotam Doron, Alistair Muldal, Tom Erez,
+ [4] Timothy P Lillicrap, Jonathan J Hunt, Alexander Pritzel,         Yazhe Li, Diego de Las Casas, David Budden, Abbas
+     Nicolas Heess, Tom Erez, Yuval Tassa, David Silver, and          Abdolmaleki, Josh Merel, Andrew Lefrancq, et al. Deep-
+     Daan Wierstra. Continuous control with deep reinforce-           Mind control suite. arXiv preprint arXiv:1801.00690,
+     ment learning. arXiv preprint arXiv:1509.02971, 2015.            2018.
+ [5] John Schulman, Filip Wolski, Prafulla Dhariwal, Alec        [18] Danijar Hafner, James Davidson, and Vincent Van-
+     Radford, and Oleg Klimov. Proximal policy optimization           houcke. TensorFlow agents: Efficient batched rein-
+     algorithms. CoRR, abs/1707.06347, 2017.                          forcement learning in TensorFlow.          arXiv preprint
+ [6] Yan Duan, Xi Chen, Rein Houthooft, John Schulman,                arXiv:1709.02878, 2017.
+     and Pieter Abbeel. Benchmarking deep reinforcement          [19] Hamid Benbrahim and Judy A Franklin. Biped dynamic
+     learning for continuous control. In Proceedings of the           walking using reinforcement learning. Robotics and
+     33rd International Conference on International Confer-           Autonomous Systems, 22(3-4):283–302, 1997.
+     ence on Machine Learning - Volume 48, ICML’16, pages        [20] Russ Tedrake, Teresa Weirui Zhang, and H Sebastian
+     1329–1338. JMLR.org, 2016.                                       Seung. Stochastic policy gradient reinforcement learning
+ [7] Sylvain Koos, Jean-Baptiste Mouret, and Stéphane Don-           on a simple 3d biped. In Intelligent Robots and Systems,
+     cieux. Crossing the reality gap in evolutionary robotics         2004.(IROS 2004). Proceedings. 2004 IEEE/RSJ Interna-
+     by promoting transferable controllers. In Proceedings of         tional Conference on, volume 3, pages 2849–2854. IEEE.
+     the 12th annual conference on Genetic and evolutionary      [21] Gen Endo, Jun Morimoto, Takamitsu Matsubara, Jun
+     computation, pages 119–126. ACM, 2010.                           Nakanishi, and Gordon Cheng. Learning CPG sensory
+ [8] Adrian Boeing and Thomas Bräunl. Leveraging multiple            feedback with policy gradient for biped locomotion for
+     simulators for crossing the reality gap. In Control              a full-body humanoid. In Proceedings of the 20th
+     Automation Robotics & Vision (ICARCV), 2012 12th                 national conference on Artificial intelligence-Volume 3,
+     International Conference on, pages 1113–1119. IEEE,              pages 1267–1273. AAAI Press, 2005.
+     2012.                                                       [22] Nate Kohl and Peter Stone. Policy gradient reinforcement
+ [9] Sergey Levine, Peter Pastor, Alex Krizhevsky, Julian             learning for fast quadrupedal locomotion. In Proceedings
+     Ibarz, and Deirdre Quillen. Learning hand-eye coor-              of the IEEE International Conference on Robotics and
+     dination for robotic grasping with deep learning and             Automation, 2004.
+     large-scale data collection. The International Journal of   [23] Masaki Ogino, Yutaka Katoh, Masahiro Aono, Minoru
+     Robotics Research.                                               Asada, and Koh Hosoda. Reinforcement learning of
+[10] David Silver, Julian Schrittwieser, Karen Simonyan,              humanoid rhythmic walking parameters based on visual
+     Ioannis Antonoglou, Aja Huang, Arthur Guez, Thomas               information. Advanced Robotics, 18(7):677–697, 2004.
+     Hubert, Lucas Baker, Matthew Lai, Adrian Bolton, et al.     [24] Sébastien Gay, José Santos-Victor, and Auke Ijspeert.
+     Mastering the game of Go without human knowledge.                Learning robot gait stability using neural networks as
+     Nature, 550(7676):354, 2017.                                     sensory feedback function for central pattern genera-
+[11] Jens Kober and Jan Peters. Reinforcement learning in             tors. In Intelligent Robots and Systems (IROS), 2013
+     robotics: A survey. In Reinforcement Learning, pages             IEEE/RSJ International Conference on, pages 194–201.
+     579–610. Springer, 2012.                                         IEEE, 2013.
+[12] Krzysztof Choromanski, Atil Iscen, Vikas Sindhwani, Jie     [25] Sergey Levine and Vladlen Koltun. Learning complex
+     Tan, and Erwin Coumans. Optimizing simulations with              neural network policies with trajectory optimization. In
+     noise-tolerant structured exploration. In Robotics and           ICML ’14: Proceedings of the 31st International Confer-
+     Automation (ICRA), 2018 IEEE International Conference            ence on Machine Learning, 2014.
+     on. IEEE, 2018.                                             [26] Xue Bin Peng, Glen Berseth, and Michiel van de Panne.
+[13] Antoine Cully, Jeff Clune, Danesh Tarapore, and Jean-            Dynamic terrain traversal skills using reinforcement
+     Baptiste Mouret. Robots that can adapt like animals.             learning. ACM Trans. Graph., 34(4):80:1–80:11, 2015.
+     Nature, 521(7553):503, 2015.                                     ISSN 0730-0301. doi: 10.1145/2766910.
+[14] Roberto Calandra, André Seyfarth, Jan Peters, and          [27] Xue Bin Peng, Glen Berseth, and Michiel van de Panne.
+     Terrain-adaptive locomotion skills using deep reinforce-          preprint arXiv:1710.06537, 2017.
+     ment learning. ACM Transactions on Graphics (Proc.           [40] Nick Jakobi, Phil Husbands, and Inman Harvey. Noise
+     SIGGRAPH 2016), 35(4), 2016.                                      and the reality gap: The use of simulation in evolutionary
+[28] Xue Bin Peng, Glen Berseth, KangKang Yin, and Michiel             robotics. Advances in artificial life, pages 704–720, 1995.
+     van de Panne. DeepLoco: Dynamic locomotion skills            [41] Lerrel Pinto, James Davidson, Rahul Sukthankar, and
+     using hierarchical deep reinforcement learning. ACM               Abhinav Gupta. Robust adversarial reinforcement learn-
+     Transactions on Graphics (Proc. SIGGRAPH 2017), 36                ing. arXiv preprint arXiv:1703.02702, 2017.
+     (4), 2017.                                                   [42] Josh Tobin, Rachel Fong, Alex Ray, Jonas Schneider,
+[29] Nicolas Heess, Dhruva TB, Srinivasan Sriram, Jay Lem-             Wojciech Zaremba, and Pieter Abbeel. Domain random-
+     mon, Josh Merel, Greg Wayne, Yuval Tassa, Tom Erez,               ization for transferring deep neural networks from simu-
+     Ziyu Wang, S. M. Ali Eslami, Martin A. Riedmiller, and            lation to the real world. arXiv preprint arXiv:1703.06907,
+     David Silver. Emergence of locomotion behaviours in               2017.
+     rich environments. CoRR, abs/1707.02286, 2017.               [43] Igor Mordatch, Kendall Lowrey, and Emanuel Todorov.
+[30] Arjun Sharma and Kris M. Kitani. Phase-parametric poli-           Ensemble-CIO: Full-body dynamic motion planning that
+     cies for reinforcement learning in cyclic environments.           transfers to physical humanoids. In Intelligent Robots
+     In AAAI Conference on Artificial Intelligence, Pittsburgh,        and Systems (IROS), 2015 IEEE/RSJ International Con-
+     PA, 2018.                                                         ference on, pages 5307–5314. IEEE, 2015.
+[31] Michael Neunert, Thiago Boaventura, and Jonas Buchli.        [44] Aravind Rajeswaran, Sarvjeet Ghotra, Balaraman Ravin-
+     Why off-the-shelf physics simulators fail in evaluat-             dran, and Sergey Levine. EPOpt: Learning robust neural
+     ing feedback controller performance-a case study for              network policies using model ensembles. arXiv preprint
+     quadrupedal robots.       In Advances in Cooperative              arXiv:1610.01283, 2016.
+     Robotics, pages 464–472. World Scientific, 2017.             [45] Andrei A. Rusu, Matej Vecerik, Thomas Rothörl, Nicolas
+[32] Shaojun Zhu, Andrew Kimmel, Kostas E. Bekris,                     Heess, Razvan Pascanu, and Raia Hadsell. Sim-to-real
+     and Abdeslam Boularias.         Model identification via          robot learning from pixels with progressive nets. CoRR,
+     physics engines for improved policy search. CoRR,                 abs/1610.04286, 2016.
+     abs/1710.08893, 2017.                                        [46] Josiah Hanna and Peter Stone. Grounded action transfor-
+[33] Chen Li, Tingnan Zhang, and Daniel I Goldman. A                   mation for robot learning in simulation. In Proceedings
+     terradynamics of legged locomotion on granular media.             of the 31st AAAI Conference on Artificial Intelligence
+     Science, 339(6126):1408–1412, 2013.                               (AAAI), 2017.
+[34] Jie Tan, Zhaoming Xie, Byron Boots, and C. Karen             [47] Eric Tzeng, Coline Devin, Judy Hoffman, Chelsea Finn,
+     Liu. Simulation-based design of dynamic controllers for           Xingchao Peng, Sergey Levine, Kate Saenko, and Trevor
+     humanoid balancing. In Intelligent Robots and Systems             Darrell. Towards adapting deep visuomotor represen-
+     (IROS), 2016 IEEE/RSJ International Conference on,                tations from simulated to real environments. CoRR,
+     pages 2729–2736. IEEE, 2016.                                      abs/1511.07111, 2015.
+[35] Rico Möckel, N. Perov Yura, Anh The Nguyen, Massimo         [48] Kuan Fang, Yunfei Bai, Stefan Hinterstoisser, and Mrinal
+     Vespignani, Stephane Bonardi, Soha Pouya, Alexander               Kalakrishnan. Multi-task domain adaptation for deep
+     Spröwitz, Jesse van den Kieboom, Frederic Wilhelm,               learning of instance grasping from simulation. CoRR,
+     and Auke Jan Ijspeert. Gait optimization for roombots             abs/1710.06422, 2017.
+     modular robots - matching simulation and reality. In         [49] Konstantinos Bousmalis, Alex Irpan, Paul Wohlhart,
+     Proceedings of the 2013 IEEE/RSJ International Con-               Yunfei Bai, Matthew Kelcey, Mrinal Kalakrishnan, Laura
+     ference on Intelligent Robots and Systems, pages 3265–            Downs, Julian Ibarz, Peter Pastor, Kurt Konolige, Sergey
+     3272, Tokyo, 2013. IEEE.                                          Levine, and Vincent Vanhoucke. Using simulation and
+[36] Josh Bongard, Victor Zykov, and Hod Lipson. Resilient             domain adaptation to improve efficiency of deep robotic
+     machines through continuous self-modeling. Science,               grasping. CoRR, abs/1709.07857, 2017.
+     314:1118–21, 2006.                                           [50] Gavin Kenneally, Avik De, and Daniel E Koditschek.
+[37] Sehoon Ha and Katsu Yamane. Reducing hardware                     Design principles for a family of direct-drive legged
+     experiments for model learning and policy optimization.           robots. IEEE Robotics and Automation Letters, 1(2):900–
+     In Robotics and Automation (ICRA), 2015 IEEE Inter-               907, 2016.
+     national Conference on, pages 2620–2626. IEEE, 2015.         [51] Erwin Coumans and Yunfei Bai. Pybullet, a python
+[38] Wenhao Yu, Jie Tan, C. Karen Liu, and Greg Turk.                  module for physics simulation in robotics, games and
+     Preparing for the unknown: Learning a universal policy            machine learning. http://pybullet.org, 2016–2017.
+     with online system identification. CoRR, abs/1702.02453,     [52] Xue Bin Peng, Michiel van de Panne, and KangKang
+     2017.                                                             Yin. Learning locomotion skills using DeepRL: Does
+[39] Xue Bin Peng, Marcin Andrychowicz, Wojciech                       the choice of action space matter? In Proc. ACM
+     Zaremba, and Pieter Abbeel. Sim-to-real transfer of               SIGGRAPH / Eurographics Symposium on Computer
+     robotic control with dynamics randomization. arXiv                Animation, 2017.
+[53] URDF - ROS wiki. http://wiki.ros.org/urdf.
+[54] Avik De and Daniel E. Koditschek. The Penn Jerboa: A
+     platform for exploring parallel composition of templates.
+     CoRR, abs/1502.05347, 2015.
+[55] Jingru Luo and Kris Hauser. Robust trajectory opti-
+     mization under frictional contact with iterative learning.
+     Autonomous Robots, 41(6):1447–1461, 2017.
+[56] Ikuko Hirai and Toshihiro Gunji. Slipperiness and coef-
+     ficient of friction on the carpets. Sen’i Kikai Gakkaishi
+     (Journal of the Textile Machinery Society of Japan), 53:
+     T140–T146, 2000.
+

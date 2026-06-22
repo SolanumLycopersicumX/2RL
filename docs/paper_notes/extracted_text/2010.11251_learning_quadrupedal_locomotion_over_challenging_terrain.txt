@@ -1,0 +1,1333 @@
+                                          Research Article                                                                                                     ETH Zurich and Intel      1
+
+
+
+
+                                         Learning Quadrupedal Locomotion over Challenging Terrain
+                                         J OONHO L EE1,* , J EMIN H WANGBO1,2,† , L ORENZ W ELLHAUSEN1 , V LADLEN KOLTUN3 , AND M ARCO H UTTER1
+                                         1 Robotic Systems Lab, ETH Zurich, Zurich, Switzerland
+                                         2 Robotics and Artificial Intelligence Lab, KAIST, Daejeon, Korea
+                                         3 Intelligent Systems Lab, Intel, Santa Clara, CA, USA
+                                         † Substantial part of the work was carried out during his stay at 1
+                                         * Corresponding author: jolee@ethz.ch
+
+
+                                         This is the accepted version of Science Robotics Vol. 5, Issue 47, eabc5986 (2020)
+                                         DOI: 10.1126/scirobotics.abc5986
+
+
+
+
+arXiv:2010.11251v1 [cs.RO] 21 Oct 2020
+                                               Some of the most challenging environments on our planet are accessible to quadrupedal animals but remain
+                                               out of reach for autonomous machines. Legged locomotion can dramatically expand the operational domains
+                                               of robotics. However, conventional controllers for legged locomotion are based on elaborate state machines that
+                                               explicitly trigger the execution of motion primitives and reflexes. These designs have escalated in complexity
+                                               while falling short of the generality and robustness of animal locomotion. Here we present a radically robust con-
+                                               troller for legged locomotion in challenging natural environments. We present a novel solution to incorporating
+                                               proprioceptive feedback in locomotion control and demonstrate remarkable zero-shot generalization from sim-
+                                               ulation to natural environments. The controller is trained by reinforcement learning in simulation. It is based
+                                               on a neural network that acts on a stream of proprioceptive signals. The trained controller has taken two gen-
+                                               erations of quadrupedal ANYmal robots to a variety of natural environments that are beyond the reach of prior
+                                               published work in legged locomotion. The controller retains its robustness under conditions that have never been
+                                               encountered during training: deformable terrain such as mud and snow, dynamic footholds such as rubble, and
+                                               overground impediments such as thick vegetation and gushing water. The presented work opens new frontiers
+                                               for robotics and indicates that radical robustness in natural environments can be achieved by training in much
+                                               simpler domains.
+
+
+
+                                         1. INTRODUCTION                                                            configuration at high temporal resolution. In response to unforeseen
+                                                                                                                    events such as unexpected ground contact, terrain deformation, and
+                                         Legged locomotion can dramatically expand the reach of robotics.           foot slippage, the controller must rapidly produce whole-body trajecto-
+                                         Much of the dry landmass on Earth remains impassible to wheeled and        ries subject to multiple objectives: balancing, avoiding self-collision,
+                                         tracked machines, the stability of which can be severely compromised       counteracting external disturbances, and locomotion. While animals
+                                         on challenging terrain. Quadrupedal animals, on the other hand, can        instinctively solve this complex control problem, it is an open challenge
+                                         access some of the most remote parts of our planet. They can choose        in robotics.
+                                         safe footholds within their kinematic reach and rapidly change their           Conventional approaches to legged locomotion on uneven terrain
+                                         kinematic state in response to the environment. Legged robots have the     have yielded increasingly complex control architectures. Many rely
+                                         potential to traverse any terrain that their animal counterparts can.      on elaborate state machines that coordinate the execution of motion
+                                             To date, no published work has demonstrated dynamic locomotion         primitives and reflex controllers [1–5]. To trigger transitions between
+                                         in diverse, challenging natural environments as shown in Fig. 1. These     states or the execution of a reflex, many systems explicitly estimate
+                                         environments have highly irregular profiles, deformable terrain, slip-     states such as ground contact and slippage [6–8]. Such estimation
+                                         pery surfaces, and overground obstructions. Under such conditions,         is commonly based on empirically tuned thresholds and can become
+                                         existing published controllers manifest frequent foot slippage, loss of    erratic in the presence of unmodeled factors such as mud, snow, or
+                                         balance, and ultimately catastrophic failure. The challenge is exacer-     vegetation. Other systems employ contact sensors at the feet, which
+                                         bated by the inaccessibility of veridical information about the physical   can become unreliable in field conditions [9–11]. Overall, conventional
+                                         properties of the terrain. Exteroceptive sensors such as cameras and       systems for legged locomotion on rough terrain escalate in complexity
+                                         LiDAR cannot reliably measure physical characteristics such as friction    as more scenarios are taken into account, have become extremely
+                                         and compliance, are impeded by obstructions such as vegetation, snow,      laborious to develop and maintain, and remain vulnerable to corner
+                                         and water, and may not have the coverage and temporal resolution to        cases.
+                                         capture changes induced by the robot itself, such as the crumbling of          Model-free reinforcement learning (RL) has recently emerged as
+                                         loose ground under the robot’s feet. Under these conditions, the robot     an alternative approach in the development of legged locomotion
+                                         must rely crucially on proprioception – the sensing of its own bodily      skills [12–14]. The idea of RL is to tune a controller to optimize a
+ Research Article                                                                                     ETH Zurich and Intel   2
+
+
+
+
+Fig. 1. Deployment of the presented locomotion controller in a variety of challenging environments.
+  Research Article                                                                                                              ETH Zurich and Intel           3
+
+                                                                              A Snow-covered slope        B Pile of rocks              C Stream
+given reward function. The optimization is performed on data acquired
+by executing the controller itself, which improves with experience.
+RL has been used to simplify the design of locomotion controllers,
+automate parts of the design process, and learn behaviors that could
+not be engineered with prior approaches [12–15].
+    However, application of RL to legged locomotion has largely been
+confined to laboratory environments and conditions. Our prior work
+                                                                              D Forest (wet moss)         E Forest (mud)               F Forest (vegetation)
+demonstrated end-to-end learning of locomotion and recovery behav-
+iors – but only on flat ground, in the lab [12]. Other work also devel-
+oped RL techniques for legged locomotion, but likewise focused largely
+on flat or moderately textured surfaces in laboratory settings [13, 14, 16–
+19].
+    Here we present a radically robust controller for blind quadrupedal
+locomotion on challenging terrain. The controller uses only proprio-
+                                                                              G DARPA Subterranean Challenge Urban Circuit (stair descent)
+ceptive measurements from joint encoders and an inertial measurement
+unit (IMU), which are the most durable and reliable sensors on legged
+machines. The operation of the controller is shown in Fig. 1 and
+Movie 1. The controller was used to drive two generations of ANYmal
+quadrupeds [20] in a variety of conditions that are beyond the reach of
+prior published work in legged robotics. The controller reliably trots
+through mud, sand, rubble, thick vegetation, snow, running water, and
+a variety of other off-road terrain. The same controller was also used
+                                                                              Fig. 2. A number of specific deployments. (A-F) Zero-shot gener-
+in our entry in the DARPA Subterranean Challenge Urban Circuit. In
+                                                                              alization to slippery and deforming terrain. (G) Steep descent during
+all deployments, robots of the same generation were driven by exactly
+                                                                              the DARPA Subterranean Challenge. The stair rise is 18 cm and the
+the same controller under all conditions. No tuning was required to
+                                                                              slope is ∼ 45◦ .
+adapt to different environments.
+    Like a number of prior applications of model-free RL to legged
+locomotion, we train the controller in simulation [12, 14, 16]. Prior         levels of robustness is an automated curriculum that synthesizes terrains
+efforts have established a number of practices for successful transfer of     adaptively, based on the controller’s performance at different stages
+legged locomotion controllers from simulation to physical machines.           of the training process. In essence, terrains are synthesized such that
+One is realistic modeling of the physical system, including the ac-           the controller is capable of traversing them while becoming more
+tuators [12]. Another is randomization of physical parameters that            robust. We evaluate the traversability of parameterized terrains and
+vary between simulation and reality, such that the controller becomes         use particle filtering to maintain a distribution of terrain parameters of
+robust to a range of conditions that cover those that arise in physical       medium difficulty [24, 25] that adapt as the neural network learns. The
+deployment, without the necessity to precisely model these conditions         training conditions grow increasingly more challenging, yielding an
+a priori [21].                                                                omnidirectional controller that combines agility with unprecedented
+    We use these ideas as well, but have found that they were not suf-        resilience.
+ficient to achieve robust locomotion on rough terrain. We therefore               The result is a legged locomotion controller that is far more robust
+introduce and validate a number of additional ingredients that are cru-       than any counterparts in existing literature. Remarkably, the controller
+cial to realizing the presented skills. The first is a different policy       is consistently effective in zero-shot generalization settings. That
+architecture. Rather than using a multi-layer perceptron (MLP) that           is, it remains robust when tested in conditions that have never been
+operates on a snapshot of the robot’s current state, as was common            encountered during training. Our training in simulation only uses rigid
+in prior work, we use a sequence model, specifically a temporal con-          terrains and a small set of procedurally generated terrain profiles, such
+volutional network (TCN) [22] that produces actuation based on an             as hills and steps. Yet when deployed on physical quadrupeds, the
+extended history of proprioceptive states. We do not employ explicit          controller successfully handles deformable terrain (mud, moss, snow),
+contact and slip estimation modules, which are known to be brittle in         dynamic footholds (stepping on a rolling board in a cluttered indoor
+challenging situations; rather, the TCN learns to implicitly reason about     environment, or debris in the field), and overground impediments such
+contact and slippage events from proprioceptive history as needed.            as thick vegetation, rubble, and gushing water. Our methodology and
+    The second important idea that enables the demonstrated results is        results open new frontiers for legged robotics and suggest that the
+privileged learning [23]. We have found that training a rough-terrain         extraordinary complexity of the physical world can be tamed without
+locomotion policy directly via reinforcement learning was not success-        brittle and painstaking modeling or dangerous and expensive trial-and-
+ful: the supervisory signal was sparse and the presented network failed       error in field conditions.
+to learn locomotion within reasonable time budgets. Instead, we de-
+compose the training process into two stages. First, we train a teacher
+                                                                              2. RESULTS
+policy that has access to privileged information, namely ground-truth
+knowledge of the terrain and the robot’s contact with it. The privileged      Movie 1 summarizes the results of the presented work. We have
+information enables the policy to quickly achieve high performance.           deployed the trained locomotion controller on two generations of ANY-
+We then use this privileged teacher to guide the learning of a purely         mal robots: ANYmal-B (Fig. 2D-G) and ANYmal-C (Fig. 2A-C and
+proprioceptive student controller that only uses sensors that are avail-      Fig. 3). The robots have different kinematics, inertia, and actuators.
+able on the real robot. This privileged learning protocol is enabled by
+simulation, but the resulting proprioceptive policy is not confined to        Natural environments
+simulation and is deployed on physical machines.                              The presented controller has been deployed in diverse natural environ-
+    The third idea that has proven important in achieving the presented       ments, as shown in Fig. 1 and Movies 1 and S1. These include steep
+       Research Article                                                                                                                    ETH Zurich and Intel     4
+
+
+
+
+  A
+
+
+
+
+ B                    command
+
+
+
+
+  C                 command
+
+
+
+
+  D                                                              E                                              Step up                         Step down
+                                          command
+
+
+
+
+                                                                 Success rate (%)
+                    10 kg payload
+
+
+
+
+                                                                                                             Step height (cm)                    Step height (cm)
+
+                                                                                                           Baseline 0.2 m/s                  Ours
+                                                                                                           Baseline 0.6 m/s                  Ours w/ payload
+                                                                                                           Baseline 0.2 m/s with payload
+
+  F                    Ours         Baseline 0.4 m/s                                  G
+                                                       Payload                                                            Nominal                   Payload
+                              Nominal
+
+                                                                                                           30
+
+
+
+
+                                                                                    Heading error (deg.)
+              0.6
+                                                                                                           20
+
+
+
+
+Speed (m/s)
+              0.4
+              0.2                                                                                          10
+
+              0.0                                                                                           0
+
+
+
+
+Fig. 3. Evaluation in an indoor environment. (A) Locomotion over unstable debris. The robot steps onto loose boards (highlighted in red and
+blue) that dislodge under the robot’s feet. (B) The policy exhibits a foot-trapping reflex and overcomes a 16.8 cm step. (C) The policy learns to
+appropriately handle obstructions irrespective of the contact location. Here it is shown reacting to an obstacle that is encountered mid-shin during
+the swing phase. (D) Controlled experiments with steps and payload. Our controller and a baseline [1, 26] are commanded to walk over a step
+with and without the 10 kg payload. (E) Success rates for different step heights. The success rate is evaluated over 10 trials for each condition.
+(F) Mean linear speed for different command directions on flat terrain. 0 ◦ refers to the front of the robot. Shaded area denotes 95 % confidence
+interval. (G) Mean heading errors for different command directions on flat terrain. Shaded area denotes 95 % confidence interval.
+ Research Article                                                                                                                    ETH Zurich and Intel              5
+
+
+                                                  Terrain                   operators are not allowed to assist the robots during the competition
+       Quantity         Controller                                          physically; only teleoperation is allowed. Accordingly, the locomo-
+                                      Moss      Mud         Vegetation      tion controller needs to perform without failure over extended mission
+                           Ours       0.452     0.338         0.248         durations. To our knowledge, this is the first use of a legged loco-
+     Average speed
+                                                                            motion controller trained via model-free RL in such competitive field
+        (m/s)            Baseline     0.199     0.197           –           deployment.
+       Average             Ours       0.423     0.692         1.23              The presented controller drove two ANYmal-B robots in four mis-
+      mechanical                                                            sions of 60 minutes. The controller exhibited a zero failure rate through-
+        COT              Baseline     0.625     0.931           –           out the competition. A steep staircase that was traversed by one of the
+                                                                            robots during the competition is shown in Fig. 2G.
+Table 1. Comparison of locomotion performance in natural envi-
+ronments. The mechanical COT is computed using positive mechan-             Indoor experiments
+ical power exerted by the actuators.                                        We further evaluated the robustness of the presented controller in an
+                                                                            indoor environment populated by loose debris, as shown in Fig. 3A.
+                                                                            Support surfaces are unstable and the robot’s feet frequently slip. Such
+mountain trails, creeks with running water, mud, thick vegetation, loose    conditions can be found at disaster sites and construction zones, where
+rubble, snow-covered hills, and a damp forest. A number of specific         legged robots are expected to operate in the future.
+scenarios are further highlighted in Fig. 2A-F. These environments              Results are shown in Fig. 3A and Movie S2. The robot moves
+have characteristics that the policy does not experience during training.   omnidirectionally over the area. The presented controller can stably
+The terrains can deform and crumble, with significant variation of          locomote over shifting support surfaces. This level of robustness is
+material properties over the surface. The robot’s legs are subjected        beyond the reach of prior controllers for ANYmal robots [1, 26] and is
+to frequent disturbances due to vegetation, rubble, and sticky mud.         comparable to the state of the art [2, 29].
+Existing terrain estimation pipelines that use cameras or LiDAR [27]            The learned controller manifests a foot-trapping reflex, as shown
+fail in environments with snow (Fig. 2A), water (Fig. 2C), or dense         in Fig. 3B and Movie S3. The policy identifies the trapping of the
+vegetation (Fig. 2F). Our controller does not rely on exteroception         foot purely from proprioceptive observations and lifts the foot over the
+and is immune to such failure. The controller learns omnidirectional        obstacle. Such reflexes were not specified in any way during training:
+locomotion based on a history of proprioceptive observations and is         they developed adaptively. This distinguishes the presented approach
+robust in zero-shot deployment on terrains with characteristics that        from conventional controller design methods, which explicitly build
+were never experienced during training.                                     in such reflexes and orchestrate their execution by a higher-level state
+    We have compared the presented controller to a state-of-the-art         machine [1, 3]. The step shown in Fig. 3B is 16.8 cm high, which is
+baseline [1, 26] in the forest environment. The baseline could traverse     higher than the foot clearance of the legs during normal walking on
+flat and unobstructed patches, but failed frequently upon encountering      flat terrain. The maximum foot clearance on flat terrain is 12.9 cm
+loose branches, thick vegetation, and mud, as shown in Movie S1. Our        and 13.6 cm for the LF and RF legs, respectively1 , and increases up
+controller never failed in these experiments.                               to 22.5 cm and 18.5 cm in the case of foot-trapping. Our controller
+    We have quantitatively evaluated the presented controller and the       also learns to adapt the hind leg trajectories when stepping up. The
+baseline in three conditions: moss, mud, and vegetation (Fig. 2D-F).        maximum foot clearance on flat terrains is 13.5 cm and 9.06 cm for
+We have measured locomotion speed and energy efficiency. The re-            the LH and RH legs, and increases up to 16.6 cm and 15.9 cm when
+sults are reported in Table 1. The presented controller achieves higher     the front legs are above the step. Further analysis is provided in the
+locomotion speed in all conditions. We computed the dimension-              Materials and Methods section. Note also that the reflexes learned by
+less cost of transport (COT) to compare the efficiency of the con-          our controller are more general and are not tied to particular contact
+trollers at different speed ranges. We define mechanical COT as             events. Fig. 3C shows the controller responding to a mid-shin collision
+∑12 actuators [τ θ̇ ]+ /(mgv). τ denotes joint torque, θ̇ is joint speed,   during the swing phase. Here, the trapping event was not signalled by
+mg is the total weight, and v is the locomotion speed. This quantity        foot contact, and scripted controllers that use foot contact events as
+represents positive mechanical power exerted by the actuator per unit       triggers would not appropriately handle this situation. Our controller,
+weight and unit locomotion speed [28]. As shown in Table 1, the             on the other hand, analyzes the proprioceptive stream as a whole and is
+presented controller is more energy-efficient, with a lower COT than        trained without making assumptions about possible contact locations.
+the baseline.                                                               Hence, it can learn to react to any obstructions and disturbances that
+    The quantitative evaluation reported in Table 1 understates the dif-    impact the robot’s bodily configuration.
+ference between the two controllers because it only measures speed              We now focus on comparing the presented approach with the base-
+and energetic efficiency of the baseline when it successfully locomotes.    line [1, 26] in controlled settings. We first compare the robustness of
+The baseline’s catastrophic failures are not factored into these measure-   the controllers in the diagnostic setting of a single step, as shown in
+ments: when the baseline fails, it is reset by a human operator in a more   Fig. 3D. In each trial, the robot is driven straight to a step for 10 s.
+stable configuration. Catastrophic failures of the baseline controller      A trial is a success if the robot traverses the step with both front and
+due to thick vegetation and other factors are shown in Movie S1. Our        hind legs. We conducted 10 trials for each step height and computed
+controller exhibited no such failures.                                      the success rate. Since the baseline controller takes a desired linear
+                                                                            velocity of the base as input, we commanded a forward velocity of
+DARPA Subterranean Challenge                                                0.2 m/s and 0.6 m/s. 0.6 m/s is the maximum speed of the baseline.
+Our controller was used by the CERBERUS team for the DARPA                  The success rates are given in Fig. 3E. The presented controller outper-
+Subterranean Challenge Urban Circuit (Fig. 2G). It replaced a model-        forms the baseline in both stepping up and down. The baseline showed
+based controller that had been employed by the team in the past [1, 26].    high sensitivity to foot-trapping, which often led to a fall, as shown in
+The objective of the competition is to develop robotic systems that         Movie S3.
+rapidly map, navigate, and search complex underground environments,             1
+                                                                                  We denote left, right, fore, and hind as L, R, F, H, respectively, to compactly refer to a
+including tunnels, urban underground, and cave networks. The human          leg. For example, ‘LF leg’ refers to the left fore leg.
+ Research Article                                                                                                          ETH Zurich and Intel        6
+
+
+    We also tested the controllers in the presence of substantial model       This is a significant advantage in that the controller makes few as-
+mismatch. We attached a 10 kg payload, as shown in Fig. 3D and                sumptions on the sensor suite and is not susceptible to failure when
+Movie S4. This payload is 22.7 % of the total weight of the robot,            exteroception breaks down. Indeed, existing work has argued that a
+and was never simulated during training. As shown in Fig. 3E, the             blind (proprioceptive) controller should form the basis of a legged
+presented controller can still traverse steps up to 13.4 cm despite the       locomotion stack [3]. Nevertheless, blind locomotion is inherently
+model mismatch. The baseline is incapable of traversing any steps             limited. If the machine is commanded to walk off a cliff, it will.
+under any command speed with the payload.                                     Even in less extreme conditions, the robot’s gait is fairly conservative
+    We then evaluate the tracking performance of the controllers on           since it must by necessity feel out the environment with its body as
+flat ground with the payload. We commanded each controller in 8               it locomotes. A major opportunity for future work is to use the pre-
+directions and measured the locomotion speed and the tracking error.          sented methodology as a starting point in the development of a hybrid
+Target speed is fixed to 0.4 m/s for the baseline controller, which is        proprioceptive-exteroceptive controller that, like many animals, will
+similar to the operating speed of the presented controller. In Fig. 3F, we    be able to locomote even when vision and other external senses are
+show the velocity profiles of the controllers. Our controller locomotes       disrupted, but will use exteroceptive data when it is provided. This will
+at around 0.4 m/s in all directions and performs similarly with the           enable legged machines to autonomously traverse environments that
+payload. On the other hand, the locomotion speed of the baseline              may have fatal elements such as cliffs, and to raise speed and energetic
+varies with direction, which can be seen by the anisotropic velocity          efficiency in safer conditions.
+profile, and the velocity profile shifts significantly off center with            More broadly, the presented results expedite the deployment of
+the payload. Fig. 3G shows the heading error of the controllers in            legged machines in environments that are beyond the reach of wheeled
+each commanded direction. The heading error is the angle between the          and tracked robots and are dangerous or inaccessible to humans, while
+command velocity and the base velocity of the robot. The heading error        the presented methodology opens new frontiers for training complex
+of the presented controller is consistently smaller than the baseline,        robotic systems in simulation and deploying them in the full richness
+both with and without the payload. The baseline’s error in the lateral        and complexity of the physical world.
+direction reaches ∼30 ◦ and the baseline fails when a speed of (0.6 m/s)
+is commanded, as shown in Movie S4. In contrast, the average heading
+error of the presented controller stays within 10 ◦ with or without the       4. MATERIALS AND METHODS
+payload. We conclude that the presented controller is much more               A. Overview
+robust to model mismatch.
+                                                                              The main objective of the presented controller is to locomote over
+    Next we test robustness to foot slippage. To introduce slippage, we
+                                                                              rough terrain following a command. The command is given either
+used a moistened whiteboard [1]. The results are shown in Movie S5.
+                                                                              by a human operator or by a higher-level navigation controller. In
+The baseline quickly loses balance, aggressively swings the legs, and
+                                                                              our formulation, unlike many existing works [12, 14, 16] that focus
+falls. In contrast, the presented controller adapts to the slippery terrain
+                                                                              on tracking the target velocity of the base (BIB v T ), only the direction
+and successfully locomotes in the commanded direction.
+                                                                              (BIB v̂ T ) is given to the controller. The reason is that the feasible range
+                                                                              of target speeds is often unclear on challenging terrain. For example,
+3. DISCUSSION                                                                 the robot can walk faster downhill than uphill.
+The presented results substantially advance the published state of the             The command vector is defined as h( BIB v̂ T ) xy , (ω̂T )z i. The first
+art in legged robotics. Beyond the results themselves, the methodology        part is the target horizontal direction in base frame ( BIB v̂ T ) xy :=
+presented in this work can have broad applications. Prior to our work,        hcos(ψT ), sin(ψT )i, where ψT is the yaw angle to command direction
+a hypothesis could be held that training in simulation is fundamentally       in the base frame. The stop command is defined as h0.0, 0.0i. The
+constrained by the limitations of simulation environments in represent-       second part is the turning direction (ω̂T )z ∈ {−1, 0, 1}. 1 refers to
+ing the complexity of the physical world. Present-day technology is           counter-clockwise rotation along the base z-axis.
+severely limited in its ability to simulate compliant contact, slippage,           An overview of our method is given in Fig. 4. We use a privileged
+and deformable and crumbling terrain. As a result, phenomena such             learning strategy inspired by “learning by cheating” [23] (Fig. 4A).
+as mud, snow, thick vegetation, gushing water, and many others are            We first train a teacher policy that has access to privileged informa-
+beyond the capabilities of robotics simulation frameworks [30–32].            tion concerning the terrain. This teacher policy is then distilled into
+The sample complexity of model-free RL algorithms, which commonly             a proprioceptive student policy that does not rely on privileged infor-
+require millions of time steps for training, further exacerbates the chal-    mation. The privileged teacher policy is confined to simulation, but
+lenge by precluding reliance on frameworks that may require seconds           the student policy is deployed on physical machines. One difference of
+of computation per time step.                                                 our methodology from that of Chen et al. [23] is that we do not rely on
+    Our work demonstrates that simulating the astonishing variety of          expert demonstrations to train the privileged policy; rather, the teacher
+the physical world may not be necessary. Our training environment fea-        policy is trained via reinforcement learning.
+tures only rigid terrain, with no compliance or overground obstructions            The privileged teacher model is based on multi-layer perceptrons
+such as vegetation. Nevertheless, controllers trained in this environ-        (MLPs) that receive information on the current state of the robot, prop-
+ment successfully meet the diversity of field conditions encountered at       erties of the terrain, and the robot’s contact with the terrain. The model
+deployment.                                                                   computes a latent embedding l¯t that represents the current state, and
+    We see a number of limitations and opportunities for future work.         an action āt . The training objective rewards locomotion in prescribed
+First, the presented controller only exhibits the trot gait. This is nar-     directions.
+rower than the range of gate patterns discovered by quadrupeds in                  After the teacher policy is trained, it is used to supervise a proprio-
+nature [33]. The gait pattern is constrained in part by the kinematics        ceptive student policy. The student model is a temporal convolutional
+and dynamics of the robot, but the ANYmal machines are physically             network (TCN) [22] that receives a sequence of N proprioceptive ob-
+capable of multiple gates [26]. We hypothesize that training protocols        servations as input. The student policy is trained by imitation. The
+and objectives that emphasize diversity can elicit these.                     vectors l¯t and āt computed by the teacher policy are used to supervise
+    Second, the presented controller relies solely on proprioception.         the student. This is illustrated in Fig. 4A.
+ Research Article                                                                                                            ETH Zurich and Intel       7
+
+
+
+
+  A Policy training                                                                                B Automatic terrain curriculum
+                                                                                   Reward
+  Step 1. Teacher policy training                                                                   Parameterized terrains
+                                                           RL algorithm
+                                                                                                             Hills         Steps            Stairs
+                                                          Policy
+     Privileged                     robot state           gradient
+     Information
+       - contact states                           MLP
+       - contact forces          MLP                      action
+       - terrain profile                                                                             parameters:
+                                 encoder
+       - friction coeff.                                                                             - Roughness     - Step width       - Step width
+                                                                                                     - Frequency     - Step height      - Step height
+       - disturbances
+                                                           copy                                      - Amplitude
+
+
+                                                                                        Simulation environment            Randomly sample
+  Step2. Student policy training                                      Imitate                                        initial terrain parameters
+                                                                    action
+       Proprioceptive
+                                                           MLP
+       history                                TCN                                                                        Propagate particles
+                 ...                          encoder                                                                     via random walk
+
+                                                                                        Privileged terrain
+              Save proprioceptive measurements every 0.02 s                             information
+                                                                                                                        Generate trajectories
+                                                                                                                        using current policy
+ C Control architecture                                                                               height map
+                                           Motion generation         Motion tracking
+command                                                                                                                Update            Update
+                        50 Hz                                                  400 Hz
+                                                                                                                       weights           policy
+                    foot position residuals
+                                                          Inverse           Joint                  terrain
+   Neural network
+                         leg frequencies                Kinematics      PD controller              traversability
+                    Foot Trajectory                target                                          for the policy
+                     Foot
+                      FootTrajectory
+                           Trajectory                                                                                   Resample particles
+                       Foot Trajectory
+                       Generator
+                        Generator                  foot positions
+
+       policy
+                        Generator
+                         Generator                                            Robot
+                                              +                              Dynamics
+                         leg phases                      observations
+
+
+Fig. 4. Overview of the presented approach. (A) Two-stage training process. First, a teacher policy is trained using reinforcement learning in
+simulation. It has access to privileged information that is not available in the real world. Next, a proprioceptive student policy learns by imitat-
+ing the teacher. The student policy acts on a stream of proprioceptive sensory input and does not use privileged information. (B) An adaptive
+terrain curriculum synthesizes terrains at an appropriate level of difficulty during the course of training. Particle filtering is used to maintain a
+distribution of terrain parameters that are challenging but traversable by the policy. (C) Architecture of the locomotion controller. The learned
+proprioceptive policy modulates motion primitives via kinematic residuals. An empirical model of the joint PD controller facilitates deployment
+on physical machines.
+  Research Article                                                                                                                ETH Zurich and Intel        8
+
+
+    Training is conducted on procedurally generated terrains in simu-                 first expressed in the robot base frame, and the joint position targets are
+lation. The terrains are synthesized adaptively, to facilitate learning               computed using analytic IK. The joint position targets are then tracked
+according to the skill level of the trained policies at any given time.               by joint position PD controllers. The main reason for using analytic IK
+We define a traversability measure for terrain and develop a sampling-                is to maximize computational efficiency and to reuse existing position
+based method to select terrains with the appropriate difficulty during                control actuator models [6, 15] for the sim-to-real transfer.
+the course of training. We use particle filtering to maintain an appropri-
+ate distribution of terrain parameters. This is illustrated in Fig. 4B. The           Teacher policy
+terrain curriculum is applied during both teacher and student training.               We formulate the control problem as a Markov Decision Process
+    Our control architecture is shown in Fig. 4C. We employ the Policies              (MDP). MDP is a mathematical framework for modeling discrete-time
+Modulating Trajectory Generators (PMTG) architecture [34] to provide                  control processes in which the evolution of the state and the outcomes
+priors on motion generation. The neural network policy modulates                      are partly stochastic. An MDP is defined by a state space S , action
+leg phases and motion primitives by synthesizing residual position                    space A, a scalar reward function R(st , st+1 ), and the transition prob-
+commands.                                                                             ability P(st+1 |st , at ). A learning agent selects an action at from its
+    The simulation uses a learned dynamics model of the robot’s joint                 policy π ( at |st ) and receives a reward rt from the environment. The
+PD controller [12]. This facilitates the transfer of policies from simula-            objective of the RL framework is to find an optimal policy π ∗ that
+tion to reality. After training in simulation, the proprioceptive controller          maximizes the discounted sum of rewards over an infinite time horizon.
+is deployed directly on physical legged machines, with no fine-tuning.                    Assuming the environment is fully observable to the teacher, we
+                                                                                      formulate locomotion control as an MDP and use an off-the-shelf
+Motion synthesis                                                                      RL method [36] to solve it. In this section, we provide the MDP for
+We now elaborate on the control architecture that is illustrated in                   teacher training, which is defined by a tuple of state space, action space,
+Fig. 4C. It is divided into motion generation and tracking. The input                 transition probability, and reward function.
+to our controller consists of the command vector and a sequence of                        The state is defined as st := hot , xt i, where ot is the measurement
+proprioceptive measurements including base velocity, orientation and                  vector obtainable from the robot and xt is the privileged information
+joint states. The controller does not use any exteroceptive input (e.g.,              that is usually not available in the real world. The detailed definitions
+no haptic sensors, cameras, or depth sensors). The input also does not                are given in Table S4. ot contains command, orientation, base twist,
+contain any handcrafted features such as foot contact states or estimated             joint positions and velocities, φi s, f i s, and previous foot position tar-
+terrain geometry. The controller outputs joint position targets.                      gets. Joint position errors and velocities measured at -0.01 s and -0.02 s
+    Our motion generation strategy is based on the periodic leg phase.                are contained in ot , which is the same as the input to the learned model
+Previous works commonly leveraged predefined foot contact sched-                      of the joint-level PD controller. This information allows the policy to
+ules [2, 26, 35]. We define a periodic phase variable φi ∈ [0.0, 2π )                 exploit the actuator dynamics [12]. To encode the leg phase, we use
+for each leg, which represents contact phase if φ ∈ [0.0, π ) and swing               hcos(φ), sin(φ)i instead of φ, which is a smooth and unique represen-
+phase if φ ∈ [π, 2π ). At every time step t, φi = (φi,0 + ( f 0 + f i )t)             tation for the angle. Previous foot position targets are also fed back to
+(mod 2π ) where φi,0 is the initial phase, f 0 is a common base fre-                  the policy and are used to compute the target smoothness reward that
+quency, and f i is the frequency offset for the i-th leg. We want the legs            is explained in the following paragraph. When the student controller
+to manifest periodic motions when f 0 + f i 6= 0 and engage ground                    is deployed, the quantities in ot are replaced with readings from the
+contact in contact phase. We set f 0 as 1.25 Hz, which is the value used              proprioceptive sensors and the base velocity and orientation are pro-
+by a previously developed conventional controller for a trot gait [26].               vided by a state estimator [37]. xt contains noiseless information that
+    The target foot positions, which are the output of the motion gen-                we receive directly from a physics engine. xt mainly consists of infor-
+eration block, are defined in the horizontal frames [35] of the feet                  mation related to foot-ground interactions such as terrain profile, foot
+(Hi , i ∈ {1, 2, 3, 4}). Hi is a reference frame that is attached below               contact states and forces, friction coefficients, and external disturbance
+the hip joint of the i-th leg. The distance equals the nominal reach                  forces applied during training. Specifically, we represent the terrain
+of the leg. The z-axis of the frame ( Hi z) is parallel to e g and Hi x is            profile with the elevation of 9 scan points around each foot, which are
+the projection of the base x-axis (B x) onto the horizontal plane, i.e.,              symmetrically placed along a circle with a 10 cm radius (visualized in
+the frame has the same yaw angle with the robot. The roll and pitch                   Fig. 4).
+angles of Hi are decoupled from the base. This kinematic trick reduces                    The action (āt ) is a 16-dimensional vector consisting of leg frequen-
+the effect of base attitude on the foot motions [35] and consequently                 cies and foot position residuals.
+stabilizes training. Defining the output in Hi results in less premature                  The reward function is defined such that an RL agent receives
+termination at the beginning of the policy training, when the base mo-                a higher reward if it advances faster towards the goal. The reward
+tion is unstable due to random actions. Another benefit is that we can                function is specified in detail in supplementary section S4.
+decompose the action distribution of the stochastic policy in the lateral                 The policy network is constructed by two MLP blocks as shown
+and vertical directions during policy training. We applied larger noise               in Fig. 4A. The MLP encoder embeds xt into a latent vector l¯t . The
+in the lateral direction to promote exploration along the ground surface.             command and robot states are not included in xt , so l¯t contains only
+    We use the PMTG architecture [34] to integrate a neural network to                the terrain- and contact-related features. We hypothesize that l¯t drives
+regulate the controller. Our implementation consists of four identical                adaptive behaviors such as changing foot clearance depending on the
+foot trajectory generators (FTGs) and a neural network policy. The                    terrain profile. Then l¯t and ot are provided to the subsequent MLP
+FTG is a function F (φ) : [0.0, 2π ) → R3 that outputs foot position                  layers to compute action.
+targets for each leg. The FTG drives vertical stepping motion when f i is                 The Trust Region Policy Optimization (TRPO) [36] algorithm is
+non-zero. The definition of F (φ) is given in supplementary section S3.               used for training. The hyperparameters we used are given in Table S7.
+    The policy outputs f i s and target foot position residuals (∆r f i ,T ),
+and the target foot position for the i-th foot is r f i ,T := F (φi ) + ∆r f i ,T .   Student policy
+    The tracking control is done using analytic inverse kinematics (IK)               The proprioceptive student policy only has access to ot . A key hypoth-
+and joint position control. Each foot position target defined in Hi is                esis here is that the latent features l¯t can be (partially) recovered from
+  Research Article                                                                                                                                ETH Zurich and Intel    9
+
+
+a time series of proprioceptive observations, ht , which is defined as                 where ξ refers to trajectories generated by π. This follows a definition
+ht := ot \ { f o , joint history, previous foot position targets}.                     of empirical traversability in prior work [44].
+    The student policy uses a temporal convolutional network                               The objective of our terrain generation method is to find c T s with
+(TCN) [22] encoder. The input to the TCN encoder is H =                                mid-range traversability (Tr (c T , π ) ∈ [0.5, 0.9]). The rationale is to
+{ht−1 , ..., ht− N −1 }, where N is the history length. The encoder is                 synthesize terrains that are neither too easy nor too difficult. We define
+fully convolutional and consists of three dilated causal convolutional                 terrain desirability as follows:
+layers, interleaved with strided convolutional layers that reduce dimen-
+                                                                                                      Td(c T , π ) := Pr( Tr (c T , π ) ∈ [0.5, 0.9])                     (4)
+sionality. The architecture is specified in Tables S5 and S6.
+    We use the TCN architecture because it affords transparent control                                                = Eξ ∼π { Tr (c T , π ) ∈ [0.5, 0.9]},              (5)
+over the input history length, can accommodate long histories, and is                  where 0.5 and 0.9 are fixed thresholds for minimum/maximum
+known to be robust to hyperparameter settings [22]. A comparison with                  traversability.
+a recurrent neural network architecture is provided in supplementary                       We use a particle filter to keep track of a distribution of high-
+section S8.                                                                            desirability c T s during training. We formulate a particle filtering prob-
+    The student policy is trained via supervised learning. The loss                    lem where we approximate the distribution of terrain parameters that
+function is defined as                                                                 satisfies Tr (c T , π ) ∈ [0.5, 0.9] with a finite set of sampling points
+       L := ( a¯t (ot , xt ) − at (ot , H ))2 + (l¯t (ot , xt ) − lt ( H ))2 .   (1)   (ckT ∈ C , k ∈ 1, · · · , Nparticle ). Our algorithm is modeled on the Se-
+                                                                                       quential Importance Resampling (SIR) particle filter. It is based on the
+Quantities marked by a bar (¯·) denote target values generated by the                  following assumptions.
+teacher. We employ the dataset aggregation strategy (DAgger) [38].
+                                                                                         1. Terrain parameters with similar Tr (·, π ) are close in Euclidean
+Specifically, training data is generated by rolling out trajectories by the
+                                                                                            distance in parameter space.
+student policy. For each visited state, the teacher policy computes its
+embedding and action vectors (¯·). These outputs of the teacher policy                   2. A policy trained over the terrains generated by c T s in some area
+are used as supervisory signals associated with the corresponding states.                   of C will learn to interpolate to nearby terrain parameters.
+The hyperparameters we used are given in Table S8.
+                                                                                         3. c T,0 , c T,1 , ... forms a Markov process,                     where c T,j   =
+Adaptive terrain curriculum                                                                                       N
+                                                                                            {c1T,j , c2T,j , ...c T,jparticle } at iteration j.
+Our method is inspired by automatic curriculum learning (ACL) for
+RL agents [25, 39]. The paired open-ended trailblazer (POET) ap-                       The first assumption comes from the insight that terrain parameters
+proach [25] generates diverse parameterized terrains for a 2D bipedal                  can be interpolated, e.g., the difficulty of a staircase increases as we
+agent. The method employs minimal criteria (MC) [24, 40] and aims                      increase the step height. The second assumption justifies the use of
+to choose environmental parameters that are neither too challenging                    discrete samples from C to train a policy that generalizes over a certain
+nor trivial for the agents: this is realized by selecting task parameters              region of C . The last assumption is necessary for formulating a particle
+that yield mid-range rewards. Florensa et al. [39] similarly choose                    filter.
+achievable yet difficult goals for RL agents.                                              The importance weight wk is defined for each ckT , and the set
+    Our method likewise realizes a training curriculum that gradually                  of tuples hckT , wk i approximates the target distribution (c T s with
+modifies a distribution over environmental parameters such that the                    Tr (c T , π ) ∈ [0.5, 0.9]). We define the measurement variable ykj such
+policy can continuously improve locomotion skills and generalize                       that ykj = 1 if Tr (ckT,j , π ) ∈ [0.5, 0.9]. Then the terrain desirability
+to new environments. Our work differs from POET as POET aims                           defined above becomes the measurement probability
+for open-ended search in the space of possible problems and evolves
+a population of specialized agents while we seek to obtain a single                        Pr(ykj |ckT,j ) = Pr( Tr (ckT,i , π ) ∈ [0.5, 0.9]) = Td(ckT,j , π ).          (6)
+generalist agent.                                                                      For practical implementation, the measurement probability is computed
+    Fig. 4B shows the types of terrains used in our training environment.              by the empirical expectation from the samples collected during policy
+Each terrain is generated by a parameter vector c T ∈ C . The terrains                 training:
+are described in detail in supplementary section S5. Our ACL method
+                                                                                                                          Ntraj 1( Tr ( ck , π ) ∈ [0.5, 0.9])
+approximates a distribution of desirable c T s using a particle filter.                                                                  T,j
+                                                                                                    Pr(ykj |ckT,j ) ≈ ∑                                            ,      (7)
+    We first describe how a given c T is evaluated in simulation. In-                                                                             Ntraj
+stead of directly using the reward function to evaluate the learning
+progress [25, 41–43], we evaluate c T s by the traversability of gener-                where Ntraj denotes the number of trajectories generated using ckT,j .
+ated terrains, which is defined as the success rate of traversing a terrain.           The trajectories are also used for policy training. Our method therefore
+We found traversability to be more intuitive than the reward function,                 does not require additional evaluation steps to advance the curriculum
+which consists of multiple objectives that are often unbounded. We                     of the terrain parameters. Resampling is done such that the probability
+first define a labeling function ν as                                                  of choosing the kth sample equals the normalized importance weight
+                                                                                               N
+                                (                                                      wk / ∑i particle wi ∈ [0, 1].
+                                  1 if v pr (st+1 ) > 0.2                                  The transition model is a random walk in C . Each parameter of a
+     ν ( s t , a t , s t +1 ) =                                         (2)
+                                  0 if v pr (st+1 ) < 0.2 ∨ termination                sampling point is shifted to its adjacent value by a fixed probability
+                                                                                       ptransition . It satisfies the third assumption (Markov process) because
+for a state transition from st to st+1 . v pr (st+1 ) stands for the inner
+                                                                                       the evolution of each parameter only relies on the current value and
+product of the base velocity and commanded direction at time step t + 1.
+                                                                                       randomly sampled noise. To improve exploration, we bounded and
+If π can locomote in the commanded direction faster than 0.2 m/s, we
+                                                                                       discretized C to reduce the search space. The initial samples (ckT,0 ) are
+consider the terrain traversable in this direction. The threshold is a
+                                                                                       either drawn uniformly from C or concentrated on almost flat terrains.
+hyperparameter; 0.2 m/s is about one third of the maximum speed of
+                                                                                           Implementation details and an overview of the training process
+our robot. Traversability is defined as
+                                                                                       are provided in supplementary section S2 and Algorithm S1 in the
+        Tr (c T , π ) = Eξ ∼π {ν(st , at , st+1 | c T )} ∈ [0.0, 1.0],           (3)   supplement.
+ Research Article                                                                                                                         ETH Zurich and Intel      10
+
+
+
+
+A command direction                                                                                                                       50 N external force
+
+
+
+
+                 Slope                                                Step                                                                Disturbance
+
+
+         TCN-1 (0.02 s)                       TCN-20 (0.4 s)                             TCN-100 (2.0 s)                                      Teacher
+B                                                                                             C                                           D
+                                                                                                                                                           35.5 %
+
+
+
+
+         TCN-20 without privileged training                                         TCN-20 with privileged training
+
+E                                                                          F                                             G
+
+
+
+
+         Teacher without adaptive curriculum                                             Teacher with adaptive curriculum
+
+H                                                                           I                 Mean reward                         J         Mean episode lengt h
+                                                                                  0.20                                            400
+
+
+                                                                         Reward                                    Tim e st eps
+                                                                                  0.15
+                                                                                                                                  200
+
+                                                                                  0.10
+                                                                                                                                      0
+                                                                                          0       2500      5000                            0      2500      5000
+                                                                                                  It erat ion                                      It erat ion
+
+Fig. 5. Ablation studies. We trained each model 5 times using different random seeds. Error bars denote 95 % confidence intervals. (A) Test
+setups. The robot is commanded to advance for 10 s in the specified direction (black arrow). We conducted 100 trials for each test. On the step
+test, a trial is considered successful if the robot traverses the step with both front and hind legs. Robots are initialized with random joint config-
+urations. Initial yaw angle is sampled from U (−π, π ) for the slope test and from U (−π/6, π/6) for the other tests. The friction coefficients
+between the feet and the ground are sampled from U (0.4, 1.0). The external force is applied for 5 s in the lateral direction. (B-D) Importance of
+memory length N in the TCN-N encoder. (E-G) Importance of privileged training. (F) Learning curves for the teacher (grey) and a TCN-20 stu-
+dent trained directly, without privileged training (red). For comparison, the blue line indicates the mean reward of a TCN-20 student trained with
+privileged training. The reward is computed by running each policy on uniformly sampled terrains. (H-J) Importance of the adaptive curriculum.
+   Research Article                                                                                                        ETH Zurich and Intel   11
+
+
+
+
+ A                                i                             ii                       iii                          iv                              v
+
+
+
+
+            16.8 cm
+
+B                                 i                             ii                       iii                          iv                              v
+
+
+
+
+C                step             flat terrain
+                                  i                             ii                      iii                          iv                           v
+
+                             FT                            FT
+
+
+Saliency
+                                                                             FT                           FT                          FT
+
+
+
+                Time(s)                          Time(s)              Time(s)                      Time(s)                            Time(s)
+
+D                                       at v
+                                                                     First collision                   Foot-trapping reflex
+                         command
+                        orientation
+                        base twist
+
+                   joint positions
+
+
+                  joint velocities
+
+ Channels
+             joint position errors
+
+
+                      Leg phases
+                 Leg frequencies
+                                                                     FT           i               ii           iii              iv                    v
+
+                                                                                       Time(s)
+
+Fig. 6. Analysis of the emergent foot-trapping reflex. FT denotes the first contact of the LF foot with the step (foot-trapping event). (A) The
+LF foot hits the step and then manifests higher foot clearance to overcome the step (ii-iv) in the following swing phase. (B) Reconstructed terrain
+information from TCN embeddings. Red ellipsoid: estimated terrain shape around the foot. The center of the ellipsoid refers to the estimated
+terrain elevation and the vertical length represents uncertainty (standard deviation). Black arrow: terrain normal at the in-contact foot. Red cone:
+uncertainty of normal estimation. Blue spheres: estimated in-contact feet. (C) Input saliency at different moments. The peaks show that the TCN
+policy attends to the foot-trapping (FT) that happened around 2.1 s. The orange curve (flat terrain) shows the saliency value computed on a flat
+terrain at similar gait phases. (D) Saliency map unrolled across input channels at 3.4 s. Red boxes refer to joint measurements from the LF leg at
+the moment it collides with the step.
+  Research Article                                                                                                            ETH Zurich and Intel     12
+
+
+Validation of the method                                                        Further analysis of emergent behavior
+We present ablation studies to justify each component of our approach:          Here we provide further analysis on how the proprioceptive policy
+(1) using a sequence model for the student policy, (2) privileged train-        adapts to different situations.
+ing, and (3) adaptive terrain curriculum.                                           To investigate how the proprioceptive policy perceives the environ-
+Memory in proprioceptive control
+                                                                                ment, we trained a decoder network which reconstructs the privileged
+                                                                                information xt ∈ X from the output of an intermediate layer of a
+We evaluate the importance of incorporating proprioceptive memory in            trained TCN policy. xt consists of information that is not directly
+the controller via the TCN architecture [22]. Let TCN-N denote a TCN            observable by the student policy such as contact states, terrain shape,
+with a receptive field of N time steps. The network architectures we            and external disturbances. For classification of foot contact states, we
+use are specified in detail in Table S5. We test controllers in diagnostic      employ a standard cross-entropy loss function. For regression of other
+settings designed to focus on specific capabilities. Specifically, we test      states, we predict both mean mi and standard deviation σi for each
+omnidirectional locomotion on sloped ground, traversal of a discrete            component and use a negative Gaussian log-likelihood loss to quantify
+step, and robustness to external disturbances (Fig. 5A).                        the uncertainty encoded in the TCN representation [45]:
+    Fig. 5B-D summarizes the importance of the memory length N.
+In these experiments, N is varied from 1 (corresponding to 20 ms                                                                   gt
+of memory) to 100 (2 s of proprioceptive memory). The latter is the                                                        ( m i − m i )2
+default setting used in our deployed controller.
+                                                                                          L=              ∑                      2σi2
+                                                                                                                                          + log(σi )    (8)
+                                                                                                i ∈dim( X \contact states)
+    As shown in Fig. 5B, memory length doesn’t have a strong effect in
+the uniform slope setting. Memory length does have a strong effect on
+the controller’s ability to traverse a step (Fig. 5B-C). Controllers with       with added weight decay. The superscript gt refers to the ground truth
+longer memory are able to handle higher steps. As shown in Fig. 5C,             generated in simulation. Note that the parameters of the policy network
+the failure rate of limited-memory controllers is particularly high when        are fixed during decoder training. Therefore, the decoder network is not
+the hind legs encounter the step. Controllers with longer memory also           used for policy training. It only provides insight into the information
+adapt hind leg trajectories to ensure higher foot clearances.                   encoded by the TCN policy after training.
+    Fig. 5D shows that controllers with longer memory are more robust                In Fig. 6, we provide snapshots of the foot-trapping reflex motion
+to external disturbances. We applied an external 50 N force laterally           (Fig. 6A) and the reconstructed privileged information. In Fig. 6B we
+to the base for 5 s during a straight walk and evaluated the resulting          show the reconstructed terrain geometry and foot contact state. When
+deviation from the intended locomotion direction. The deviation of the          the LF foot collides with the step, the estimated elevation in front of
+TCN-100 controller was 35.5 % lower than that of TCN-1.                         the front legs increases and its uncertainty grows (i+ii). The estimated
+                                                                                elevations and normal vectors adapt to the step during the foot-trapping
+Privileged training                                                             reflex (iii+iv). After the successful step-up, the terrain uncertainty
+We now assess the importance of privileged training. As a baseline,             remains elevated (v), indicating an anticipation of generally rough
+we train a TCN-20 policy directly, without the two-stage privileged             terrain. Additionally, the decoder network can detect foot contacts with
+training protocol. The policy is trained by TRPO [36] with the same             horizontal and vertical surfaces while successfully identifying frontal
+reward and hyperparameters that we use for teacher training. This               collision as such, as indicated by the estimated terrain normal vector (i +
+baseline is compared to the same TCN-20 architecture trained via                iii). The ability to reconstruct explicit environmental information from
+privileged learning.                                                            the encoding of the proprioceptive history is a strong indicator that the
+    The results are summarized in Fig. 5E-G. Fig. 5E shows that the             TCN policy learns to build an internal representation of the environment
+baseline fails the diagnostic tests: it is incapable of locomoting on a         and uses it for decision making. We provide more examples of the
+slope or traversing a step. Fig. 5F shows that the baseline does not reach      reconstructed privileged information in supplementary section S7.
+comparable reward during training as the teacher MLP architecture                    We then analyse how the proprioceptive policy leverages past ob-
+with privileged information or the proprioceptive TCN-20 architecture           servations. We compute the saliency map of the input H ∈ R60× N ,
+(same as the baseline, no privileged information) trained via privileged        and visualize the sensitivity of the policy to each element of the input
+learning. Fig. 5G shows the mean episode length during training, which          while overcoming the step [46]. Each column of H is a proprioceptive
+indicates that the baseline fails to learn to balance and locomote.             measurement h ∈ R60 , and we stack N measurements (history length
+                                                                                = 0.02 s × N). We define the saliency value for the i-th measurement
+Adaptive terrain curriculum                                                     (i ∈ [0, N ]) as
+We now evaluate the effect of the adaptive terrain curriculum on teacher
+training. Terrains used for training (specifically, hills, steps, and stairs)
+are shown in Fig. 4B. As a baseline, we trained a teacher using ran-                          Mi =       ∑        (|d((r f ,T )z )/dHi,j |) ∈ R,        (9)
+                                                                                                     j∈channels
+domly generated terrains that are uniformly sampled from C as speci-
+fied in Table S2. The success rates on the testing terrains are signifi-
+cantly lower when trained without the adaptive curriculum, as shown in              where (r f ,T )z refers to the height command for the foot f . We
+Fig. 5H. Fig. 5I shows that a teacher trained without adaptive curricu-         computed the value for (r f ,T )z because we are interested in the change
+lum plateaus at a lower reward level. Throughout the training process,          in foot clearance. Mi can be interpreted as the sensitivity of the output
+the mean episode length is shorter for the model being trained without          to the ith measurement. As we use 1D convolution over time, the
+adaptive curriculum (Fig. 5J). This is because uniform sampling is              output is in R N , i.e., each row of H is regarded as a channel.
+more likely to draw terrains that cannot be successfully traversed by               In Fig. 6C we can see that the saliency value at the foot-trapping
+the policy being trained. On these terrains, the policy fails early and         event (FT) is kept high while stepping up. The policy has direct access
+receives less training signal as a result. The adaptive curriculum modu-        to the measurements at the moment of foot-trapping, and leverages this
+lates the difficulty of sampled terrains so as to maximize the didactic         in the following swing phase. This is highlighted by the red boxes in
+benefit of each episode. We provide an additional evaluation of the             Fig. 6D. The policy attends to the LF leg joint states measured at the
+adaptive curriculum in supplementary section S6.                                foot-trapping event.
+     Research Article                                                                                                            ETH Zurich and Intel        13
+
+
+5. ACKNOWLEDGMENTS                                                                        event-based locomotion in unstructured terrains, 2018 IEEE Interna-
+                                                                                          tional Conference on Robotics and Automation (ICRA) (IEEE, 2018).
+Funding The project was funded, in part, by the Intel Network on                    3.    M. Focchi, R. Orsolino, M. Camurri, V. Barasuol, C. Mastalli, D. G.
+Intelligent Systems, the Swiss National Science Foundation (SNF)                          Caldwell, C. Semini. Heuristic planning for rough terrain locomotion
+through the National Centre of Competence in Research Robotics,                           in presence of external disturbances and variable perception quality.
+the European Research Council (ERC) under the European Union’s                            Advances in Robotics Research: From Lab to Market (Springer, 2020),
+Horizon 2020 research and innovation programme grant agreement                            165–209.
+No 852044 and No 780883. The work has been conducted as part                        4.    J. Reher, W. Ma, A. D. Ames, Dynamic walking with compliance on a
+of ANYmal Research, a community to advance legged robotics. Au-                           Cassie bipedal robot, European Control Conference, 2589–2595 (IEEE,
+thor contribution J.L formulated the main idea of the training and                        2019).
+                                                                                    5.    Y. Gong, R. Hartley, X. Da, A. Hereid, O. Harib, J. Huang, J. W. Grizzle,
+control methods, implemented the controller, set up the simulation,
+                                                                                          Feedback control of a Cassie bipedal robot: Walking, standing, and
+and trained control policies. J.L performed the indoor experiments.
+                                                                                          riding a Segway, American Control Conference, 4559–4566 (IEEE,
+J.H contributed in setting up the simulation. J.L and L.W performed                       2019).
+outdoor experiments together. J.L, J.H, L.W, M.H, and V.K re-                       6.    J. Hwangbo, C. D. Bellicoso, P. Fankhauser, M. Huttery, Probabilistic
+fined ideas, contributed in the experiment design and analyzed the                        foot contact estimation by fusing information from dynamics and differ-
+data. Conflict of interest The authors declare that they have no                          ential/forward kinematics, 2016 IEEE/RSJ International Conference on
+competing interests. Data and materials availability All (other)                          Intelligent Robots and Systems (IROS), 3872–3878 (IEEE, 2016).
+data needed to evaluate the conclusions in the paper are present in                 7.    M. Camurri, M. Fallon, S. Bazeille, A. Radulescu, V. Barasuol, D. G.
+the paper or the Supplementary Materials. Other materials can be                          Caldwell, C. Semini, Probabilistic contact estimation and impact de-
+found at https://github.com/leggedrobotics/learning_quadrupedal_                          tection for state estimation of quadruped robots, IEEE Robotics and
+locomotion_over_challenging_terrain_supplementary.                                        Automation Letters 1023–1030 (2017).
+                                                                                    8.    M. Focchi, V. Barasuol, M. Frigerio, D. G. Caldwell, C. Semini. Slip de-
+                                                                                          tection and recovery for quadruped robots. Robotics Research (Springer,
+SUPPLEMENTARY MATERIALS                                                                   2018), 185–199.
+                                                                                    9.    M. Blösch, C. Gehring, P. Fankhauser, M. Hutter, M. A. Hoepflinger,
+Section S1.   Nomenclature                                                                R. Siegwart, State estimation for legged robots on unstable and slippery
+Section S2.   Implementation details                                                      terrain, 2013 IEEE/RSJ International Conference on Intelligent Robots
+Section S3.   Foot trajectory generator                                                   and Systems, 6058–6064 (IEEE, 2013).
+Section S4.   Reward function for teacher policy training                           10.   C. Gehring, C. D. Bellicoso, S. Coros, M. Bloesch, P. Fankhauser,
+Section S5.   Parameterized terrains                                                      M. Hutter, R. Siegwart, Dynamic trotting on slopes for quadrupedal
+Section S6.   Qualitative evaluation of the adaptive terrain curriculum                   robots, 2015 IEEE/RSJ International Conference on Intelligent Robots
+Section S7.   Reconstruction of the privileged information                                and Systems (IROS), 5129–5135 (IEEE, 2015).
+             in different situations                                                11.   R. Hartley, J. Mangelson, L. Gan, M. G. Jadidi, J. M. Walls, R. M. Eu-
+                                                                                          stice, J. W. Grizzle, Legged robot state-estimation through combined
+Section S8. Recurrent neural network student policy
+                                                                                          forward kinematic and preintegrated contact factors, 2018 IEEE Inter-
+Section S9. Ablation of the latent representation loss for student                        national Conference on Robotics and Automation (ICRA), 1–8 (IEEE,
+             training                                                                     2018).
+Algorithm S1. Teacher training with automatic terrain curriculum                    12.   J. Hwangbo, J. Lee, A. Dosovitskiy, D. Bellicoso, V. Tsounis, V. Koltun,
+Figure S1.    Illustration of the adaptive curriculum.                                    M. Hutter, Learning agile and dynamic motor skills for legged robots,
+Figure S2.    Reconstructed privileged information in different                           Science Robotics p. eaau5872 (2019).
+             situations.                                                            13.   T. Haarnoja, S. Ha, A. Zhou, J. Tan, G. Tucker, S. Levine, Learning to
+Figure S3.    Comparison of neural network architectures for the                          walk via deep reinforcement learning, Robotics: Science and Systems
+             proprioceptive controller                                                    (2019).
+Table S1.     Computation time for training                                         14.   Z. Xie, P. Clary, J. Dao, P. Morais, J. Hurst, M. van de Panne, Learning
+                                                                                          locomotion skills for Cassie: Iterative design and sim-to-real, Confer-
+Table S2.     Parameter spaces C for simulated terrains
+                                                                                          ence on Robot Learning (2019).
+Table S3.     Hyperparameters for automatic terrain curriculum
+                                                                                    15.   J. Lee, J. Hwangbo, M. Hutter, Robust recovery controller
+Table S4.     State representation for proprioceptive controller and                      for a quadrupedal robot using deep reinforcement learning,
+             the privileged information                                                   arXiv:1901.07517 (2019).
+Table S5.     Neural network architectures                                          16.   J. Tan, T. Zhang, E. Coumans, A. Iscen, Y. Bai, D. Hafner, S. Bohez,
+Table S6.     Network parameter settings and the training time for                        V. Vanhoucke, Sim-to-real: Learning agile locomotion for quadruped
+             student policies                                                             robots, Robotics: Science and Systems (2018).
+Table S7.     Hyperparameters for teacher policy training                           17.   Y. Yang, K. Caluwaerts, A. Iscen, T. Zhang, J. Tan, V. Sindhwani, Data
+Table S8.     Hyperparameters for student policy training                                 efficient reinforcement learning for legged robots, Conference on Robot
+Table S9.     Hyperparameters for decoder training                                        Learning (2019).
+Movie S1.     Deployment in a forest                                                18.   S. Ha, P. Xu, Z. Tan, S. Levine, J. Tan, Learning to walk in the real
+                                                                                          world with minimal human effort, arXiv:2002.08550 (2020).
+Movie S2.     Locomotion over unstable debris
+                                                                                    19.   X. B. Peng, E. Coumans, T. Zhang, T.-W. Lee, J. Tan, S. Levine,
+Movie S3.     Step experiment                                                             Learning agile robotic locomotion skills by imitating animals,
+Movie S4.     Payload experiment                                                          arXiv:2004.00784 (2020).
+Movie S5.     Foot slippage experiment                                              20.   M. Hutter, C. Gehring, D. Jud, A. Lauber, C. D. Bellicoso, V. Tsou-
+                                                                                          nis, J. Hwangbo, K. Bodie, P. Fankhauser, M. Bloesch, R. Diethelm,
+                                                                                          S. Bachmann, A. Melzer, M. A. Höpflinger, ANYmal - a highly mobile
+REFERENCES
+                                                                                          and dynamic quadrupedal robot, IEEE/RSJ International Conference on
+1.      F. Jenelten, J. Hwangbo, F. Tresoldi, C. D. Bellicoso, M. Hutter, Dynamic         Intelligent Robots and Systems, 38–44 (IEEE, 2016).
+        locomotion on slippery ground, IEEE Robotics and Automation Letters         21.   X. B. Peng, M. Andrychowicz, W. Zaremba, P. Abbeel, Sim-to-real trans-
+        4170–4176 (2019).                                                                 fer of robotic control with dynamics randomization, IEEE International
+2.      G. Bledt, P. M. Wensing, S. Ingersoll, S. Kim, Contact model fusion for
+  Research Article                                                                                                               ETH Zurich and Intel         14
+
+
+    Conference on Robotics and Automation (ICRA) (IEEE, 2018).                         arXiv:1312.6034 (2013).
+22. S. Bai, J. Z. Kolter, V. Koltun, An empirical evaluation of generic convolu-   47. G. A. Pratt, M. M. Williamson, Series elastic actuators, IEEE/RSJ
+    tional and recurrent networks for sequence modeling, arXiv:1803.01271              International Conference on Intelligent Robots and Systems, 399–406
+    (2018).                                                                            (1995).
+23. D. Chen, B. Zhou, V. Koltun, P. Krähenbühl, Learning by cheating,              48. R. M. Smelik, K. J. De Kraker, T. Tutenel, R. Bidarra, S. A. Groenewe-
+    Conference on Robot Learning (2019).                                               gen, A survey of procedural methods for terrain modelling, Proceedings
+24. J. C. Brant, K. O. Stanley, Minimal criterion coevolution: a new ap-                 of the CASA Workshop on 3D Advanced Media In Gaming And Simulation
+    proach to open-ended search, Genetic and Evolutionary Computation                    (3AMIGAS), 25–34 (2009).
+    Conference, 67–74 (2017).                                                      49.   A. Lagae, S. Lefebvre, R. Cook, T. DeRose, G. Drettakis, D. S. Ebert,
+25. R. Wang, J. Lehman, J. Clune, K. O. Stanley, Paired open-ended trail-                J. P. Lewis, K. Perlin, M. Zwicker, A survey of procedural noise functions,
+    blazer (poet): Endlessly generating increasingly complex and diverse                 Computer Graphics Forum, 2579–2600 (Wiley Online Library, 2010).
+    learning environments and their solutions, arXiv:1901.01753 (2019).            50.   J. Chung, C. Gulcehre, K. Cho, Y. Bengio, Empirical evaluation of gated
+26. C. D. Bellicoso, F. Jenelten, C. Gehring, M. Hutter, Dynamic locomotion              recurrent neural networks on sequence modeling, arXiv:1412.3555
+    through online nonlinear motion optimization for quadrupedal robots,                 (2014).
+    IEEE Robotics and Automation Letters 2261–2268 (2018).                         51.   R. J. Williams, J. Peng, An efficient gradient-based algorithm for on-line
+27. P. Fankhauser, M. Bloesch, C. Gehring, M. Hutter, R. Siegwart. Robot-                training of recurrent network trajectories, Neural Computation 490–501
+    centric elevation mapping with uncertainty estimates. Mobile Service                 (1990).
+    Robotics (World Scientific, 2014), 433–440.                                    52.   D. P. Kingma, J. Ba, Adam: A method for stochastic optimization,
+28. S. Collins, A. Ruina, R. Tedrake, M. Wisse, Efficient bipedal robots                 International Conference on Learning Representations (2015).
+    based on passive-dynamic walkers, Science 1082–1085 (2005).
+29. Ghost Robotics, Vision 60: Latest blind-mode stress testing of V60
+    legged robot, www.youtube.com/watch?v=tQsLauQWp8M (2019).
+30. J. Hwangbo, J. Lee, M. Hutter, Per-contact iteration method for solv-
+    ing contact dynamics, IEEE Robotics and Automation Letters 895–902
+    (2018).
+31. E. Coumans, others, Bullet physics library, Open source: bulletphysics.
+    org (2013).
+32. R. Smith, others, Open dynamics engine, Open source: ode.org (2005).
+33. R. M. Alexander, Principles of Animal Locomotion (Princeton University
+    Press, 2003).
+34. A. Iscen, K. Caluwaerts, J. Tan, T. Zhang, E. Coumans, V. Sindhwani,
+    V. Vanhoucke, Policies modulating trajectory generators, Conference on
+    Robot Learning, 916–926 (2018).
+35. V. Barasuol, J. Buchli, C. Semini, M. Frigerio, E. R. De Pieri, D. G.
+    Caldwell, A reactive controller framework for quadrupedal locomotion
+    on challenging terrain, 2013 IEEE International Conference on Robotics
+    and Automation, 2554–2561 (IEEE, 2013).
+36. J. Schulman, S. Levine, P. Abbeel, M. Jordan, P. Moritz, Trust re-
+    gion policy optimization, International Conference on Machine Learning,
+    1889–1897 (2015).
+37. M. Bloesch, M. Hutter, M. A. Hoepflinger, S. Leutenegger, C. Gehring,
+    C. D. Remy, R. Siegwart, State estimation for legged robots-consistent
+    fusion of leg kinematics and imu, Robotics 17–24 (2013).
+38. S. Ross, G. Gordon, D. Bagnell, A reduction of imitation learning
+    and structured prediction to no-regret online learning, International
+    Conference on Artificial Intelligence and Statistics, 627–635 (2011).
+39. C. Florensa, D. Held, X. Geng, P. Abbeel, Automatic goal generation
+    for reinforcement learning agents, International Conference on Machine
+    Learning, 1514–1523 (2018).
+40. J. Lehman, K. O. Stanley, Revising the evolutionary computation ab-
+    straction: minimal criteria novelty search, Genetic and Evolutionary
+    Computation Conference, 103–110 (2010).
+41. T. Matiisen, A. Oliver, T. Cohen, J. Schulman, Teacher-student curricu-
+    lum learning, IEEE transactions on neural networks and learning systems
+    (2019).
+42. W. Yu, G. Turk, C. K. Liu, Learning symmetric and low-energy locomo-
+    tion, ACM Transactions on Graphics (TOG) p. 144 (2018).
+43. I. Akkaya, M. Andrychowicz, M. Chociej, M. Litwin, B. McGrew,
+    A. Petron, A. Paino, M. Plappert, G. Powell, R. Ribas, others, Solving
+    rubik’s cube with a robot hand, arXiv:1910.07113 (2019).
+44. R. O. Chavez-Garcia, J. Guzzi, L. M. Gambardella, A. Giusti, Learning
+    ground traversability from simulations, IEEE Robotics and Automation
+    Letters 1695–1702 (2018).
+45. A. Kendall, Y. Gal, What uncertainties do we need in bayesian deep
+    learning for computer vision?, Advances in neural information processing
+    systems, 5574–5584 (2017).
+46. K. Simonyan, A. Vedaldi, A. Zisserman, Deep inside convolutional
+    networks: Visualising image classification models and saliency maps,
+ Research Article                                                                                                                   ETH Zurich and Intel         15
+
+
+SUPPLEMENTARY MATERIALS                                                                  The neural network policy runs at 400 Hz on an onboard CPU (Intel
+                                                                                      i7-5600U, 2.6 – 3.2GHz, dual-core 64-bit) integrated into the robot.
+S1. Nomenclature
+                                                                                      The Tensorflow C++ API is used for onboard inference.
+    ˆ
+   (·)      normalized vector
+    ˙
+   (·)      first derivative                                                          Algorithm S1. Teacher training with automatic terrain curriculum
+    ¯
+   (·)      teacher’s quantity                                                         1: Initialize a replay memory, Sample Nparticle c T,0 s uniformly from
+  (·)T      target quantity                                                                 C (Table S2), i, j = 0.
+  C v       linear velocity of B frame with respect to A frame
+  AB                                                                                   2: repeat
+           ėxpressed in C frame                                                       3:      for 0 ≤ k ≤ Nevaluate do
+   cT       terrain parameter vector                                                   4:          for 0 ≤ l ≤ Nparticle do
+    ω       angular velocity                                                           5:              for 0 ≤ m ≤ Ntraj do
+    τ       joint torque
+                                                                                       6:                  Generate terrain using clT,j
+     θ      joint angle
+    ψ       yaw angle                                                                  7:                  Initialize robot at random position
+    φ       leg phase                                                                  8:                  Run policy πi
+     f      leg frequency                                                              9:                  Compute traverability label for each
+   rf       linear position of a foot                                                                       state transition (Eq. 2)
+    eg      gravity vector                                                            10:                  Save the scores and the trajectory
+    H       horizontal frame                                                          11:          Update policy using TRPO [36]
+    gi      gap function of the i-th possible contact pair                            12:          i = i+1
+    Ic      index set of all contacts                                                 13:      for 0 ≤ l ≤ Nparticle do
+ Ic,body index set of body contacts                                                   14:          Compute measurement probability for each
+ Ic, f oot index set of foot contacts                                                                parameter clT,j s (Eq. 9)
+ Iswing index set of swing legs                                                       15:      for 0 ≤ l ≤ Nparticle do
+   |·|      cardinality of a set or l1 norm                                                                                    P(yl |cl )
+  ||·|| l2 norm                                                                       16:          Update weights w j = ∑ P(iymT,j
+                                                                                                                               |cm )
+                                                                                                                               m    i   T,j
+
+                                                                                      17:    Resample Nparticle parameters
+S2. Implementation details                                                            18:    Append c T,j s to the replay memory
+The RaiSim simulator [30] is used for rigid-body and contact dynamics                 19:    for 0 ≤ l ≤ Nparticle do
+simulation. The actuator networks [12] are trained for each robot to                  20:        by preplay probability, sample from replay memory
+simulate Series Elastic Actuators (SEA) [47] at the joint. The input to               21:        by ptransition probability, move clT,j to an adjacent value
+the actuator model is a 6-dimensional real-valued vector consisting of                            in C .
+the joint position error and velocity at current time step t and two past             22:    j = j+1
+states corresponding to t − 0.01 s and t − 0.02 s. The feature selection              23: until Convergence
+is done as in [12].
+    As several studies have shown that randomization of dynamic prop-
+erties improves the robustness of the policy [12, 16], we also random-                S3. Foot trajectory generator
+ized several physical quantities, and the teacher policy has access to
+                                                                                      The foot trajectory is defined as
+these values during training. We applied disturbances, randomized                                 
+                                                                                                             3     2    Hi
+friction coefficients between the feet and the terrain, and additive noise                        (h(−2k + 3k ) − 0.5) z
+                                                                                                                                                 k ∈ [0, 1]
+to the observations during training.                                                   F (φi ) = (h(2k3 − 9k2 + 12k − 4) − 0.5) Hi z              k ∈ [1, 2]     (11)
+    The training process for the teacher policy is depicted in Algo-
+                                                                                                    −0.5 Hi z
+                                                                                                  
+                                                                                                                                                  otherwise,
+                                                                                                  
+rithm S1. Hyperparameters are given in Table S3. In our implementa-
+tion of the terrain curriculum, we update the curriculum every Nevaluate              where k = 2(φi − π )/π and h is a parameter for the maximum foot
+policy iterations to reduce variance. We assume that within Nevaluate                 height. Each segment during the swing phase (k ∈ [0, 2)) is a cubic
+iterations, the performance of the policy is similar. With the slower                 Hermite spline connecting the highest and lowest points with a zero
+update rate, the measurement probability of Eq.6 becomes                              first derivative at the connecting points. Other periodic functions such
+                          Nevaluate Ntraj 1( Tr ( ck , π ) ∈ [0.5, 0.9])
+                                                                                      as hi sin(φi ) can be used for the FTG. With a set of reasonably tuned
+                                                   T,j
+      Pr(ykj |ckT,j ) ≈     ∑ ∑                Ntraj Nevaluate
+                                                                           .   (10)    f 0 , h and φi,0 , a quadruped can stably step in place. In our setting, f 0
+                                                                                      = 1.25, h = 0.2 m, and φi,0 are sampled from U (0, 2π ).
+Additionally, we leverage replay memory to prevent degeneration of
+                                                                                      S4. Reward function for teacher policy training
+the particle filter and to avoid catastrophic forgetting.
+    The controller is implemented with a state machine to switch be-                  The reward function is defined as 0.05rlv + 0.05r av + 0.04rb +
+tween the “standing still” state and the locomotion state. We set the                 0.01r f c + 0.02rbc + 0.025rs + 2 · 10−5 rτ . The individual terms are
+base frequency f 0 to zero when the zero command is given for 0.5 s,                  defined as follows.
+which stops FTGs, and the robot stands still on the terrain. f 0 is set                  • Linear Velocity Reward (rlv ): This term maximizes the v pr =
+to 1.25 Hz when the direction command is given or the linear velocity                      ( BIB v) xy · ( BIB v̂ T ) xy , which is the base linear velocity projected
+of the base exceeds 0.3 m/s for the disturbance rejection. The state                       onto the command direction.
+machine is included in the training environment.                                                          
+                                                                                                                                         2
+    During the deployment, the base velocity and orientation are esti-                                    exp (−2.0(v pr − 0.6) ) v pr < 0.6
+                                                                                                          
+mated by the state estimator that relies on inertial measurements and                            rlv := 1.0                                   v pr ≥ 0.6      .   (12)
+                                                                                                          
+leg kinematics [37].                                                                                      
+                                                                                                              0.0                             zero command
+ Research Article                                                                                                                        ETH Zurich and Intel          16
+
+
+     The velocity threshold is defined as 0.6 m/s which is the maximum                     • The Steps terrain consists of square steps of random height. For
+     speed reachable on the flat terrain with the existing controller [26].                  every c T,1 by c T,1 blocks, the height is sampled from U (0, c T,2 ).
+                                                                                             A policy experiences discrete elevation changes and foot-trapping
+   • Angular Velocity Reward (r av ): We motivate the agent to turn as                       on this terrain.
+     fast as possible along the base z-axis when ( BIB ω̂T )z is nonzero.
+     It is defined as                                                                      • The Stairs terrain is a staircase with fixed width and height. The
+                    (                                                                        robot is initialized at the flat segment in the middle of the staircase
+                      exp (−1.5(ω pr − 0.6)2 ) ω pr < 0.6
+            r av :=                                           ,     (13)                     (see Fig. 4B).
+                      1.0                      ω pr ≥ 0.6
+                                                                                        The ranges are defined considering the kinematics of the robot, e.g., a
+     where ω pr = ( BIB ω )z · ( BIB ω̂T )z .                                           step height should be lower than leg length. During training, the terrain
+                                                                                        is regenerated every episode with a different random seed.
+   • Base Motion Reward (rb ): This term penalizes the velocity or-
+     thogonal to the target direction and the roll and pitch rates such                 S6. Qualitative evaluation of the adaptive terrain curriculum
+     that the base is stable during the locomotion.
+                                                                                        The behavior of adaptive curriculum is illustrated in Fig. S1. Fig. S1A-
+               rb := exp(−1.5v2o ) + exp(−1.5||( BIB ω ) xy ||2 )                (14)   C focuses on the Hills terrain type. There are three parameters for this
+                                                                                        terrain: roughness, frequency, and amplitude. The relationship between
+     where vo = ||( BIB v) xy − v pr · ( BIB v̂ T ) xy ||. When the stop com-           traversability (Eq. 3) and desirability (Eq. 4) is illustrated in Fig. S1A-
+     mand is given, vo is replaced by || BIB v||.                                       B. Undesirable terrains are either too easy or too difficult, as shown
+                                                                                        in the leftmost and rightmost panels of Fig. S1A. Fig. S1B-C shows
+   • Foot Clearance Reward (r f c ): When a leg is in swing phase, i.e.,                that the particle filter fits the latent distribution of desirable terrains,
+     φi ∈ [π, 2π ), the robot should lift the corresponding foot higher                 which has a bow shape in the frequency-amplitude marginal (middle).
+     than the surroundings to avoid collision. We first define the set of               Fig. S1D focuses on the Stairs terrain type and shows the evolution of
+     such collision-free feet as Fclear = {i : r f ,i > max ( Hscan,i ), i ∈            terrain parameters during training. The particle filter rejects parameters
+     Iswing }, where Hscan,i is the set of scanned heights around the                   that represent short and steep steps (upper-left area). The curriculum
+     i-th foot. Then the clearance cost is defined as                                   initially focuses on wide and shallow steps (middle panels, particularly
+                                                                                        Iter. 50-60), and then broadens the distribution to include narrower
+               r f c :=     ∑ (1F       clear
+                                                (i )/| Iswing |) ∈ [0.0, 1.0].   (15)   steps (rightmost panels).
+                          i ∈ Iswing
+
+                                                                                        S7. Reconstruction of the privileged information in different
+   • Body Collision Reward (rbc ): We want to penalize undesirable                      situations
+     contact between the robot’s body parts and the terrain to avoid
+                                                                                        In Fig. S2, we provide the decoded privileged information in different
+     hardware damage.
+                                                                                        situations. Fig. S2A shows the estimated friction coefficient between
+                                rbc := −| Ic,body \ Ic, f oot |.                 (16)   the feet and the terrain when traversing a wet, slippery whiteboard,
+                                                                                        as shown in Movie S5. The estimate decreases as soon as the first
+   • Target Smoothness Reward (rs ): The magnitude of the second or-                    foot starts slipping (i), remains low throughout the traversal (ii) and
+     der finite difference derivatives of the target foot positions are pe-             increases about 2 s after the robot returns to normal ground (iii). The
+     nalized such that the generated foot trajectories become smoother.                 external disturbance and terrain information can also be reconstructed
+                                                                                        from the TCN embedding. As shown in Fig. S2B, the decoder detects
+                 rs := −||(r f ,d )t − 2(r f ,d )t−1 + (r f ,d )t−2 ||.          (17)   downward external force when an unknown 10 kg payload is applied.
+                                                                                        While traversing dense vegetation as shown in Fig. S2C, it detects a
+   • Torque Reward (rτ ): We penalize the joint torques to prevent                      force opposite the motion direction, which makes the policy to counter-
+     damaging joint actuators during the deployment and to reduce                       act and push through the vegetation. The uncertainty of the elevation
+     energy consumption (τ ∝ electric current).                                         estimates are notably high in the natural terrains shown in Fig. S2C and
+                                                                                        Fig. S2D, which indicates that the TCN policy encodes the roughness
+                                  rτ := − ∑i∈ joints |τi |.                      (18)   of the terrain.
+
+S5. Parameterized terrains                                                              S8. Recurrent neural network student policy
+It is important to generate training environments that can pose rep-                    We use the TCN architecture for the proprioceptive policy [22]. For
+resentative challenges such as foot slippage and foot-trapping. To                      comparison, we also evaluated a recurrent network with gated recurrent
+efficiently synthesize random terrains, we use procedural generation                    units (GRU) [50]. The architectures are specified in Tables S5 and S6.
+techniques [48]. This method allows us to generate a large number                       The loss function for training a GRU student policy is defined as
+of different terrains by changing a set of terrain parameters c T ∈ C .
+In the following, we describe the three terrain generators used in this                          L := ( a¯t (ot , xt ) − at (ot ))2 + (l¯t (ot , xt ) − lt (ot ))2 .   (19)
+work. See Fig. 4B for a visualization of the terrains and Table S2 for
+the definition of parameter spaces C .                                                  To improve the performance and computational efficiency of the train-
+                                                                                        ing, we have implemented Truncated Backpropagation Though Time
+   • The Hills terrain is based on Perlin noise [49]. The terrain is                    (Truncated BPTT) [51].
+     generated via three parameters: roughness, frequency of the Perlin                     Performance on the diagnostic settings presented in Fig. 5A is given
+     noise, and amplitude of the Perlin noise. The height of each                       in Fig. S3. Overall, the performance of the GRU-based controller is
+     element of the output height map hm is defined as hm[i, j] :=                      between that of TCN-20 and TCN-100. The performance is comparable
+     Perlin(c T,2 , c T,3 )[i, j] + U (−c T,1 , c T,1 ). A policy experiences           to TCN-100 in the slope setting, but the GRU-based controller fails to
+     smooth slopes and foot slippage on this terrain during training.                   achieve the performance of TCN-100 in step experiments.
+ Research Article                                                           ETH Zurich and Intel   17
+
+
+    The chief advantage of the TCN is in training efficiency. The
+training time for the TCN is much faster in comparison to the GRU.
+The computation times are reported in Table S1.
+
+S9. Ablation of the latent representation loss for student train-
+ing
+We examine the effect of the second term in the loss function for student
+policy training presented in Eq. 1, which is a squared error loss for
+the latent vector lt . As a baseline, we train a student policy using the
+following loss function:
+
+                    L := ( a¯t (ot , xt ) − at (ot , H ))2 ,        (20)
+
+which simply imitates the output of the teacher.
+    The result is reported in Fig. S3 as ‘TCN-100 naive IL’. The perfor-
+mance is comparable in the uniform slope setting and under external
+disturbances. On the other hand, the ablated version has lower success
+rates on steps.
+ Research Article                                                                                                        ETH Zurich and Intel                  18
+
+
+
+
+                        A
+                        i                          ii                      iii                          iv
+
+
+
+
+                               Roughness=0.02             Roughtness=0.15               Roughness=0.15          Roughness=0.15
+                                 Frequency=0.1               Frequency=0.3                Frequency=1.2          Frequency=1.2
+                                 Amplitude=2.0               Amplitude=2.0                Amplitude=0.5           Amplitude=2.0
+                            Traversability= 0.91        Traversability= 0.56         Traversability= 0.67    Traversability=0.15
+
+
+                        B
+                                                                                                                          0.6
+
+
+
+
+                                                                                                                                        Terrain desirability
+                                                                    ii         iv
+                                                                                                                          0.4
+
+
+                                                                               iii                                        0.2
+                                   i
+
+
+
+
+                        C
+                                                                                                                          6
+
+
+
+
+                                                                                                                                Number of samples
+                                                                                                                          18
+                                                                                                                          30
+                                                                                                                          42
+                                                                                                                          54
+                                                                                                                          66
+
+
+
+
+                        D           Stair parmeters generated by particle fiter during training
+
+
+
+
+                                                                                                                                Number of samples
+
+
+
+
+Fig. S1. Illustration of the adaptive curriculum. (A) Examples of Hills terrains. The color bar indicates desirability; dark blue represents low
+desirability. (B) Terrain desirability estimated from 1000 trajectories generated by a fully trained teacher policy. The red crosses correspond to
+the examples presented in A. (C) The distribution of terrain profiles sampled by the particle filter during the last 100 iterations of teacher training.
+(D) Evolution of Stairs terrain parameters during training.
+ Research Article                                                                                                      ETH Zurich and Intel      19
+
+
+
+                       A                                  i                                    ii                          iii
+
+
+
+
+                                                              Estimated friction coefficient
+
+
+
+
+                        Friction coeff.
+                                                  i               ii             iii
+                                                                          Time
+                       B                                      C        command                      D     command
+                                          10 kg payload
+
+
+
+
+                                             80.1 N
+
+
+
+
+Fig. S2. Reconstructed privileged information in different situations. (A) Estimated friction coefficient between the feet and the terrain
+while traversing a wet whiteboard. The shaded area denotes 95 % confidence interval. (B-D) Reconstruction of the external disturbance and
+terrain information in different scenarios. Blue arrow: estimated external force applied to the torso. Red ellipsoid: estimated terrain shape around
+the foot. The center of the ellipsoid refers to the estimated terrain elevation and the vertical length represents uncertainty (1 standard deviation).
+For each foot, 8 ellipsoids are symmetrically placed along a circle with 10 cm radius. Black arrow: terrain normal at the in-contact foot.
+
+
+
+
+                                                                                                        TCN-1
+                                                                                                        TCN-20
+                                                                                                        TCN-100
+                                                                                                        TCN-100
+                                                                                                        Naive IL
+                                                                                                        GRU
+                                                                                                        Teacher
+
+
+
+
+Fig. S3. Comparison of neural network architectures for the proprioceptive controller. We trained each model 5 times using different ran-
+dom seeds. The error bars denote 95% confidence intervals. ‘TCN-100 naive IL’ denotes the TCN-100 network trained using a naive imitation
+learning method without the latent representation loss (Eq. 19).
+ Research Article                                                                                                                ETH Zurich and Intel   20
+
+
+
+
+                                                                     Name                   Time
+                                                           Teacher policy training        ≈ 12 hrs
+                                                           Student policy training         ≈ 4 hrs
+                                                        Adaptive terrain curriculum         2.9 s
+
+Table S1. Computation time for training. The TCN-100 architecture is used for the student policy. The training is conducted on a desktop
+machine with i7-8700K CPU and a Geforce RTX 2080 GPU.
+
+
+
+
+                                     Terrain         grid size     friction coefficient   parameters (c T )          range
+                                                                                          roughness (m)            [0.0, 0.05]
+                                      Hills            0.2 m          N (0.7, 0.2)           frequency              [0.2, 1.0]
+                                                                                          amplitude (m)             [0.2, 3.0]
+                                                                                          roughness (m)            [0.0, 0.05]
+                                 Slippery Hills        0.2 m          N (0.3, 0.1)           frequency              [0.2, 1.0]
+                                                                                          amplitude (m)             [0.2, 3.0]
+                                                                                          step width (m)            [0.1, 0.5]
+                                      Steps           0.02 m          N (0.7, 0.2)
+                                                                                          step height (m)          [0.05, 0.3]
+                                                                                          step width (m)            [0.1, 0.5]
+                                     Stairs           0.02 m          N (0.7, 0.2)
+                                                                                          step height (m)          [0.02, 0.2]
+
+Table S2. Parameter spaces C for simulated terrains. N (m, d) denotes that the value is sampled from the Gaussian distribution of mean m
+and stardard deviation d. The friction coefficient is clipped to be above 0.1.
+
+
+
+
+                                                               Parameter                                   value
+                                                  Number of particles (Nparticle )                   10 per terrain type
+                                               Transition probability (ptransition )                          0.8
+                                                Trajectories per particle (Ntraj )                            6
+                                       Update rate of the terrain parameters (Nevaluate )                     10
+                                    Probability of sampling from replay memory (Preplay )                   0.05
+
+Table S3. Hyperparameters for automatic terrain curriculum.
+ Research Article                                                                                                                       ETH Zurich and Intel   21
+
+
+
+                                        Data                                             dimension        xt        ot   ht
+                                        Desired direction (( BIB v̂d ) xy )                 2                       X    X
+                                        Desired turning direction (( BIB ω̂d )z )           1                       X    X
+                                        Gravity vector (e g )                               3                       X    X
+                                        Base angular velocity (BIB ω)                       3                       X    X
+                                        Base linear velocity (BIB v)                        3                       X    X
+                                        Joint position/velocity (θi , θ˙i )                 24                      X    X
+                                        FTG phases (sin(φi ), cos(φi ))                     8                       X    X
+                                        FTG frequencies (φ̇i )                              4                       X    X
+                                        Base frequency ( f o )                              1                       X
+                                        Joint position error history                        24                      X
+                                        Joint velocity history                              24                      X
+                                        Foot target history ((r f ,d )t−1,t−2 )             24                      X
+                                        Terrain normal at each foot                         12            X
+                                        Height scan around each foot                        36            X
+                                        Foot contact forces                                 4             X
+                                        Foot contact states                                 4             X
+                                        Thigh contact states                                4             X
+                                        Shank contact states                                4             X
+                                        Foot-ground friction coefficients                   4             X
+                                        External force applied to the base                  3             X
+
+Table S4. State representation for proprioceptive controller (top) and the privileged information (bottom).
+
+
+
+                               Layer           Teacher               TCN-N Student               GRU Student             Decoder
+                                input     ot           xt       ot        h (60×N)               ot            ot         h ot , lt i
+                                  1       id      tanh(72)      id    1D conv dilation 1         id      GRU(68)         relu(196)
+                                  2       id      tanh(64)      id     1D conv stride 2           concatenate             Output
+                                  3        concatenate          id    1D conv dilation 2              tanh(256)*              -
+                                  4        tanh(256)*           id     1D conv stride 2               tanh(128)*              -
+                                  5        tanh(128)*           id    1D conv dilation 4              tanh(64)*               -
+                                  6            tanh(64)*        id     1D conv stride 2                Output*                -
+                                  7            Output*          id            tanh(64)                    -                   -
+                                  8                -                  concatenate                         -                   -
+                                  9                -                   tanh(256)*                         -                   -
+                                 10                -                   tanh(128)*                         -                   -
+                                 11                -                   tanh(64)*                          -                   -
+                                 12                -                    Output*                           -                   -
+
+Table S5. Neural network architectures. Unless specified otherwise, the dilation and stride are 1 for convolutional layers. The filter size is
+fixed to 5. The layers marked with ∗ are copied from the teacher to learners after the teacher training. id refers to the identity map. The TCN-N
+architecture uses dilated causal convolution [22]. Each convolutional layer is followed by a relu activation function.
+ Research Article                                                                                                     ETH Zurich and Intel   22
+
+
+                                    Model      seq. length      # channels       # param.             SGD time (s)
+                                    TCN-1           1                 60         161960          9.22e-3 (±1.78e-3)
+                                   TCN-20           20                44         158300          2.11e-2 (±1.24e-3)
+                                   TCN-100         100                34         158070          5.07e-2 (±1.94e-3)
+                                     GRU          100*                 -         159640          1.52e-1 (±1.89e-2)
+
+Table S6. Network parameter settings and the training time for student policies. SGD time refers to the computation time required for one
+stochastic gradient descent update with the batch size given in Table S8. The computation times are presented as empirical means with standard
+deviations. *The sequence length for the GRU network stands for the sequence length used for Truncated BPTT [51].
+
+
+                                                                Parameter           Value
+                                                             discount factor        0.995
+                                                             KL-d threshold             0.01
+                                                          max. episode length           400
+                                                              CG damping                1e-1
+                                                              CG iteration              50
+                                                             discount factor        0.995
+                                                                batch size          80000
+                                                             total iterations       10000
+
+Table S7. Hyperparameters for teacher policy training.
+
+
+                                                         Parameter              TCN-N          GRU
+                                                   initial learning rate         5e-4          2e-4
+                                                   learning rate decay          exp(0.995, 100)
+                                                   max. episode length                  400
+                                                         batch size             20000          10000
+                                                         minibatches                     5
+                                                           epochs                        4
+                                                        total iteration                 4000
+
+Table S8. Hyperparameters for student policy training. exp(a,b) denotes exponential decay, which is defined as lr0 ∗ aupdates/b . The
+Adam [52] optimizer is used.
+
+
+                                                           Parameter               values
+                                                    initial learning rate           1e-4
+                                                    learning rate decay         exp(0.99, 100)
+                                                           batch size               20000
+                                                          minibatches                   2
+                                                             epochs                     10
+                                                         total iteration            1000
+                                                         weight decay           l2-norm, 1e-4
+
+Table S9. Hyperparameters for decoder training. exp(a,b) denotes exponential decay, which is defined as lr0 ∗ aupdates/b . The Adam [52]
+optimizer is used.
+

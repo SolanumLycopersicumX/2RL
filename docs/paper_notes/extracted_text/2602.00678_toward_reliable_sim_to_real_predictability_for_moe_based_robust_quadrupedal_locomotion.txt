@@ -1,0 +1,1188 @@
+                                                Toward Reliable Sim-to-Real Predictability for
+                                                 MoE-based Robust Quadrupedal Locomotion
+                                                          Tianyang Wu1 , Hanwei Guo1 , Yuhang Wang1 , Junshu Yang1 , Xinyang Sui1 , Jiayi Xie1 ,
+                                                                            Xingyu Chen1∗ , Zeyang Liu1∗ , Xuguang Lan1∗
+                                                                              1
+                                                                            National Key Laboratory of Human-Machine Hybrid Augmented Intelligence,
+                                                               Institute of Artificial Intelligence and Robotics, Xi’an Jiaotong University, ∗ Corresponding Authors
+                                                              Page: https://robogauge.github.io/complete/ Code: Train, Evaluate, Deploy
+                                                 MoE Representation Learning                    Policy        Env 1                       RoboGauge                                                      Real-World Testing
+                                                           Gating                                 Asyn.
+                                                          Network             Actor                           Env 2
+                                                                             Network
+
+
+
+
+arXiv:2602.00678v4 [cs.RO] 10 May 2026
+                                                                    Latent                                     ...                     10 Levels 7 Tasks
+                                                                                               Results
+                                                                                                             Env N
+
+                                                                                                           Terrains &
+                                                            MoE
+                                                                                                            Metrics
+
+
+                                                                                                                         Eval. RoboGauge
+                                                 Parallel Multi-terrain Training
+                                                                                                                          quantify Sim2Real
+                                                                                                                           transferability by              ct
+                                                                                                                                                         le
+                                                                                                 alua                      Sim2Sim metrics             Se
+                                                                                                     tio                                                           y
+                                                                                                        n                                                      lic
+                                                                                               Ev                        New Closed-loop                     Po
+                                                                                                         Ad
+                                                                                                           ju                                           just
+                                                                                                             st
+                                                                                                                        Training Framework            Ad
+
+
+                                                                                        Train IsaacGym                                                      Deploy Real
+                                                                                          algorithm, model,
+                                                                                                                                                         testing in various
+                                                                                       domain randomization,
+                                                                                                                                                       real-world scenarios
+                                                                                        reward, curriculum...
+
+                                         Fig. 1: Our proposed framework integrates a Mixture-of-Experts architecture for terrain and command representation with
+                                         the RoboGauge assessment suite to quantify sim-to-real transferability through sim-to-sim metrics. This closed-loop design
+                                         enables reliable policy selection to facilitate robust deployment for agile locomotion across diverse challenging environments
+                                         based solely on proprioception.
+                                                                                                                                                                       Flat
+                                            Abstract—Reinforcement learning has shown strong promise
+                                         for quadrupedal agile locomotion, even with proprioception-only
+                                         sensing. In practice, however, sim-to-real gap and reward overfit-
+                                         ting in complex terrains can produce policies that fail to transfer,                                   Wave                                                   Obstacle
+                                         while physical validation remains risky and inefficient. To address                                                                               0.7
+                                                                                                                                                                                                 0.9
+                                         these challenges, we introduce a unified framework encompassing                                                                            0.5
+                                                                                                                                                                              0.3
+                                         a Mixture-of-Experts (MoE) locomotion policy for robust multi-
+                                         terrain representation with RoboGauge, a predictive assessment                                                                                                           Ours
+                                         suite that quantifies sim-to-real transferability. The MoE policy                                                                                                        CTS
+                                         employs a gated set of specialist experts to decompose latent                                                                                                            HIM
+                                         terrain and command modeling, achieving superior deployment
+                                                                                                                                                           Slope                          Stairs                  DreamWaQ
+                                         robustness and generalization via proprioception alone. Robo-
+                                         Gauge further provides multi-dimensional proprioception-based                              Fig. 2: Comparative analysis against one-stage proprioceptive
+                                         metrics via sim-to-sim tests over terrains, difficulty levels, and
+                                         domain randomizations, enabling reliable MoE policy selection
+                                                                                                                                    methods including CTS, HIM, and DreamWaQ. Within the
+                                         without extensive physical trials. Experiments on a Unitree Go2                            RoboGauge framework, each axis reflects average perfor-
+                                         demonstrate robust locomotion on unseen challenging terrains,                              mance on a specific terrain and serves as a reliable proxy to
+                                         including snow, sand, stairs, slopes, and 30 cm obstacles. In                              quantify sim-to-real capability. Our architecture consistently
+                                         dedicated high-speed tests, the robot reaches 4 m/s and exhibits                           outperforms or matches previous state-of-the-art across all
+                                         an emergent narrow-width gait associated with improved stability
+                                         at high velocity.
+                                                                                                                                    evaluated terrains under RoboGauge’s metrics.
+
+                                                                     I. I NTRODUCTION
+                                           Robots frequently operate in complex and dynamic envi-                                   [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]. Reinforcement learning
+                                         ronments which require high levels of mobility [1, 2, 3].                                  has emerged as a potent methodology for motion control by
+                                         Quadrupedal robots have garnered significant prominence                                    facilitating continuous policy optimization through simulation-
+                                         due to their superior mobility and environmental adaptability                              based interactions to enhance the robustness of robotic loco-
+motion [16, 17, 18, 19, 20, 6, 21, 22, 23, 24, 25, 26, 27, 28, 29].   [22, 16, 37]. Adaptability has further advanced through la-
+   The inherent sim-to-real gap remains a primary barrier as          tent parameter estimation via adaptation modules or recur-
+simulation-based performance metrics often prove unreliable           rent belief encoders and contrastive learning within paral-
+for real-world deployment [30, 31, 32, 33, 34]. Specifically,         lelized simulations [17, 38, 23, 24, 25]. Furthermore research
+high training rewards across diverse terrains often fail to           pushes agility to peak velocities of 3.9 m/s through command
+guarantee physical stability, as policies tend to overfit to the      curricula [26, 39] whereas diverse gaits [28, 40, 41] and
+specific dynamics of the simulated robot, thereby degrading           seamless switching emerge from energy optimization rewards
+generalization to real-world hardware [16, 17, 35]. Moreover,         [27, 42, 43] and multi-expert gating architectures [29, 44].
+the lack of reliable quantitative proxies compels researchers
+                                                                      B. Sim-to-Real Evaluation Suites
+to rely on direct physical validation, a process that remains
+prohibitively risky and inefficient [5, 6, 21].                          Evaluation frameworks for locomotion models are currently
+   To mitigate these challenges, we propose a training frame-         limited. In contrast, research in robotic manipulation has
+work that integrates a Mixture-of-Experts (MoE) architecture          addressed similar challenges by employing ranking metrics to
+for terrain and command representation with the RoboGauge             verify consistency between simulation and reality [45, 46].
+assessment suite. This MoE approach improves modeling                 High-fidelity digital twins provide closed-loop assessment
+capabilities by relying exclusively on proprioception to encode       through environmental reconstruction but often suffer from
+unknown terrains and commands while avoiding exteroceptive            high costs that restrict their scalability across diverse real-
+sensors like cameras, LiDAR, or foot contact sensors, which           world scenarios [47, 48].
+frequently fail in extreme conditions such as dense smoke and               III. M O E L ATENT R EPRESENTATION L EARNING
+insufficient lighting or violent shaking. Complementing the
+                                                                         The proposed one-stage reinforcement learning framework
+policy iteration architecture we develop RoboGauge as a pre-
+                                                                      centers on Mixture-of-Experts latent representation learning
+dictive evaluation framework designed to quantify sim-to-real
+                                                                      for quadrupedal locomotion, as illustrated in the training phase
+stability by utilizing a parallelized sim-to-sim methodology
+                                                                      of Fig. 1. This section describes the mathematical formulation
+across 6 distinct metrics involving 7 terrains and 10 difficulty
+                                                                      of the motion control task and the internal structural design
+levels as well as 3 objectives and 4 domain randomizations.
+                                                                      of the multi-expert neural network architecture, followed by
+   Fig. 2 illustrates the performance distribution of various
+                                                                      the detailed reward configurations and environment configura-
+models across seven terrains evaluated within the RoboGauge.
+                                                                      tions.
+Our MoE policy outperforms all baseline methods across every
+terrain category to demonstrate comprehensive superiority.            A. Locomotion Control in Reinforcement Learning
+This approach further exhibits exceptional performance during            The core objective of quadrupedal locomotion control is to
+actual deployment on physical robots.                                 determine appropriate joint torque commands for all actuated
+   Our contributions are summarized as follows:                       joints based on proprioception. Assuming that proprioceptive
+  • We propose RoboGauge, a comprehensive predictive as-              information is acquired exclusively via an IMU and joint
+    sessment framework that utilizes a sim-to-sim methodol-           encoders, the quadrupedal locomotion dynamics are modeled
+    ogy to quantify sim-to-real transferability, thereby miti-        as an infinite-horizon Partially Observable Markov Decision
+    gating the risk of hardware damage during direct physical         Process (POMDP), defined by the tuple (S, A, O, P, Ω, R, ρ0 ),
+    deployment.                                                       where S ⊂ Rn denotes the privileged state space includ-
+  • We integrate a Mixture-of-Experts module into the policy          ing all dynamic information of robot perception and the
+    to resolve existing deficiencies in multi-terrain represen-       surrounding environment. The set A ⊂ Rm represents the
+    tation and demonstrate superior mobility on the physical          action space and O ⊂ Ro signifies the observation space.
+    Unitree Go2 robot.                                                The state transition probability is characterized by P (s′ |s, a),
+  • We demonstrate that our framework enables the robot to            the observation function by Ω(o|s), the reward function by
+    reach a high-speed locomotion of 4 m/s on flat terrain            R(s, a, s′ ), and the initial state distribution by ρ0 (s0 ). Our
+    while exhibiting an emergent narrow-width gait associ-            objective is to acquire an optimal policy π ∗ that maximizes
+    ated with improved stability.                                     the expected cumulative discounted reward over the trajectory
+                                                                      τ = {st , at , rt , st+1 , ...}:
+                      II. R ELATED W ORK
+                                                                                                       "∞                         #
+                                                                                                        X
+                                                                               J(π) = Es0 ∼ρ0 ,τ ∼π        γ t R(st , at , st+1 )    (1)
+A. Reinforcement Learning for Quadrupedal Locomotion                                                  t=0
+
+   Reinforcement learning for quadrupedal locomotion in               where γ ∈ (0, 1) serves as the discount factor.
+physical environments is hindered by severe sample ineffi-               Let ot ∈ O and st ∈ S denote the observation and state at
+ciency and potential hardware hazards [5, 6, 21]. The pre-            time t, respectively. The observation incorporates the angular
+dominant sim-to-real approach employs frameworks such as              velocity ω measured by the IMU, the projected gravity vector
+proximal policy optimization [36] or teacher-student training         g proj in the body frame, joint positions q, and joint velocities
+to achieve multi-terrain traversal at velocities under 1 m/s          q̇, linear velocity commands in the longitudinal and lateral
+directions vxcmd and vycmd , the yaw rate command ωzcmd , and        where B specifies the batch size utilized during training
+                                                                             (j)
+the preceding action at−1 . Beyond the components of ot , the        while ωk represents the weight allocated to the k-th expert
+state st encompasses the linear velocity v t , sampled terrain       for the j-th sample. This formulation encourages the system
+heights ht , and environmental latent parameters µt represent-       to distribute tasks uniformly across all experts to ensure
+ing foot contact forces, joint torques, and joint accelerations.     representational diversity and expressive capacity.
+The height measurements are sampled within a 1m × 1.6m
+rectangular area centered on the robot’s base with a 0.1m            C. Reward Design
+interval, providing a comprehensive representation of the local         We utilize a consistent reward function structure for both the
+terrain.                                                             multi-terrain and the flat-ground high-speed locomotion mod-
+   The action at ∈ A denotes the joint position offsets relative     els. The fundamental reward configurations are established
+to the initial joint positions. For each actuated joint, the         based on established methodologies [16, 22, 49]. Building
+model produces target positions, and the required torques are        upon these foundations, we introduced a hip joint position
+computed through a Proportional-Derivative (PD) controller.          reward to mitigate outward thigh abduction during rapid
+B. Mixture-of-Experts Representation Encoder                         locomotion. Appendix Table IX presents the comprehensive
+                                                                     reward specifications. Within this framework, σ denotes the
+   To facilitate the acquisition of an optimal policy, privileged    velocity tracking precision parameter initialized to a value
+observations st are commonly employed during training to             of 0.25. Additionally, the reward component rfr adopts the
+accelerate learning and elevate performance upper bounds.            formulation from the CTS model [49] to incentivize adequate
+Given that the model is restricted to observations ot during de-     foot clearance during high-speed movement. For high-speed
+ployment, the teacher-student paradigm leverages distillation        locomotion training on flat ground, we introduce an external
+techniques to transfer advantageous strategies to the student        hip symmetry reward rhs to regularize joint positions while
+[16]. The Concurrent Teacher-Student (CTS) framework [49]            executing longitudinal linear motion commands. This term
+simultaneously optimizes both teacher and student networks.          ensures that the robot maintains symmetrical postures and is
+Through this parallel learning process, both entities update         defined as follows:
+actor and critic networks, enabling student feedback to ac-
+tively refine the teacher’s parameters. Such joint optimization                       |vxcmd |  hip       hip        hip     hip
+                                                                                                                                    
+                                                                              rhs =            · |q FL + q FR  | + |q RL  + q RR  |   (4)
+typically yields outcomes superior to those achieved through                         ∥v cmd ∥2
+independent training [50]. We observe that the limited expres-          Since the training curriculum involves diverse terrains, the
+sive capacity of the student model often precludes it from           vertical linear velocity reward weight decays to zero once the
+accurately inferring the features encoded by the teacher, which      robot achieves stable locomotion. This reduction prevents ver-
+consequently restricts the performance ceiling. To overcome          tical velocity fluctuations caused by terrain irregularities from
+this limitation, we integrate a Mixture-of-Experts (MoE) struc-      interfering with the policy optimization process. We observed
+ture [51, 52] into the student architecture within the CTS           that augmenting the base height reward weight effectively
+framework. This augmentation bolsters the representational           mitigates body sagging during high-speed locomotion on flat
+capabilities of the student and further elevates the performance     surfaces. For the multi-terrain model, the reference base height
+upper bound of the overall system.                                   is established at 0.38m. In contrast, the high-speed model
+   We substitute the student encoder in the CTS framework            utilizes a lower reference height of 0.33m to enhance the
+with the MoE network. This architecture comprises K parallel         stability of the center of mass through a reduced posture.
+expert subnetworks {Ek }K    k=1 where each expert specializes
+in processing observation data under specific command types          D. Environment Configurations
+or environmental contexts. To coordinate these subnetworks,             We utilize the IsaacGym simulation environment [55] to
+we incorporate a gating network g that dynamically allocates         train 8192 agents in parallel across diverse terrains. The
+weights ωk based on the observation sequence ot−H:t =                experimental platform is the Unitree Go2 quadrupedal robot
+                    T
+[ot−H , · · · , ot ] . These coefficients determine the relative     featuring 12 degrees of freedom. Motor PD control gains are
+contribution of each expert to the current state representation.     specified as kp = 20.0 and kd = 0.5 for all joints. The system
+Accordingly, the resulting latent state z s of the student encoder   operates with a control frequency of 50Hz and a simulation
+is formulated as the weighted sum of all expert outputs:             frequency of 200Hz. The length of the observation sequence
+         K
+         X                                                           ot−H:t is set to 5 for MoE input. Algorithm configurations
+  zs =         ωk Ek (ot−H:t ),   ωk = softmax(g(ot−H:t ))k (2)      follow the CTS framework [49].
+         k=1                                                            Establishing a proper curriculum difficulty is essential to
+  To prevent the gating network from exclusively activating          ensure representational diversity during training. Following
+a single expert subnetwork, we incorporate an auxiliary load         [22], we implement a terrain curriculum encompassing seven
+balancing loss [53, 54]:                                             terrains including flat, wave, slope, rough slope, stairs up,
+                    K
+                    X         2             B                      stairs down, and obstacle. Slope inclinations vary from 5.7◦ to
+                             1             1 X (j)                   29.6◦ and the rough slope terrain incorporates random height
+    Lload balance =    ω̄k −      , ω̄k =        ω        (3)
+                             K             B j=1 k                   fluctuations of 5cm. Stair heights range between 5cm and
+                    k=1
+                                                                      A           Evaluation Env                                   Asyn Envs                        B
+25.7cm with a constant tread width of 31cm. The obstacle                              Base Pipeline                              Multi/Level Pipeline
+terrain consists of random cubic structures with heights span-                     Terrains (i, N=7)                                   Filter Data
+                                                                                                                          Worst-Case                3 Seed
+ning from 5cm to 27.5cm and widths between 1m and 2m.                     Flat
+                                                                                                                          Mean (50%)                Average
+   To facilitate effective sim-to-real transfer, we introduce                                                                     Quality Score
+                                                                          Wave Levels (L=10)
+domain randomization parameters, the details of which are
+shown in Table I.
+                                                                          Slope Levels (L=10)                             Max Feasible Level Search
+      TABLE I: Domain Randomization Specifications                                                                                                    5 Seed Eval
+                                                                                                                                   Binary Search
+ Randomization Term     Range                         Unit                                                                         Sucess Rate
+                                                                          Stairs Levels (L=10)
+                                                                                                                                      ≥ 80% ?
+ Friction               [0.5, 1.5]                    –
+ Payload mass           [−1, 1]                       kg                                                                  Level down     no   yes       Level up
+ Link mass              [0.9, 1.1] × Nominal Value    kg                                                                                      done
+                                                                          Obstacle Levels (L=10)
+ Base center of mass    [−3, 3] × [−3, 3] × [−3, 3]   cm                                                                     Terrain Quality Score
+ Restitution            [0.0, 0.5]                    –
+ Proportional gain kp   [0.9, 1.1] × Nominal Value    Nm/rad
+ Derivative gain kd     [0.9, 1.1] × Nominal Value    Nm · s/rad
+                                                                                                                            Aggregation results                     C
+ Actuator strength      [0.8, 1.2] × Nominal Value    –                          Domain Rand (j, M=9)
+ Actuator offset        [−0.035, 0.035]               rad                   friction, action delay, noise obs ...                Stress Pipeline
+                                                                                                                       Robust Score      Evaluation Score
+ Control latency        [0, 20]                       ms
+                                                                          Normalization Metrics              (K=8)
+                                                                                   Task, Quality, Safety
+
+   We identify several training problems within the original
+framework [22, 24, 25, 49] which are elaborated in Ap-              Fig. 3: The RoboGauge evaluation architecture consists of
+pendix B along with corresponding ablation studies to verify        three hierarchical stages. (A) Base Pipeline serves as a single
+the effectiveness of our improvements. To ensure reward             evaluation environment by incorporating specific terrains and
+stability on complex terrains we implement a dynamic veloc-         domain randomization. (B) Multi/Level Pipeline highlights
+ity tracking precision adjustment B-A that scales constraints       the parallel evaluations across diverse random seeds. (C)
+based on terrain difficulty and command magnitude. We               Stress Pipeline triggers comprehensive testing across the entire
+further incorporate a comprehensive command design suite            terrain suite to synthesize the final score.
+including a command curriculum, extreme command sampling
+and dynamic command sampling B-B to ensure consistent                      TABLE II: Metrics for the RoboGauge Framework
+progression through terrain levels. These strategies collectively
+accelerate convergence and elevate the peak RoboGauge score          Metric                                 Description
+by 11% while promoting stable locomotion patterns across             Lin. Velocity Error                    Linear velocity ℓ2 tracking error
+                                                                     Ang. Velocity Error                    Angular velocity ℓ2 tracking error
+diverse environments.                                                Dof Power                              Motor power consumption
+                                                                     Dof Limits                             Joint angles exceeding soft limits
+       IV. T HE ROBO G AUGE P REDICTIVE A SSESSMENT                  Orientation Stability                  Gravity projection on the lateral (y) axis
+                         F RAMEWORK                                  Torque Smoothness                      Temporal smoothness of motor torques
+                                                                     ZMP Margin                             Normalized Zero Moment Point deviation
+   As illustrated in the central evaluation module of Fig. 1,        Friction Margin                        Normal-force-weighted Coulomb friction
+RoboGauge serves as the pivotal assessment engine designed
+to bridge the gap between simulation training and real-world
+deployment. This section details the design philosophy of
+RoboGauge, a comprehensive framework developed to quan-             accurately reflect a controller’s efficacy during real-world
+titatively validate the performance of reinforcement learning       deployment. Drawing from empirical observations of common
+(RL) locomotion controllers.                                        failure modes in physical testing, we formulated 6 metrics, as
+   Built upon the MuJoCo [56] simulation environment, the           detailed in Table II, addressing three critical aspects of sim-to-
+framework’s operational workflow is depicted in Fig. 3, which       real transfer. First, to ensure hardware safety and efficiency,
+organizes the evaluation process into three hierarchical stages:    we evaluate dof limits and dof power, preventing actuator
+(1) the BasePipeline for atomic, single-environment evalua-         damage or thermal failure caused by sub-optimal motor opera-
+tions; (2) the Multi/Level Pipeline for parallelized difficulty     tion. Second, tracking precision is quantified by the velocity
+assessment and domain randomization; and (3) the Stress             error, measuring the controller’s fidelity in following linear
+Pipeline for synthesizing a unified robustness score. The           and angular commands. Finally, we assess motion stability
+following subsections detail the formulation of our quantitative    via torque smoothness and orientation stability to mitigate
+metrics, the design of the evaluation environments, and the         structural vibrations and ensure robust attitude control. To
+hierarchical scoring methodology, respectively.                     further formalize this stability assessment, we integrated two
+                                                                    physical criteria: the Zero Moment Point (ZMP) margin [57]
+A. Quantitative Performance Metrics                                 and a Coulomb friction margin under Contact Wrench Cone
+   The primary objective of RoboGauge is to derive quan-            (CWC) constraints [58]. The ZMP margin evaluates the hor-
+titative indicators solely from proprioceptive feedback that        izontal distance error of the ZMP relative to the nominal
+stance span, derived via aggregated Newton-Euler equations.             normalized metrics {m1 , . . . , m8 }, where each mk ∈ [0, 1]
+The Coulomb friction margin computes the normal-force-                  denotes the average result across three stochastic seeds. To
+weighted average slack to the friction-cone boundary over               penalize imbalanced performance, specifically to prevent high
+active contacts. Detailed mathematical formulations for these           scores when a critical dimension fails, we employ a weighted
+stability metrics are provided in Appendix A-A. To facilitate a         geometric mean to compute the execution quality score:
+unified assessment, all raw measurements are normalized and                                                    !1/ PK
+                                                                                                    K               k=1 wk
+transformed via the function f (x) = 1 − x, ensuring that a                                        Y w
+higher score consistently signifies superior performance.                            Qi,j (L) =          mk  k
+                                                                                                                                  (5)
+                                                                                                      k=1
+B. Evaluation Environment and Randomization                                We adopt a Worst-Case Mean aggregation strategy to evalu-
+   To ensure a rigorous and holistic assessment, the framework          ate performance across motion goals. This method involves av-
+establishes a systematic evaluation matrix integrating diverse          eraging the lowest 50% of scores within each goal, effectively
+motion goals, complex terrain structures, and extensive domain          discounting high scores from non-challenging commands to
+randomizations.                                                         concentrate the assessment on challenging maneuvers such
+   Motion Goals: We devised motion goals to stress-test the             as obstacle negotiation and gait transitions. Additionally, we
+control policy as detailed in Appendix Table VIII. These tasks          compute the global mean and the average of the top 25% for
+cover maximum command execution, rapid emergency stops,                 broader reference as detailed in Appendix Table XIII.
+and abrupt diagonal velocity step changes. Furthermore, the                We employ a binary search strategy to identify the maxi-
+evaluation incorporates a specific target position task regulated       mum attainable difficulty level L∗i,j ∈ L for each terrain under
+by a proportional error controller. This task serves as the             the specified domain randomization parameters. For a given
+pass criterion for terrain traversal. It enables a binary search        level, the model is evaluated across five stochastic seeds to
+strategy to identify the maximum difficulty level the model             verify whether it successfully reaches the goal. A difficulty
+can navigate.                                                           level is deemed passable if the success rate in the goal-reaching
+   Terrain Configuration: The evaluation suite features 5 dis-          task surpasses 80%.
+tinct terrain categories: flat, wave, slopes, stairs, and obstacles.       Let Qi,j (L∗i,j ) denote the execution quality score at the
+Excluding the flat surface, each terrain type is subdivided             highest passable difficulty level. To balance task difficulty and
+into 10 discrete difficulty levels to probe the limits of the           execution quality across diverse terrains, the terrain quality
+controller’s mobility. Fig. 3 explicitly illustrates the environ-       score Si,j for a specific terrain Ti and domain randomization
+mental complexity for difficulty levels 3, 5, and 10. Beyond            dj is formulated using the following overlapping scoring
+difficulty scaling, navigation on slopes and stairs presents            function:
+unique directional challenges. Therefore, we explicitly eval-                          Si,j = α(L∗i,j − 1) + βQi,j (L∗i,j )            (6)
+uate both ascending and descending configurations to ensure
+                                                                        By setting β > α, this design ensures that high-quality per-
+robust performance regardless of the incline direction.
+                                                                        formance at a lower difficulty level approximates the score of
+   Domain Randomization: We implement domain randomiza-
+                                                                        mediocre performance at a higher level, facilitating a smooth
+tion across two primary dimensions environmental factors and
+                                                                        transition across difficulty tiers.
+inherent robot properties. Specifically, environmental factors
+                                                                           The framework results are aggregated through arithmetic
+include variations such as payloads and friction coefficients,
+                                                                        averaging. Initially, we calculate the robust score S̄i for each
+while robot properties encompass motor response latency and
+                                                                        terrain Ti by averaging the results over M domain randomiza-
+observation noise. Collectively, these perturbations simulate
+                                                                        tions. The final framework score S̄ is subsequently obtained
+the imperfections of physical hardware, preventing the policy
+                                                                        by averaging these robust scores across all N terrains:
+from overfitting to ideal simulation dynamics and ensuring
+                                                                                                  M                    N
+robust real-world transfer.                                                                   1 X                   1 X
+                                                                                      S̄i =         Si,j ,   S̄ =         S̄i         (7)
+C. Hierarchical Scoring Methodology                                                           M j=1                 N i=1
+   We denote the set of N = 7 terrain configurations as T =                Given the extensive combinations of terrain types, random-
+{T1 , . . . , TN }, expanding the five distinct terrain categories by   ization parameters, and random seeds, performing a full evalu-
+treating ascending and descending directions on slopes and              ation sequentially is prohibitively time-consuming. We conse-
+stairs as separate evaluation environments. For each terrain            quently adopt multiprocessing acceleration to run concurrent
+T ∈ T , we apply M = 9 distinct domain randomizations,                  environment instances. This efficiency fulfills the necessity
+denoted by D = {d1 , . . . , dM }. The terrain difficulty is            for rapid performance feedback throughout the training phase.
+stratified into 10 levels, represented as L ∈ {1, 2, . . . , 10}.       Further implementation specifics and all specific hyperparam-
+Each evaluation session yields K = 8 performance metrics,               eter values are elaborated in Appendix A.
+designated as M = {m1 , . . . , mK }.
+   Next, we formalize the composite scoring methodology                  V. F RAMEWORK VALIDATION AND A BLATION S TUDIES
+for evaluating the model. For a given terrain Ti , domain                  In this section, we present experiments aimed at addressing
+randomization dj , and difficulty level L, we aggregate K = 8           the following research questions:
+  • Q1: Does RoboGauge provide metrics that correlate                IsaacGym [55]. Because DreamWaQ and HIM do not support
+    closely with real-world performance?                             terrain-specific velocity command ranges, we set their max-
+  • Q2: How do state-of-the-art methods perform under our            imum limit to 1 m/s. We apply this same constraint within
+    evaluation framework?                                            the RoboGauge assessment for these models to reduce the
+  • Q3: Can the Mixture of Experts architecture effectively          difficulty of command tracking. Conversely, both CTS and our
+    differentiate between various encoded terrains?                  proposed model utilize a command range of 2 m/s for both
+                                                                     training and evaluation. Each algorithm is trained with three
+A. Metric Reliability of RoboGauge
+                                                                     independent random seeds and we select the model achiev-
+   We deployed the proposed model and baselines on a Uni-            ing the highest RoboGauge score for subsequent analysis.
+tree Go2 quadruped robot. We utilize a 12-camera NOKOV               The outcomes summarized in Table IV demonstrate that our
+Mars18H motion capture system operating at 90Hz to acquire           method significantly outperforms the other approaches across
+real-time linear and angular velocity data across flat terrain       the entire set of metrics.
+and 10cm stairs by mounting five markers on the robot base.
+At the same time, we gather proprioceptive feedback and                       TABLE IV: RoboGauge results for baselines
+motor torques to derive the six specific metrics in Table II.
+To quantify the fidelity of these assessment methods, we              Model        Score    Tracking ↑   Safety ↑   Quality ↑   Level
+compare the metric errors from both the training environ-             Ours         0.6713     0.6669      0.7857      0.7392    7.85
+ment and our proposed framework against real-world ground             CTS          0.5786     0.5755      0.7066      0.6624    6.83
+                                                                      HIM          0.5379     0.5453      0.6476      0.6050    6.19
+truth. We specifically evaluate a model that exhibited high           DreamWaQ     0.5054     0.5105      0.6149      0.5730    5.74
+performance during training but suffered from significant sim-
+to-real degradation. As presented in Table III, the training
+environment consistently yields larger errors. Comprehensive            As indicated in the training curves in Fig. 4, our model does
+scoring data provided in Table XII in the Appendix further           not necessarily achieve the highest terrain levels during the
+confirms that errors obtained through our framework are              training phase compared to other baselines. Nevertheless, the
+markedly lower than those from standard training evaluations.        predictability assessment framework provides precise scores
+These results demonstrate that our evaluation framework more         that accurately reflect the underlying performance. Fig. 5 illus-
+accurately reflects real-world performance and provides a more       trates the maximum terrain levels attained across a variety of
+dependable basis for model selection.                                friction coefficients. Details of the terrain levels are provided
+                                                                     in Fig. 14 of the Appendix. Our model consistently exhibits
+              TABLE III: Metrics Error Comparison                    superior terrain level proficiency across the entire range of
+                                                                     friction values. These findings are further corroborated by
+ Env.           Cmd.         Tracking ↓   Safety ↓   Quality ↓
+                                                                     the real-world deployment data in Table VI, which confirms
+              Longitudinal     0.0573     0.0253       0.0246
+ MuJoCo         Lateral        0.0541     0.0049       0.0079
+                                                                     that the controller possesses the capability to navigate such
+ (Ours)        Angular         0.0560     0.0050       0.0035        challenging environments in physical settings.
+               Average         0.0558     0.0117       0.0120
+              Longitudinal     0.1365     0.0844       0.0678
+                                                                     C. Ablation and Latent Representation of MoE
+ IsaacGym       Lateral        0.0572     0.0052       0.0125
+ (Training)    Angular         0.0713     0.0103       0.0337           We designed various ablation studies to investigate the
+                                                                     integrated MoE structure, including the following variants:
+               Average         0.0883     0.0333       0.0380
+                                                                       1) MoE-NG: The command information is excluded from
+                                                                          the MoE input, utilizing only observation information to
+B. Comparison of Baselines under RoboGauge                                the expert networks.
+   To facilitate a rigorous comparative evaluation, we bench-          2) AC-MoE: Following MoE-Loco [44], the MoE structure
+mark our proposed approach against several state-of-the-art               is applied to the Actor-Critic networks rather than the
+one-stage training algorithms based solely on proprioception:             student encoder.
+   1) DreamWaQ [24]: The policy utilizes an asymmetric                 3) MCP [59]: A multiplicative composition strategy is
+       actor-critic scheme with a variational estimator to jointly        employed for the actions output by the Actor.
+       predict body velocity and terrain latents.                       As shown in Table V, our proposed method achieved the
+   2) HIM [25]: The policy incorporates a hybrid internal            best performance across all evaluation metrics. Furthermore,
+       model to explicitly estimate robot responses using con-       during training, we observed that modifications to the action
+       trastive learning.                                            network, such as AC-MoE and MCP, were prone to loss
+   3) CTS [49]: The policy employs an asymmetric teacher-            divergence. This instability likely originates from the expert
+       student setup to optimize the agent via reinforcement         combination acting directly within the action space. The
+       learning and supervised reconstruction.                       concurrent adaptation of the gating network and individual
+   We implement all aforementioned methods using a con-              experts can yield volatile control signals that induce hazardous
+sistent configuration, with 8192 parallel agents training in         maneuvers and consequently undermine training stability.
+                  0.7                                                                                                                                       CTS w/ MoE (Ours)                         CTS
+                                                                                          6
+
+
+
+
+                                                            Avg. Training Terrain Level
+                                                                                                                                                                                                            Flat
+                  0.6                                                                                                                                                                                       Wave
+                                                                                                                                                    0.5
+
+RoboGauge Score
+                                                                                          5                                                                                                                 Stairs
+
+
+
+                                                                                                                                  PCA Dimension 2
+                  0.5                                                                                                                                                                                       Obstacle
+                  0.4                                                                     4
+                                                                                                                                                    0.0
+                  0.3                                                                     3
+                  0.2                                                                     2                                                         0.5
+                        0     40K       80K          120K                                     0        40K       80K       120K
+                              Training Steps                                                           Training Steps
+                                                                                                                                                          0.5       0.0       0.5        0.5      0.0     0.5
+                               Ours            CTS                                        HIM             DreamWaQ                                              PCA Dimension 1                PCA Dimension 1
+ Fig. 4: Comparison of RoboGauge scores and terrain level                                                                          Fig. 6: PCA visualization of the student encoder latent space
+ curves across various baselines during training. Stable Robo-                                                                     in different terrains with forward command.
+ Gauge scores despite fluctuating terrain levels demonstrate that
+ training levels fails to accurately represent model performance.                                                                                   TABLE VI: Real-World Survival Rate Comparison
+
+                  10
+                            Wave               Slope                                              Stairs             Obstacle                                                   Survival Rate (%) ↑
+                                                                                                                                          Model
+                   8                                                                                                                                             Lat. Impulse    Tile Stairs 15.5cm   Obstacle 30cm
+
+
+Terrain Level
+                                                                                                                                                                  (80–100 N)         (µ = 0.38)        (µ = 0.85)
+                   6    DreamWaQ         DreamWaQ                                         DreamWaQ             DreamWaQ
+                   4    HIM              HIM                                              HIM                  HIM                        Ours                      18/20              85/85                17/20
+                   2    CTS              CTS                                              CTS                  CTS                        Built-in RL                5/20              85/85                 0/20
+                        Ours             Ours                                             Ours                 Ours                       CTS                       11/20              18/85                 0/20
+                   0                                                                                                                      HIM                        8/20              24/85                 0/20
+                                                                                                                                          DreamWaQ                  7/20               12/85                 0/20
+ Fig. 5: Comparison of maximum terrain levels across varying
+ friction coefficients as evaluated by RoboGauge.
+                                                                                                                                   A. Comparison on Terrain Challenges
+                        TABLE V: RoboGauge Results for MoE Ablation
+                                                                                                                                      We deployed the proposed model and baselines on a Unitree
+         Model                        Score     Tracking                                      Safety       Quality      Level      Go2 quadruped robot to evaluate its real-world performance
+         MoE (Ours)                0.6713        0.6669                                       0.7857       0.7392       7.85       as summarized in Table VI. The experimental validation
+         AC-MoE [44]               0.6509        0.6442                                       0.7644       0.7149       7.52       comprises three robustness scenarios including sudden lateral
+         MoE-NG                    0.6519        0.6447                                       0.7639       0.7186       7.56       pulls between 80 N and 100 N then 15.5 cm smooth tile stairs
+         MCP [59]                  0.6399        0.6355                                       0.7542       0.7058       7.41
+                                                                                                                                   and 30 cm obstacle climbing where Appendix Fig. 17 depicts
+                                                                                                                                   the specific setups. Only our model successfully surmounted
+                                                                                                                                   the 30 cm obstacle while also exhibiting the most effective
+    We subsequently visualize the MoE latent space by applying                                                                     disturbance rejection during lateral pulls. Although both our
+ Principal Component Analysis [60] to reduce the dimension-                                                                        approach and the built-in reinforcement learning controller
+ ality of the student encoder hidden states. Fig. 6 contrasts the                                                                  conquered the stairs, our model completed the 85 steps 17
+ state distributions during 5 s of forward locomotion across                                                                       s faster than the baseline.
+ diverse terrains to evaluate the impact of the MoE module.
+ Similarly, Fig. 16 in the Appendix illustrates the hidden                                                                         B. Velocity Tracking Precision
+ state distributions across all terrains under various commands                                                                       We employed a motion capture system to assess velocity
+ including forward, backward, left, and right turns over a 5 s                                                                     tracking accuracy across both flat terrain and stair scenarios.
+ duration. These results indicate that the MoE architecture                                                                        Fig. 7 depicts the robot traversing stairs at an average speed
+ achieves superior discrimination of encoding features across                                                                      of 1.31 m/s with a tracking error of 0.15 m/s, which confirms
+ various terrains and motion commands.                                                                                             the robust tracking proficiency of the framework even when
+                                                                                                                                   tackling complex environments. We further evaluated the lo-
+                  VI. P HYSICAL D EPLOYMENT AND G ENERALIZATION                                                                    comotion performance on a 30 degree wooden slope where
+                                                                                                                                   the robot maintains an average velocity of 1.53 m/s. This
+   In this section, our real-world experiments are designed to                                                                     efficiency reduces the traversal duration by 1.7 s compared
+ address the following research questions.                                                                                         to the built-in reinforcement learning baseline as documented
+                                                                                                                                   in Fig. 8 of the Appendix.
+              • Q4: Does the proposed framework outperform more
+                                                                                                                                      Fig. 9 illustrates the tracking performance during high-
+                challenging terrain compared to other baselines?
+                                                                                                                                   speed locomotion on flat ground. Restricted by an 8 m indoor
+              • Q5: How accurate is its tracking of velocity commands?
+                                                                                                                                   runway, the robot attains a peak velocity of 4.01 m/s within
+              • Q6: Can the model perform reliably in diverse complex
+                                                                                                                                   2.16 s with a tracking error of 0.20 m/s, which demonstrates
+                environments not encountered during training?
+                                                                                                                                   exceptional acceleration and braking capabilities. Notably the
+                                                                                                                                                    2.0
+Stairs Traversal
+
+                                                                                                                            Linear Velocity (m/s)
+                                                                                                                                                    1.5
+Duration: 2.98 s                                                                                                                                    1.0
+                                                                                                                                                    0.5               Command         Stairs Entry
+Avg. Speed: 1.31 m/s                                                                                                                                0.0
+                                                                                                                                                                      Measured        Stairs Exit
+                                                                                                                                                       0.0 0.5 1.0 1.5 2.0 2.5 3.0 3.5 4.0 4.5 5.0 5.5
+                                                                                                                                                                             Time (s)
+
+
+                                                                                           1.5m
+                                                                                                              0.1m
+                                                                            0.15m
+                                                                                                                     0.3m
+                                                                     0.3m
+
+
+
+Fig. 7: Experiment on wooden stairs with a 10 cm rise and 15 cm drop. The upper-right plot depicts the velocity tracking
+curve captured through a motion capture system where the tracking error is 0.15 m/s.
+
+Slope Traversal                                                                                                                                                            Drop Recovery
+Duration: 3.33 s                                                                                                                                                                 Height: 0.6 m
+Avg. Speed: 1.53 m/s
+
+                                                                                    1.5m      2.4m
+                                                                                                      15°
+                                                                 1.2m                                                                        0.6m
+
+
+                                                      30°
+
+
+Fig. 8: Robust locomotion during slope traversal and drop recovery. The left panel highlights a 1.7 s efficiency gain on µ = 0.71
+slopes compared to the built-in RL baseline and the right frame verifies reliable recovery from 60 cm drops.
+
+                                   4
+
+
+
+
+   Forward Linear Velocity (m/s)
+                                                                                              C. Stability and Generalization
+                                          Command
+                                   3      Measured                                               We validated the emergency recovery capabilities of the
+                                                                                              proposed model across two challenging real-world scenarios.
+                                   2                                                          First, the robot is subjected to external forces such as strong
+                                                                                              pushes or pulls where it shows great disturbance rejection by
+                                   1
+                                                                                              changing its center of mass and creating gaits to offset the
+                                   0                                                          impact. Fig. 10 and 17 show that the robot remains stable
+                                    0.0   0.5   1.0    1.5     2.0    2.5   3.0
+                                                      Time (s)                                under continuous lateral pulls between 25 N and 40 N as
+                                                                                              well as sudden impulses of 85 N to 100 N where established
+Fig. 9: Velocity tracking and gait on a µ = 0.6 surface. The                                  baselines almost entirely fail to maintain balance. Second,
+left plot exhibits command following reaching 4.01 m/s within                                 when encountering a sudden loss of support the robot rapidly
+2.16 s with a 0.20 m/s error. The upper-right image captures                                  reconfigures its gait to secure its footing and prevent forward
+transient flight phases while the lower-right image highlights                                tumbling. Fig. 8 illustrates a successful recovery sequence
+a stable narrow-base gait.                                                                    from a 60 cm drop while Fig. 18 depicts the natural transition
+                                                                                              to a stable posture after an unexpected fall from flat ground
+                                                                                              onto stairs.
+                                                                                                 Finally we conducted field tests in diverse outdoor environ-
+                                                                                              ments   to evaluate
+                                                                                               Backward    Impulsethe generalization capabilities of the frame-
+                                                                                              work. The right panel of Fig. 1 illustrates the performance
+                                                                                              across various terrains such as sand and ice as well as slopes
+                                                                                              and uneven terrains. The robot completed all trials with a
+Fig. 10: Continuous lateral pull disturbance rejection experi-                                100% success rate and zero unexpected terminations which
+                                     Lateral
+ment on flat terrain. The robot endures      Impulse
+                                        repeated lateral pulls of                             highlights the exceptional robustness of the learned policy.
+approximately 25 ∼ 40N while maintaining stable locomotion.
+                                                                                                        VII. C ONCLUSIONS AND FUTURE WORK
+model autonomously develops a stable narrow-base gait de-                                        In this work, we presented a training framework comprising
+spite the absence of explicit motion constraints to minimize                                  the RoboGauge assessment suite and an MoE locomotion
+lateral center-of-mass oscillations and bolster stability during                              policy which enables robust multi-terrain locomotion relying
+high-speed maneuvers.                                                                         solely on proprioception. Physical experiments on a Unitree
+Go2 robot demonstrate that our framework successfully sur-          [7] Thomas Dudzik, Matthew Chignoli, Gerardo Bledt,
+mounts challenging environments including 30 cm obstacles               Bryan Lim, Adam Miller, Donghyun Kim, and Sangbae
+and 100 N impulses, while utilizing the identical training              Kim. Robust autonomous navigation of a small-scale
+configuration on flat ground to attain a peak velocity of               quadruped robot in real-world environments. In 2020
+4.01 m/s. The framework consistently outperforms established            IEEE/RSJ International Conference on Intelligent Robots
+baselines in both tracking precision and recovery stability with        and Systems (IROS), pages 3664–3671. IEEE, 2020.
+a 100% success rate in diverse outdoor field tests. This syn-       [8] Magnus Gaertner, Marko Bjelonic, Farbod Farshidian,
+ergy between predictive assessment and modular architecture             and Marco Hutter. Collision-free mpc for legged robots
+provides a reliable and efficient way to bridge the gap between         in static and dynamic scenes. In 2021 IEEE International
+simulation results and actual physical performance.                     Conference on Robotics and Automation (ICRA), pages
+   Future research will extend RoboGauge to broader mor-                8266–8272. IEEE, 2021.
+phologies like humanoid robots and integrate exteroceptive          [9] Jia-Ruei Chiu, Jean-Pierre Sleiman, Mayank Mittal, Far-
+perception with the MoE representation to further improve the           bod Farshidian, and Marco Hutter. A collision-free mpc
+crossing of complex structural obstacles.                               for whole-body dynamic locomotion and manipulation.
+                                                                        In 2022 international conference on robotics and au-
+                    ACKNOWLEDGEMENT                                     tomation (ICRA), pages 4686–4693. IEEE, 2022.
+                                                                   [10] David Hoeller, Lorenz Wellhausen, Farbod Farshidian,
+   The authors thank Tencent AI Arena and Unitree Robotics
+                                                                        and Marco Hutter. Learning a state representation and
+for providing the Go2 quadruped for the initial experiments.
+                                                                        navigation in cluttered and dynamic environments. IEEE
+Thanks to Guangsheng Li for providing the training code for
+                                                                        Robotics and Automation Letters, 6(3):5081–5088, 2021.
+baseline DreamWaQ.
+                                                                   [11] Donghyun Kim, Daniel Carballo, Jared Di Carlo, Ben-
+   This work was supported in part by the National Key R&D
+                                                                        jamin Katz, Gerardo Bledt, Bryan Lim, and Sangbae
+Program of China under Grant No. 2024YFB4707600, NSFC
+                                                                        Kim. Vision aided dynamic exploration of unstructured
+under grant No. 62125305, No. U23A20339, No. 62573339,
+                                                                        terrain with a small-scale quadruped robot. In 2020 IEEE
+No. 62503380, Fundamental and Interdisciplinary Disciplines
+                                                                        International Conference on Robotics and Automation
+Breakthrough Plan of the Ministry of Education of China
+                                                                        (ICRA), pages 2464–2470. IEEE, 2020.
+under grant No. JYB2025XDXM210, Natural Science Foun-
+                                                                   [12] Qiayuan Liao, Zhongyu Li, Akshay Thirugnanam, Jun
+dation of Shaanxi Province under Grant 2025SYSSYSZD-083,
+                                                                        Zeng, and Koushil Sreenath. Walking in narrow spaces:
+and State Grid Corporation of China Science and Technology
+                                                                        Safety-critical locomotion control for quadrupedal robots
+Projects 52060025005B-439-ZN.
+                                                                        with duality-based optimization. In 2023 IEEE/RSJ In-
+                                                                        ternational Conference on Intelligent Robots and Systems
+                        R EFERENCES
+                                                                        (IROS), pages 2723–2730. IEEE, 2023.
+ [1] Oussama Khatib. Real-time obstacle avoidance for ma-          [13] Matias Mattamala, Nived Chebrolu, and Maurice Fallon.
+     nipulators and mobile robots. The international journal            An efficient locally reactive controller for safe navigation
+     of robotics research, 5(1):90–98, 1986.                            in visual teach and repeat missions. IEEE Robotics and
+ [2] Sertac Karaman and Emilio Frazzoli. Sampling-based al-             Automation Letters, 7(2):2353–2360, 2022.
+     gorithms for optimal motion planning. The international       [14] Ruihan Yang, Minghao Zhang, Nicklas Hansen, Huazhe
+     journal of robotics research, 30(7):846–894, 2011.                 Xu, and Xiaolong Wang.            Learning vision-guided
+ [3] Jemin Hwangbo, Joonho Lee, Alexey Dosovitskiy, Dario               quadrupedal locomotion end-to-end with cross-modal
+     Bellicoso, Vassilios Tsounis, Vladlen Koltun, and Marco            transformers. In Deep RL Workshop NeurIPS 2021.
+     Hutter. Learning agile and dynamic motor skills for           [15] Chong Zhang, Jin Jin, Jonas Frey, Nikita Rudin, Matı́as
+     legged robots. Science Robotics, 4(26):eaau5872, 2019.             Mattamala, Cesar Cadena, and Marco Hutter. Resilient
+ [4] Russell Buchanan, Lorenz Wellhausen, Marko Bjelonic,               legged local navigation: Learning to traverse with com-
+     Tirthankar Bandyopadhyay, Navinda Kottege, and Marco               promised perception end-to-end. In 2024 IEEE Interna-
+     Hutter. Perceptive whole-body planning for multilegged             tional Conference on Robotics and Automation (ICRA),
+     robots in confined spaces. Journal of Field Robotics, 38           pages 34–41. IEEE, 2024.
+     (1):68–84, 2021.                                              [16] Joonho Lee, Jemin Hwangbo, Lorenz Wellhausen,
+ [5] Sehoon Ha, Peng Xu, Zhenyu Tan, Sergey Levine, and                 Vladlen Koltun, and Marco Hutter. Learning quadrupedal
+     Jie Tan. Learning to walk in the real world with minimal           locomotion over challenging terrain. Science robotics, 5
+     human effort. In Conference on Robot Learning, pages               (47):eabc5986, 2020.
+     1110–1120. PMLR, 2021.                                        [17] Ashish Kumar, Zipeng Fu, Deepak Pathak, and Jitendra
+ [6] Laura Smith, J Chase Kew, Xue Bin Peng, Sehoon Ha,                 Malik. Rma: Rapid motor adaptation for legged robots.
+     Jie Tan, and Sergey Levine. Legged robots that keep                Robotics: Science and Systems XVII, 2021.
+     on learning: Fine-tuning locomotion policies in the real      [18] Zhi Su, Xiaoyu Huang, Daniel Ordoñez-Apraez, Yunfei
+     world. In 2022 international conference on robotics and            Li, Zhongyu Li, Qiayuan Liao, Giulio Turrisi, Massim-
+     automation (ICRA), pages 1593–1599. IEEE, 2022.                    iliano Pontil, Claudio Semini, Yi Wu, et al. Leveraging
+     symmetry in rl-based legged locomotion control. In 2024          ternational conference on intelligent robots and systems
+     IEEE/RSJ International Conference on Intelligent Robots          (IROS), pages 23–30. IEEE, 2017.
+     and Systems (IROS), pages 6899–6906. IEEE, 2024.            [32] Xue Bin Peng, Marcin Andrychowicz, Wojciech
+[19] Gwanghyeon Ji, Juhyeok Mun, Hyeongjun Kim, and                   Zaremba, and Pieter Abbeel. Sim-to-real transfer of
+     Jemin Hwangbo. Concurrent training of a control policy           robotic control with dynamics randomization. In 2018
+     and a state estimator for dynamic and robust legged              IEEE international conference on robotics and automa-
+     locomotion. IEEE Robotics and Automation Letters, 7              tion (ICRA), pages 3803–3810. IEEE, 2018.
+     (2):4630–4637, 2022.                                        [33] OpenAI: Marcin Andrychowicz, Bowen Baker, Maciek
+[20] Jinze Wu, Guiyang Xin, Chenkun Qi, and Yufei Xue.                Chociej, Rafal Jozefowicz, Bob McGrew, Jakub Pa-
+     Learning robust and agile legged locomotion using ad-            chocki, Arthur Petron, Matthias Plappert, Glenn Powell,
+     versarial motion priors. IEEE Robotics and Automation            Alex Ray, et al. Learning dexterous in-hand manipula-
+     Letters, 8(8):4975–4982, 2023.                                   tion. The International Journal of Robotics Research, 39
+[21] Philipp Wu, Alejandro Escontrela, Danijar Hafner, Pieter         (1):3–20, 2020.
+     Abbeel, and Ken Goldberg. Daydreamer: World models          [34] Yevgen Chebotar, Ankur Handa, Viktor Makoviychuk,
+     for physical robot learning. In Conference on robot              Miles Macklin, Jan Issac, Nathan Ratliff, and Dieter
+     learning, pages 2226–2240. PMLR, 2023.                           Fox. Closing the sim-to-real loop: Adapting simulation
+[22] Nikita Rudin, David Hoeller, Philipp Reist, and Marco            randomization with real world experience. In 2019
+     Hutter. Learning to walk in minutes using massively              International Conference on Robotics and Automation
+     parallel deep reinforcement learning. In Conference on           (ICRA), pages 8973–8979. IEEE, 2019.
+     robot learning, pages 91–100. PMLR, 2022.                   [35] Yunho Kim, Hyunsik Oh, Jeonghyun Lee, Jinhyeok Choi,
+[23] Takahiro Miki, Joonho Lee, Jemin Hwangbo, Lorenz                 Gwanghyeon Ji, Moonkyu Jung, Donghoon Youm, and
+     Wellhausen, Vladlen Koltun, and Marco Hutter. Learning           Jemin Hwangbo. Not only rewards but also constraints:
+     robust perceptive locomotion for quadrupedal robots in           Applications on legged robot locomotion. IEEE Trans-
+     the wild. Science robotics, 7(62):eabk2822, 2022.                actions on Robotics, 40:2984–3003, 2024.
+[24] I Made Aswin Nahrendra, Byeongho Yu, and Hyun               [36] John Schulman, Filip Wolski, Prafulla Dhariwal, Alec
+     Myung. Dreamwaq: Learning robust quadrupedal lo-                 Radford, and Oleg Klimov. Proximal policy optimization
+     comotion with implicit terrain imagination via deep              algorithms. arXiv preprint arXiv:1707.06347, 2017.
+     reinforcement learning. In 2023 IEEE International          [37] Chong Zhang, Nikita Rudin, David Hoeller, and Marco
+     Conference on Robotics and Automation (ICRA), pages              Hutter. Learning agile locomotion on risky terrains. In
+     5078–5084. IEEE, 2023.                                           2024 IEEE/RSJ International Conference on Intelligent
+[25] Junfeng Long, Zirui Wang, Quanyi Li, Liu Cao, Jiawei             Robots and Systems (IROS), pages 11864–11871. IEEE,
+     Gao, and Jiangmiao Pang. Hybrid internal model:                  2024.
+     Learning agile legged locomotion with simulated robot       [38] Sepp Hochreiter and Jürgen Schmidhuber. Long short-
+     response. In ICLR, 2024.                                         term memory. Neural Computation, 9(8):1735–1780,
+[26] Gabriel B Margolis, Ge Yang, Kartik Paigwar, Tao Chen,           1997. doi: 10.1162/neco.1997.9.8.1735.
+     and Pulkit Agrawal. Rapid locomotion via reinforcement      [39] Prakhar Mishra, Amir Hossain Raj, Xuesu Xiao, and Di-
+     learning. In Robotics: Science and Systems, 2022.                nesh Manocha. Hacl: History-aware curriculum learning
+[27] Zipeng Fu, Ashish Kumar, Jitendra Malik, and Deepak              for fast locomotion. arXiv preprint arXiv:2505.18429,
+     Pathak. Minimizing energy consumption leads to the               2025.
+     emergence of gaits in legged robots. In Conference on       [40] Alexander Luis Mitchell, Wolfgang Merkt, Aristotelis
+     Robot Learning, pages 928–937. PMLR, 2022.                       Papatheodorou, Ioannis Havoutis, and Ingmar Posner.
+[28] Gabriel B Margolis and Pulkit Agrawal. Walk these                Gaitor: Learning a unified representation across gaits
+     ways: Tuning robot control for generalization with mul-          for real-world quadruped locomotion. In 8th Annual
+     tiplicity of behavior. In Conference on Robot Learning,          Conference on Robot Learning, 2024.
+     pages 22–31. PMLR, 2023.                                    [41] Guillaume Bellegarda, Milad Shafiee, and Auke Ijspeert.
+[29] Chuanyu Yang, Kai Yuan, Qiuguo Zhu, Wanming Yu,                  Allgaits: Learning all quadruped gaits and transitions. In
+     and Zhibin Li. Multi-expert learning of adaptive legged          2025 IEEE International Conference on Robotics and
+     locomotion. Science Robotics, 5(49):eabb2174, 2020.              Automation (ICRA), pages 15929–15935. IEEE, 2025.
+[30] Sylvain Koos, Jean-Baptiste Mouret, and Stéphane Don-      [42] Milad Shafiee, Guillaume Bellegarda, and Auke Ijspeert.
+     cieux. The transferability approach: Crossing the reality        Viability leads to the emergence of gait transitions in
+     gap in evolutionary robotics. IEEE Transactions on               learning agile quadrupedal locomotion on challenging
+     Evolutionary Computation, 17(1):122–145, 2012.                   terrains. Nature Communications, 15(1):3073, 2024.
+[31] Josh Tobin, Rachel Fong, Alex Ray, Jonas Schneider,         [43] Skand Peri, Akhil Perincherry, Bikram Pandit, and Ste-
+     Wojciech Zaremba, and Pieter Abbeel. Domain ran-                 fan Lee. Non-conflicting energy minimization in rein-
+     domization for transferring deep neural networks from            forcement learning based robot control. In 9th Annual
+     simulation to the real world. In 2017 IEEE/RSJ in-               Conference on Robot Learning, 2025.
+[44] Runhan Huang, Shaoting Zhu, and Yilun Du. Moe-loco:             Robots and Systems, pages 5026–5033, 2012. doi:
+     Mixture of experts for multitask locomotion. In 2025            10.1109/IROS.2012.6386109.
+     IEEE/RSJ International Conference on Intelligent Robots    [57] Miomir Vukobratović and Branislav Borovac. Zero-
+     and Systems (IROS), pages 14218–14225, 10 2025. doi:            moment point—thirty five years of its life. International
+     10.1109/IROS60139.2025.11246585.                                journal of humanoid robotics, 1(01):157–173, 2004.
+[45] Xuanlin Li, Kyle Hsu, Jiayuan Gu, Karl Pertsch, Oier       [58] Stéphane Caron, Quang-Cuong Pham, and Yoshihiko
+     Mees, Homer Rich Walke, Chuyuan Fu, Ishikaa Lunawat,            Nakamura. Stability of surface contacts for humanoid
+     Isabel Sieh, Sean Kirmani, et al. Evaluating real-world         robots: Closed-form formulae of the contact wrench cone
+     robot manipulation policies in simulation. In RSS 2024          for rectangular support areas. In 2015 IEEE International
+     Workshop: Data Generation for Robotics.                         Conference on Robotics and Automation (ICRA), pages
+[46] Wei-Cheng Tseng, Jinwei Gu, Qinsheng Zhang, Hanzi               5107–5112. IEEE, 2015.
+     Mao, Ming-Yu Liu, Florian Shkurti, and Lin Yen-Chen.       [59] Xue Bin Peng, Michael Chang, Grace Zhang, Pieter
+     Scalable policy evaluation with video world models.             Abbeel, and Sergey Levine. Mcp: Learning composable
+     arXiv preprint arXiv:2511.11520, 2025.                          hierarchical control with multiplicative compositional
+[47] Xinhai Li, Jialin Li, Ziheng Zhang, Rui Zhang, Fan Jia,         policies. Advances in neural information processing
+     Tiancai Wang, Haoqiang Fan, Kuo-Kun Tseng, and Ruip-            systems, 32, 2019.
+     ing Wang. Robogsim: A real2sim2real robotic gaussian       [60] Karl Pearson. Liii. on lines and planes of closest fit to
+     splatting simulator. arXiv preprint arXiv:2411.11839,           systems of points in space. The London, Edinburgh, and
+     2024.                                                           Dublin philosophical magazine and journal of science, 2
+[48] Shaoting Zhu, Linzhan Mou, Derun Li, Baijun Ye,                 (11):559–572, 1901.
+     Runhan Huang, and Hang Zhao. Vr-robo: A real-to-
+     sim-to-real framework for visual robot navigation and
+     locomotion. IEEE Robotics and Automation Letters,
+     2025.
+[49] Hongxi Wang, Haoxiang Luo, Wei Zhang, and Hua Chen.
+     Cts: Concurrent teacher-student reinforcement learning
+     for legged locomotion. IEEE Robotics and Automation
+     Letters, 2024.
+[50] Ying Zhang, Tao Xiang, Timothy M Hospedales, and
+     Huchuan Lu. Deep mutual learning. In Proceedings
+     of the IEEE conference on computer vision and pattern
+     recognition, pages 4320–4328, 2018.
+[51] Robert A Jacobs, Michael I Jordan, Steven J Nowlan, and
+     Geoffrey E Hinton. Adaptive mixtures of local experts.
+     Neural computation, 3(1):79–87, 1991.
+[52] Michael I Jordan and Robert A Jacobs. Hierarchical
+     mixtures of experts and the em algorithm. Neural
+     computation, 6(2):181–214, 1994.
+[53] William Fedus, Barret Zoph, and Noam Shazeer. Switch
+     transformers: Scaling to trillion parameter models with
+     simple and efficient sparsity. Journal of Machine Learn-
+     ing Research, 23(120):1–39, 2022.
+[54] Noam Shazeer, Azalia Mirhoseini, Krzysztof Maziarz,
+     Andy Davis, Quoc Le, Geoffrey Hinton, and Jeff
+     Dean.      Outrageously large neural networks: The
+     sparsely-gated mixture-of-experts layer. arXiv preprint
+     arXiv:1701.06538, 2017.
+[55] Viktor Makoviychuk, Lukasz Wawrzyniak, Yunrong
+     Guo, Michelle Lu, Kier Storey, Miles Macklin, David
+     Hoeller, Nikita Rudin, Arthur Allshire, Ankur Handa,
+     et al. Isaac gym: High performance gpu based physics
+     simulation for robot learning. In NeurIPS Datasets and
+     Benchmarks, 2021.
+[56] Emanuel Todorov, Tom Erez, and Yuval Tassa. Mu-
+     joco: A physics engine for model-based control. In
+     2012 IEEE/RSJ International Conference on Intelligent
+                      A PPENDIX A                                            horizontal distance error of the ZMP relative to the geometric
+         ROBO G AUGE S UPPLEMENTARY M ATERIAL                                center of the active contacts, is defined as:
+                                                                                                                                      
+A. Stability Metric                                                                                                ||(xzmp , yzmp )||2
+                                                                                     mzmp margin = max 0, 1 −                            (12)
+   To provide a more comprehensive evaluation of locomotion                                                             Dnorm
+stability, we introduce two formal physical criteria in Robo-                    2) Coulomb Friction Margin: To account for potential
+Gauge: the Zero Moment Point (ZMP) margin [57] and a                         slippage and Contact Wrench Cone (CWC) constraints, we
+Coulomb friction margin under Contact Wrench Cone (CWC)                      introduce a translational friction margin. Let Nc be the number
+constraints [58].                                                            of active foot contacts with the ground. For each contact i,
+   1) Zero Moment Point (ZMP) Margin: The Zero Moment                        fitangent represents the tangential force, finormal represents the
+Point (ZMP) is a fundamental concept in legged locomotion,                   normal force, and µ is the surface friction coefficient.
+defined as the point on the ground where the net moment of                       The Coulomb Friction Margin is calculated as the normal-
+inertial and gravitational forces has no horizontal components.              force-weighted average slack to the friction-cone boundary
+To formalize this metric within our framework, we establish                  over all active contacts:
+the following definitions:                                                                              Nc
+                                                                                                                         ||fitangent ||
+                                                                                                       X                               
+   • Support Polygon: The convex hull formed by all active                          mfriction margin =     wi max 0, 1 −                   (13)
+      contact points between the robot and the ground.                                                 i=1
+                                                                                                                          µfinormal
+   • Fictitious ZMP (FZMP): When the calculated ZMP falls                      where the weighting factor wi dynamically emphasizes
+      outside the support polygon, it is referred to as the FZMP,            contacts bearing greater vertical loads:
+      indicating that the system is in a dynamically unbalanced
+      state.                                                                                              f normal
+                                                                                                   wi = PNci                              (14)
+                                                                                                                normal
+   • Virtual Horizontal Plane: A coordinate frame translated                                             j=1 fj
+      to O′ , representing the geometric center of all active
+                                                                             B. Hyperparameter Configuration
+      ground contact points, which projects the system onto
+      the xy-plane.                                                             In the quality score calculation Eq. 5, the metric weights
+                                                                             are set to wk = 2 for task-completion metrics and wk = 1
+   Within the MuJoCo simulation environment, the ZMP is
+                                                                             to others. For the overlapping scoring function Eq. 6, the
+calculated by aggregating the dynamics over all N rigid bodies
+                                                                             hyperparameters are set to α = 0.09 and β = 0.19, which
+of the robot. For the i-th rigid body at the current timestep,
+                                                                             ensures the performance score is bounded within the range
+we define its mass as mi , its center of mass (CoM) position
+                                                                             [0, 1]. Domain randomizations include friction coefficients
+relative to O′ as pi , its CoM linear acceleration as p̈i , its
+                                                                             from 0.2 to 1.0 in increments of 0.1. Terrain levels are
+angular velocity as ω i , its angular acceleration as ω̇ i , and its
+                                                                             designed with difficulty parameters d ranging from 0.1 to 1.0
+inertia tensor as I i . It is crucial that all kinematic and inertial
+                                                                             in increments of 0.1 as detailed in Table VII. The locomotion
+properties are strictly expressed in the world coordinate frame.
+                                                                             control objectives are configured as described in Table VIII.
+   The total force F total and total moment M total of the system
+are formulated as:                                                           C. Implementation Details
+              N
+              X                                                                 The operational logic for each pipeline is delineated below.
+  F total =         mi (g − p̈i )                                      (8)      The BasePipeline (Fig. 11) orchestrates the interaction
+              i=1                                                            between the simulation engine sim, the evaluator gauge
+               N
+              X                                                              responsible for control commands and metric computation,
+ M total =          [(pi × mi (g − p̈i )) − (I i ω̇ i + ω i × (I i ω i ))]   and the locomotion model robot. Additionally, it manages
+              i=1
+                                                                             exception handling, domain randomization, and the application
+                                                                       (9)
+                                                                             of observation noise.
+   By definition, the relationship between the total moment and                 The MultiPipeline leverages multiprocessing to exe-
+force at the ZMP is given by M = r zmp × F total . Expanding                 cute the BasePipeline across diverse seeds and domain
+this cross product yields the moment components:                             randomization configurations while aggregating the output
+                (                                                            files. To determine the maximum navigable difficulty for a
+                  M y = −xzmp F z + zzmp F x                                 given terrain, the LevelPipeline (Fig. 12) identifies the
+                                                           (10)
+                  M x = yzmp F z − zzmp F y                                  highest level that the model traverses successfully across three
+                                                                             separate random seeds.
+   By projecting the ZMP onto the virtual horizontal plane
+(zzmp = 0), the exact ZMP coordinates (xzmp , yzmp ) are derived
+as:
+                         My              Mx
+                xzmp = −     , yzmp =                       (11)
+                         Fz              Fz
+  Let Dnorm denote the diagonal stance span of the robot in its
+default posture. The normalized ZMP Margin, representing the
+                           TABLE VII: Terrain Level Design Parameters (d = 0.1, 0.2, · · · , 1.0)
+Terrain                Specification & Formula                                                        Range / Unit
+                       Amplitude A = 0.4d                                                            A ∈ [0.04, 0.4]
+Wave                   Period T = 1.6                                                                      m
+                       Height Field z(x, y) = A sin(x/T ) + A cos(y/T )                                    m
+Slope                  Slope k = 0.07 + 0.5d                                                  Angle θ ∈ [8.4◦ , 29.7◦ ]
+                       Step Width w = 0.31
+                                       (                                                                    m
+Stairs                                   0.05 + 0.3d,         0.1 ≤ d ≤ 0.4
+                       Step Height h =                                                              h ∈ [0.08, 0.23] m
+                                         0.17 + 0.1(d − 0.4), 0.5 ≤ d ≤ 1.0
+Obstacles              Height h = 0.05 + 0.23d                                                  h ∈ [0.073, 0.28] m
+
+
+                              TABLE VIII: Configuration of Locomotion Control Objectives
+Goal Name                  Description                                        Reset Condition                   Max Trials
+Max Velocity               Evaluation of peak linear or angular velocity in   Sudden stop after each                   6
+                           a single dimension.                                directional command.
+Diagonal Velocity          Tracking of coupled diagonal velocity vectors      Completion of each pair of               8
+                           (combined linear and angular).                     diagonal commands.
+Target Pos. Velocity       Position-based tracking using a Proportional       Goal reached or time limit               1
+                           controller to reach targets.                       exceeded.
+
+
+
+
+                                 Fig. 11: Operational workflow of the BasePipeline.
+
+
+
+
+                                Fig. 12: Operational workflow of the LevelPipeline.
+                        A PPENDIX B                                  frequently encountered during hardware deployment. To ad-
+                     T RAINING D ETAILS                              dress this issue, we introduced an extreme command sampling
+A. Dynamic Velocity Tracking Precision Adjustment                    strategy. This methodology allocates a 10% probability to
+                                                                     stationary commands and a 20% probability to command
+   To adapt the velocity tracking precision σ according to
+                                                                     combinations that represent maximum velocity limits across
+terrain characteristics and difficulty levels, we implement a
+                                                                     all three dimensions. Furthermore, when the linear velocity is
+dynamic scaling adjustment. We observe that as the maxi-
+                                                                     zero, the framework maintains a 20% probability of sampling
+mum command range expands from 0.5 to 1.5, locomotion
+                                                                     the maximum angular velocity to enhance robustness during
+on challenging terrains such as wave, stairs, and obstacle
+                                                                     pivot turns.
+often fails to accurately track the commanded linear velocity.
+                                                                         At the start of training, the linear velocity command range
+Consequently, we scale the tracking coefficients to relax the
+                                                                     is restricted to [−0.5, 0.5] m/s with a 10% probability of
+tracking constraints for these scenarios.
+                                                                     remaining stationary. Such a narrow distribution frequently
+   We define [vmin , vmax ] as the velocity magnitude range des-
+                                                             Ti      produces command sequences that fail the terrain level-up
+ignated for the dynamic adjustment of σ. The parameter σmax
+                                                                     condition, which necessitates a final horizontal distance rela-
+denotes the maximum velocity tracking coefficient assigned to
+                                                                     tive to the initial position exceeding 4m, a value equivalent to
+the i-th terrain type. Given a commanded velocity v for the
+                                                                     half the terrain length [22]. This limitation prevents the agent
+i-th terrain, the intermediate coefficient σvel is formulated as
+                                                                     from exploring higher difficulty levels. To guarantee that the
+follows:
+                                                                    cumulative command length surpasses the required threshold,
+  σ,
+                                        v ∈ [0, vmin ),             we implement a dynamic command sampling strategy.
+    σ(v − vmin ) + σmaxTi
+                          (vmax − v), v ∈ [vmin , vmax ), (15)           Let nr represent the number of sampled commands and
+  
+   Ti                                                               v cmd  denote the i-th linear velocity command. Given that Tr
+    σmax ,                               v ∈ [vmax , ∞).               i
+                                                                     signifies the sampling interval and Tep is the episode duration,
+   The final adaptive tracking coefficient σnow incorporates the     the sampling range for the (nr + 1)-th command is restricted
+terrain difficulty level L as delineated below:                      to the intervals between (v min , −v ∗ ) ∪ (v ∗ , v max ) where v ∗ is
+                                L                                    formulated as follows:
+            σnow = σ + min(e 10 − 1, 1)(σvel − σ)           (16)                           Pnr cmd                                        
+                                                                         ∗            5 − || i=1   v i ||2 Tr
+The velocity commands v pertain to longitudinal and lateral             v := clip                             , 0, min(|v min |, |v max |)
+                                                                                            Tep − nr Tr
+linear velocities as well as angular velocity commands. Table                                                                             (17)
+X in the Appendix details the maximum velocity tracking                  Should a stationary command be selected for the (nr +1)-th
+              Ti
+coefficients σmax and the associated velocity adjustment ranges      sample, its specific duration is determined as follows:
+across diverse terrains.                                                                                     Pnr cmd                       
+                                                                         zero                          5 − || i=1     v i ||2 Tr
+                                                                      T       = clip Tep − nr Tr −                                 , 0, T r
+B. Command Design                                                                                      0.8 × max(vxmax , vymax )
+   Direct training with the full command range of [−1, 1] m/s                                                                             (18)
+across all terrains enables rapid progression through difficulty         The integration of the aforementioned command curriculum,
+levels but frequently yields unstable gaits. Specifically, the       extreme command sampling, and dynamic command sampling
+robot often demonstrates erratic behaviors such as leaping and       promotes the development of more stable locomotion gaits
+high-frequency leg motions. Conversely, training from low-           while ensuring a steady advancement across terrain difficulty
+speed commands facilitates the acquisition of stable locomo-         levels. Additionally, these strategies markedly raise the perfor-
+tion patterns. We therefore introduce a command curriculum           mance ceiling for models evaluated with the RoboGauge.
+to address these issues, as detailed in Table XI.                                     0.7
+   We observed that when the maximum command magnitude
+exceeds [−1, 1] m/s, the robot fails to accurately track the                          0.6                                                       0.6
+
+
+
+                                                                    RoboGauge Score                                        Flat Terrain Score
+target linear velocity on complex terrains such as wave, stairs,                      0.5
+and obstacle. This tracking discrepancy induces instability                                                                                     0.4
+during the training process. Therefore, we impose specific                            0.4
+constraints on the maximum command range for individual                                                                                         0.2
+                                                                                      0.3
+terrains as detailed in Table X. Notably, although these limits
+are strictly enforced during the training phase, no such restric-                     0.2                                      0.0
+                                                                                            0       40K      80K       120K        0      40K       80K       120K
+tions are applied during hardware testing on the physical robot.                                   Training Steps                         Training Steps
+Despite this discrepancy, the model follows commands that                                        Ours          Vanilla w/ Dynamic Resampling          Vanilla
+lie beyond the training distribution and demonstrates robust
+generalization capabilities.                                                                    Fig. 13: Ablation study on training strategies.
+   Our empirical analysis indicates that uniform sampling
+distributions are suboptimal because boundary values exhibit           We conducted ablation studies on the training configurations
+an exceptionally low probability of occurrence despite being         where Fig. 13 illustrates the impact of dynamic command
+sampling. Activating this feature accelerates convergence and
+elevates the peak reward by 11% relative to the version
+                                                                                                                                             Wave                                                                           Slope
+without dynamic sampling. The final training curve is achieved                                                      10                                                     10
+by further incorporating dynamic velocity tracking precision
+adjustment and a command curriculum. These additions sig-                                                                8                                                                  8
+
+
+                                                                                 Terrain Level
+nificantly bolster training stability and improve performance                                                            6                                                                  6
+on flat terrain.
+                                                                                                                         4                                                                  4
+                             A PPENDIX C
+                      T RAIN CONFIGURATION
+                                                                                                                         2                                                                  2
+                                                                                                                         0                                                                  0
+         TABLE IX: Reward Function Specifications                                                                                0.3 0.4 0.6 0.8 1.0                                                                0.3 0.4 0.6 0.8 1.0
+                                                                                                                                             Stairs                                                                        Obstacle
+ Reward Term               Equation                           Weight                                                10                                                     10
+                                                                                                                         8                                                                  8
+                           exp(−σ||v cmd              2
+ Lin. velocity tracking                   xy − v xy ||2 )     1.0/2.0
+ Ang. velocity tracking                  cmd
+                           exp(−σ|ωz − ωz | )     2           0.5
+
+
+                                                                                 Terrain Level
+ Lin. velocity (z)         vz2                                −2.0                                                       6                                                                  6
+ Ang. velocity (xy)        ||ω xy ||22                        −0.05
+ Joint acceleration        q̈ 2                               −2.5×10−7                                                  4                                                                  4
+ Joint power               |τ ||q̇|T                          −2 × 10−5
+ Joint torque              ||τ ||22                           −1 × 10−4                                                  2                                                                  2
+ Base height               (hdes − h)2                        −1.0
+ Action rate               ||at − at−1 ||22                   −0.01                                                      0                                                                  0
+ Action smoothness         ||at − 2at−1 + at−2 ||22           −0.01                                                              0.3 0.4 0.6 0.8 1.0                                                                0.3 0.4 0.6 0.8 1.0
+ Collision                 ncollision                         −1.0                                                                      Friction                                                                           Friction
+ Joint limit               nlimitation                        −2.0
+ Foot regulation           rfr                                −0.05                                                                   Ours                 CTS                                              HIM                   DreamWaQ
+                                       hip
+ Hip regulation            |q hip − q default |               −0.05
+ Hip symmetry              rhs                                −1                  Fig. 14: Maximum terrain difficulty levels achieved by various
+  Black: Reward terms utilized for the multi-terrain model.                       models under a subset of friction coefficients (ranging from
+  Red: Flat-ground high-speed model modified weights.                             0.2 to 1.0 in increments of 0.1).
+
+
+TABLE X: Maximum Velocity Tracking Coefficients and
+Command Limits Across Terrains
+                     i                                                                                             1.2                                 Command                                        0.6                                   Command
+
+
+
+
+                                                                                   Forward Linear Velocity (m/s)
+ Terrain Type       σmax     vx [m/s]       vy [m/s]        ωz [rad/s]
+
+
+
+                                                                                                                                                                      Lateral Linear Velocity (m/s)
+                                                                                                                   1.0                                 Measured                                       0.5                                   Measured
+ Flat                1/4       ± 2.0          ± 1.0           ± 2.0                                                0.8                                                                                0.4
+ Wave               5/12       ± 1.5          ± 1.0           ± 1.5                                                0.6                                                                                0.3
+ Slope               1/4       ± 1.5          ± 1.0           ± 1.5                                                0.4                                                                                0.2
+                                                                                                                   0.2                                                                                0.1
+ Stairs Up           1/2       ± 1.0          ± 1.0           ± 1.5
+                                                                                                                   0.0                                                                                0.0
+ Stairs Down         1/2       ± 1.0          ± 1.0           ± 1.5                                                      0       1    2           3    4          5                                         0         1     2           3   4          5
+ Obstacle            3/4       ± 1.0          ± 1.0           ± 1.5                                                                       Time (s)                                                                              Time (s)
+
+   Note: Velocity ranges are defined as v lin ∈ [0.5, 1.5] m/s and v ang ∈                                               (a) With vxcmd = 1.0 m/s                                                       (b) With vycmd = 0.5 m/s
+   [1.0, 2.0] rad/s.
+                                                                                                                   1.25                                Command                                                                              Command
+
+
+
+
+                                                                                   Yaw Angular Velocity (rad/s)                                                       Forward Linear Velocity (m/s)
+                                                                                                                                                       Measured                                       1.25
+                                                                                                                                                                                                                                            Measured
+                                                                                                                   1.00
+                                                                                                                                                                                                      1.00
+TABLE XI: Command Curriculum Stages and Velocity Limits                                                            0.75                                                                               0.75
+                                                                                                                   0.50                                                                               0.50
+                                              vx             vy          ωz                                        0.25                                                                               0.25
+ Stage            Training Steps
+                                             [m/s]          [m/s]      [rad/s]                                     0.00                                                                               0.00
+                                                                                                                             0    1    2           3   4          5                                             0      1    2           3   4          5
+                                                                                                                                           Time (s)                                                                             Time (s)
+ Initial          [0, 2 × 104 ]              ± 0.5          ± 0.5      ± 1.0
+ Intermediate     [2×104 , 5×104 ]           ± 1.0          ± 1.0      ± 1.5                                        (c) With ωzcmd = 1.0 rad/s                        (d) 10 cm stairs with vx = 1.0 m/s
+ Advanced         [5 × 104 , ∞]              ± 2.0          ± 1.0      ± 2.0
+                                                                                  Fig. 15: The green dashed lines represent the ground-truth ve-
+                                                                                  locities measured by the motion capture system at a sampling
+                         A PPENDIX D                                              frequency of 90 Hz, while the blue solid lines denote the cor-
+                 S UPPLEMENTARY E XPERIMENT                                       responding target command values automatically transmitted
+                                                                                  to the Unitree Go2 via a pre-defined evaluation program.
+                                                                                                                                                                                                                          Continuous Lateral Pull
+
+
+
+
+                                                                                                                 Forward
+                                                                                                                 Backward
+                  0.5                                                                                            Strafe Left
+
+
+
+PCA Dimension 2
+                                                                                                                 Strafe Right
+                                                                                                                 Turn Left
+                  0.0                                                                                            Turn Right
+
+
+                  0.5                                                                                                                                                         Drop Recovery
+
+
+                        0.6               0.4                        0.2     0.0    0.2     0.4         0.6              0.8
+                                                                            PCA Dimension 1
+ Fig. 16: PCA visualization of the student encoder latent space                                                                                       0.6m
+ in different commands with all terrains.
+
+
+                                                                                                                                                                                                                                    0.3m
+
+
+
+
+                                                                                                                                                Fig. 17: Locomotion performance of the Unitree Go2 across
+                                                                                                                                                three challenging scenarios. Top image illustrates the robot
+                                                                                                                                                maintaining balance against a lateral impulse between 80
+                                                                                                                                                N and 100 N. Bottom-left image depicts the stable ascent
+                                                                                                                                                of 15.5 cm tile stairs with µ = 0.38. Bottom-right image
+                                                                                                                                                showcases the successful traversal of a 30 cm obstacle where
+                                                                                                                                                µ = 0.85.
+
+
+
+
+                                                              200                                 Steady-state         Support       Rapid                       Impact                             Resumed
+
+
+
+
+                                     Foot Contact Force (N)
+                                                                      Contact Threshold               Gait              Loss       Adaptation                   Absorption                            Gait
+                                                                      FR_foot Force
+                                                              150     FL_foot Force
+                                                              100
+                                                               50
+                                                                0
+                                                                      FR_foot
+
+                                 Foot Heights
+                                                              -0.1    FL_foot
+                                                              -0.2
+
+                              Relative to Base (m)
+                                                              -0.3
+                                                              -0.4
+                                                                     0.0         0.5      1.0     1.5            2.0             2.5         3.0          3.5           4.0        4.5        5.0             5.5   6.0
+                                                                                                                                       Time Steps (sec)
+
+                              Fig. 18: The top panel shows the robot quickly adjusting its posture to safely descend when the
+                              ground ends at the edge. The middle plot depicts the contact force signals measured by the foot
+                              sensors. The bottom image illustrates the front foot height relative to the base calculated from
+                              forward kinematics. These results confirm the robustness of the policy and its capacity for adaptive
+                              gait transitions across diverse challenges.
+            TABLE XII: Comprehensive Evaluation: Real-World Measurements, Predicted Values, and Absolute Errors
+
+ Source                                  Movement                            Lin. Trk.              Ang. Trk.              DOF Power                  DOF Limits                  Orient.                Smooth.
+                                         Linear (x = 1)                          0.9185                0.5808                   0.8527                      0.9159                 0.9675                0.7739
+      Real                               Lateral (y = 0.5)                       0.9552                0.7037                   0.9696                      0.9384                 0.9661                0.8985
+ (Ground Truth)                          Angular (z = 1)                         0.9552                0.8010                   0.9659                      0.9439                 0.9614                0.9020
+                                         Stairs (x = 1)                          0.8554                0.2732                   0.6721                      0.8395                 0.8749                0.5944
+                                         Linear (x = 1)                          0.8217                0.5669                   0.8330                      0.9386                 0.9592                0.7853
+ RoboGauge                               Lateral (y = 0.5)                       0.8685                0.6822                   0.9704                      0.9293                 0.9627                0.8861
+ (Predicted)                             Angular (z = 1)                         0.8763                0.7679                   0.9734                      0.9414                 0.9647                0.8983
+                                         Stairs (x = 1)                          0.7596                0.2507                   0.6211                      0.8472                 0.8625                0.6606
+ RoboGauge (Ours)                        x = 1 (Merge)                           0.0963                0.0182                   0.0354                      0.0152                 0.0103                0.0388
+  (Abs. Error) ↓                         Average                                 0.0873                0.0243                   0.0145                      0.0089                 0.0057                0.0183
+                                         Linear (x = 1)                          0.8977                0.7826                   0.9155                      0.9361                 0.9737                0.8289
+  IsaacGym                               Lateral (y = 0.5)                       0.9694                0.8039                   0.9598                      0.9378                 0.9707                0.8781
+ (Predicted)                             Angular (z = 1)                         0.9853                0.9134                   0.9751                      0.9325                 0.9798                0.9510
+                                         Stairs (x = 1)                          0.8786                0.5732                   0.8635                      0.9027                 0.9339                0.7454
+   IsaacGym                              x = 1 (Merge)                           0.0220                0.2509                   0.1271                      0.0417                 0.0326                0.1030
+ (Abs. Error) ↓                          Average                                 0.0221                0.1545                   0.0487                      0.0179                 0.0185                0.0575
+
+
+
+
+                                                          TABLE XIII: RoboGauge detailed metrics for baselines
+                                  ang vel err                                       lin vel err                                      dof limits                                         dof power
+   Model
+                   mean          mean@25 mean@50                      mean         mean@25 mean@50                      mean        mean@25 mean@50                      mean          mean@25 mean@50
+Our               0.7018           0.6047            0.6431           0.7394         0.6497            0.6908          0.8139         0.8029            0.8073          0.7889          0.7411             0.7642
+CTS               0.6231           0.5253            0.5632           0.6464         0.5363            0.5878          0.7341         0.7232            0.7275          0.7113          0.6607             0.6856
+HIM               0.5652           0.4620            0.5025           0.6297         0.5443            0.5881          0.6781         0.6645            0.6699          0.6529          0.5996             0.6253
+DreamWaQ          0.5309           0.4305            0.4698           0.5937         0.5060            0.5512          0.6437         0.6307            0.6360          0.6200          0.5690             0.5939
+
+                             orientation stability                               torque smoothness                                  zmp margin                                         friction margin
+   Model
+                   mean         mean@25 mean@50                       mean          mean@25 mean@50                     mean        mean@25 mean@50                      mean           mean@25 mean@50
+Our               0.8147           0.7946            0.8040           0.7734         0.7400            0.7535          0.7933         0.7401            0.7653          0.6892          0.6051             0.6340
+CTS               0.7346           0.7124            0.7232           0.6954         0.6594            0.6744          0.7163         0.6670            0.6900          0.6188          0.5310             0.5622
+HIM               0.6780           0.6497            0.6643           0.6416         0.6053            0.6201          0.6604         0.6092            0.6344          0.5544          0.4706             0.5014
+DreamWaQ          0.6443           0.6170            0.6312           0.6060         0.5709            0.5853          0.6290         0.5814            0.6049          0.5236          0.4392             0.4706
+
+
+
+
+                                                    TABLE XIV: RoboGauge detailed terrain scores for baselines
+                                 flat                                                wave                                            slope forward                                      slope backward
+ Model
+               mean            mean@25          mean@50             mean           mean@25          mean@50            mean            mean@25         mean@50            mean             mean@25          mean@50
+Our        0.755 ± 0.005     0.559 ± 0.013    0.663 ± 0.009     0.615 ± 0.042    0.542 ± 0.042    0.579 ± 0.042    0.583 ± 0.104    0.519 ± 0.094    0.551 ± 0.099     0.584 ± 0.105     0.522 ± 0.094     0.553 ± 0.100
+CTS         0.721 ± 0.004     0.436 ± 0.008    0.592 ± 0.006     0.602 ± 0.056    0.525 ± 0.055    0.561 ± 0.055    0.557 ± 0.104    0.488 ± 0.094    0.521 ± 0.098    0.524 ± 0.101     0.458 ± 0.090     0.491 ± 0.096
+HIM         0.739 ± 0.003     0.486 ± 0.009    0.621 ± 0.006     0.569 ± 0.030    0.490 ± 0.028    0.525 ± 0.029    0.492 ± 0.090    0.425 ± 0.082    0.457 ± 0.085    0.571 ± 0.102     0.504 ± 0.092     0.537 ± 0.097
+DreamWaQ    0.736 ± 0.003     0.485 ± 0.010    0.620 ± 0.006     0.532 ± 0.042    0.458 ± 0.041    0.491 ± 0.041    0.404 ± 0.083    0.343 ± 0.069    0.373 ± 0.076   0.595 ± 0.105     0.533 ± 0.097     0.564 ± 0.102
+
+
+
+                                       stairs forward                                                     stairs backward                                                         obstacle
+  Model
+                      mean               mean@25                 mean@50                  mean               mean@25                mean@50                 mean                 mean@25                 mean@50
+Our            0.826 ± 0.024          0.743 ± 0.021            0.775 ± 0.024       0.791 ± 0.039         0.710 ± 0.038          0.744 ± 0.039         0.882 ± 0.004         0.799 ± 0.004           0.835 ± 0.004
+CTS             0.799 ± 0.051          0.722 ± 0.050            0.746 ± 0.050       0.666 ± 0.056         0.587 ± 0.053          0.617 ± 0.055         0.569 ± 0.008         0.483 ± 0.007           0.521 ± 0.008
+HIM             0.560 ± 0.060          0.486 ± 0.051            0.514 ± 0.054       0.735 ± 0.082         0.663 ± 0.068          0.693 ± 0.074         0.460 ± 0.028         0.385 ± 0.020           0.418 ± 0.024
+DreamWaQ        0.588 ± 0.086          0.515 ± 0.075            0.542 ± 0.079       0.680 ± 0.056         0.602 ± 0.054          0.633 ± 0.055         0.355 ± 0.020         0.280 ± 0.015           0.315 ± 0.017
+

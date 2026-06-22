@@ -1,0 +1,883 @@
+                                                           BeamDojo: Learning Agile Humanoid
+                                                             Locomotion on Sparse Footholds
+                                                         Huayi Wang1,2         Zirui Wang1,3   Junli Ren1,4   Qingwei Ben1,5                  Tao Huang1,2
+                                                                                                 1,2,†
+                                                                                    Weinan Zhang        Jiangmiao Pang1,†
+                                                              1
+                                                                  Shanghai AI Laboratory 2 Shanghai Jiao Tong University 3 Zhejiang University
+                                                                      4
+                                                                        The University of Hong Kong 5 The Chinese University of Hong Kong
+                                                                                              †
+                                                                                                Corresponding Authors.
+                                                                            Website: https://why618188.github.io/beamdojo
+
+
+
+
+arXiv:2502.10363v3 [cs.RO] 27 Apr 2025   Fig. 1: Our proposed framework, B EAM D OJO, enables agile and robust humanoid locomotion across challenging sparse footholds. Top
+                                         Row: Utilizing global mapping information from LiDAR, the humanoid demonstrates the ability to precisely traverse both forward and
+                                         backward on stepping stones, with arrows indicating the direction of movement. Bottom Left: The humanoid skillfully traverses a narrow
+                                         balance beam. Bottom Middle: Despite being trained without exposure to gaps and balancing beams, the humanoid achieves zero-shot
+                                         generalization to various sparse foothold terrains. Bottom Right: Humanoid exhibits remarkable robustness, maintaining stable locomotion
+                                         under external disturbances and additional payloads.
+
+                                            Abstract—Traversing risky terrains with sparse footholds poses    efficient learning in simulation and enables agile locomotion with
+                                         a significant challenge for humanoid robots, requiring precise       precise foot placement on sparse footholds in the real world,
+                                         foot placements and stable locomotion. Existing learning-based       maintaining a high success rate even under significant external
+                                         approaches often struggle on such complex terrains due to sparse     disturbances.
+                                         foothold rewards and inefficient learning processes. To address
+                                         these challenges, we introduce B EAM D OJO, a reinforcement                                I. I NTRODUCTION
+                                         learning (RL) framework designed for enabling agile humanoid            Traversing risky terrains with sparse footholds, such as
+                                         locomotion on sparse footholds. B EAM D OJO begins by intro-
+                                                                                                              stepping stones and balancing beams, presents a significant
+                                         ducing a sampling-based foothold reward tailored for polygonal
+                                         feet, along with a double critic to balancing the learning process   challenge for legged locomotion. Achieving agile and safe
+                                         between dense locomotion rewards and sparse foothold rewards.        locomotion on such environment requires robots to accurately
+                                         To encourage sufficient trial-and-error exploration, B EAM D OJO     process perceptive information, make precise footstep place-
+                                         incorporates a two-stage RL approach: the first stage relaxes the    ment within safe areas, and maintain base stability throughout
+                                         terrain dynamics by training the humanoid on flat terrain while
+                                                                                                              the process [60, 63].
+                                         providing it with task-terrain perceptive observations, and the
+                                         second stage fine-tunes the policy on the actual task terrain.          Existing works have effectively addressed this complex task
+                                         Moreover, we implement a onboard LiDAR-based elevation               for quadrupedal robots [15, 16, 27, 35, 55, 60, 61, 63, 64].
+                                         map to enable real-world deployment. Extensive simulation and        However, these methods encounter great challenges when
+                                         real-world experiments demonstrate that B EAM D OJO achieves         applied to humanoid robots, primarily due to a key difference
+in foot geometry. Although the foot of most quadrupedal                 As shown in Fig. 1, B EAM D OJO skillfully enables hu-
+robots and some simplified bipedal robots [9, 30] can be             manoid robots to traverse risky terrains with sparse footholds,
+modeled as a point, the foot of humanoid robots is often             such as stepping stones and balancing beams. Through exten-
+represented as a polygon [5, 17, 24, 49]. For traditional model-     sive simulations and real-world experiments, we demonstrate
+based methods, this requires additional half-space constraints       the efficient learning process of B EAM D OJO and its ability
+defined by linear inequalities, which impose a significant com-      to achieve agile locomotion with precise foot placements in
+putational burden for online planning [7, 8, 17, 38, 49]. In the     real-world scenarios.
+case of reinforcement learning (RL) methods, foothold rewards           The contributions of our work are summarized as follows:
+designed for point-shaped feet are not suitable for evaluating          • We propose B EAM D OJO , a two-stage RL framework
+foot placement of polygon-shaped feet [60]. Hybrid methods,               that combines a newly designed foothold reward for
+which combine RL with model-based controllers, face similar               the polygonal foot model and a double critic, enabling
+challenges in online planning for humanoid feet [15, 27, 55].             humanoid locomotion on sparse footholds.
+Furthermore, the higher degrees of freedom and the inherently           • We implement a LiDAR-based elevation map for real-
+unstable morphology of humanoid robots make it even more                  world deployment, incorporating carefully designed do-
+difficult to achieve agile and stable locomotion over risky               main randomization in simulation training.
+terrains.                                                               • We conduct extensive experiments both in simulation and
+   On the other hand, recent advancements in learning-based               on Unitree G1 Humanoid, demonstrating agile and robust
+humanoid robot locomotion have demonstrated impressive                    locomotion on sparse footholds, with a high zero-shot
+robustness across various tasks, including walking [2, 45, 46,            sim-to-real transfer success rate of 80%. To the best of
+52], stair climbing [6, 18, 34], parkour [66], and whole-body             our knowledge, B EAM D OJO is the first learning-based
+control [3, 13, 19, 20, 22, 28, 29], etc. However, these methods          method to achieve fine-grained foothold control on risky
+still struggle with complex terrains and agile locomotion on              terrains with sparse footholds.
+fine-grained footholds. Enabling agile movement on risky
+                                                                                          II. R ELATED W ORKS
+terrains for humanoid robots presents several challenges. First,
+the reward signal for evaluating foot placement is sparse,           A. Locomotion on Sparse Footholds
+typically provided only after completing a full sub-process             Walking on sparse footholds has been a long-standing
+(e.g., lifting and landing a foot), which makes it difficult         application of perceptive legged locomotion. Existing works
+to assign credit to specific states and actions [50]. Second,        often employs model-based hierarchical controllers, which de-
+the learning process is highly inefficient, as a single misstep      compose this complex task into separate stages of perception,
+often leads to early termination during training, hindering          planning, and control [16, 17, 26, 40, 41, 43, 53]. However,
+sufficient exploration. Additionally, obtaining reliable percep-     model-based controllers react sensitively to violation of model
+tual information is challenging due to sensory limitations and       assumptions, which hinders applications in real-world scenar-
+environmental noise [66].                                            ios. Recent studies have explored combining RL with model-
+   In this work, we introduce B EAM D OJO, a novel rein-             based controllers, such as using RL to generate trajectories
+forcement learning-based framework for controlling humanoid          that are then tracked by model-based controllers [15, 61, 55],
+robots traversing risky terrains with sparse footholds. The          or employing RL policies to track trajectories generated by
+name B EAM D OJO combines the words “beam” (referring to             model-based planners [27]. While demonstrating remarkable
+sparse footholds such as beams) and “dojo” (a place of training      performance, these decoupled architectures can constrain the
+or learning), reflecting the goal of training agile locomotion on    adaptability and coordination of each module.
+such challenging terrains. We begin by defining a sampling-             Subsequent works have explored end-to-end learning frame-
+based foothold reward, designed to evaluate the foot placement       works that train robots to walk on sparse footholds using
+of a polygonal foot model. To address the challenge of sparse        perceptive locomotion controllers [1, 4, 59, 60, 63]. Despite
+foothold reward learning, we propose using double critic             their focus being limited to quadrupeds, a majority of these
+architecture to separately learn the dense locomotion rewards        works rely on depth cameras for exteroceptive observations,
+and the sparse foothold reward. Unlike typical end-to-end RL         which are limited by the camera’s narrow field of view
+methods [60, 63], B EAM D OJO further incorporates a two-stage       and restrict the robot to moving backward [1, 4, 59, 60].
+approach to encourage fully trial-and-error exploration. In the      Additionally, an image processing module is often necessary to
+first stage, terrain dynamics constraints are relaxed, allowing      bridge the sim-to-real gap between the captured depth images
+the humanoid robot to practice walking on flat terrain while         and the terrain heightmap used during training [1, 4, 59, 60].
+receiving perceptive information of the target task terrain (e.g.,      In contrast to the aforementioned literature, this work
+sparse beams), where missteps will incur a penalty but do            achieves agile humanoid locomotion over risky terrains that
+not terminate the episode. In the second stage, the policy is        addressing unique challenges specific to humanoid systems,
+fine-tuned on the true task terrain. To enable deployment in         such as foot geometry. Additionally, we implement a LiDAR-
+real-world scenarios, we further implement a LiDAR-based,            based elevation map to enhance the task, demonstrating that
+robot-centric elevation map with carefully designed domain           the robot can move smoothly both forward and backward using
+randomization in simulation training.                                the robotics-centric elevation map as the perception module.
+                                                                         we sample n points on the soles of the robot’s feet, as
+                                                                         illustrated in Fig. 2. For each j-th sample on foot i, let dij
+                                                                         denotes the global terrain height at the corresponding position.
+                                                                         The penalty foothold reward rfoothold is defined as:
+                                                                                                       2
+                                                                                                       X          n
+                                                                                                                  X
+                                                                                       rfoothold = −         Ci         1{dij < ϵ},             (2)
+                                                                                                       i=1        j=1
+
+
+Fig. 2: Foothold Reward. We sample n points under the foot. Green        where Ci is an indicator function that specifies whether foot
+points indicate contact with the surface within the safe region, while   i is in contact with the terrain surface, and 1 is the indicator
+red points represent those not in contact with the surface.              function for a condition. The threshold ϵ is a predefined depth
+                                                                         tolerance, and when dij < ϵ, it indicates that the terrain
+                                                                         height at this sample point is significantly low, implying
+B. Reinforcement Learning in Locomotion Control                          improper foot placement outside of a safe area. This reward
+    Reinforcement learning has been widely applied in legged             function encourages the humanoid robot to maximize the
+locomotion control [4, 21, 31, 32, 33, 39, 42, 44, 65], bene-            overlap between its foot placement and the safe footholds,
+fiting from the policy update stability and high data efficiency         thereby improving its terrain-awareness capabilities.
+provided by Proximal Policy Optimization (PPO) [48]. To
+adapt learned policies to diverse target tasks and ensure                B. Double Critic for Sparse Reward Learning
+hardware deployability, previous works have designed two-                   The task-specific foothold reward rfoothold is a sparse reward.
+stage training frameworks that aim to bridge the sim-to-real             To effectively optimize the policy, it is crucial to carefully bal-
+gap in the observation space [31, 32]. In contrast, this work            ance this sparse reward with dense locomotion rewards which
+introduces a novel two-stage training approach specifically              are crucial for gait regularization [62]. Inspired by [25, 56, 62],
+aimed at improving sample efficiency, particularly addressing            we adopt a double critic framework based on PPO, which
+the challenge of early termination when walking on sparse                effectively decouples the mixture of dense and sparse rewards.
+terrains. This design not only enhances performance but also                In this framework, we train two separate critic networks,
+ensures more efficient learning in complex, real-world envi-             {Vϕ1 , Vϕ2 }, to independently estimate value functions for two
+ronments.                                                                distinct reward groups: (i) the regular locomotion reward group
+                                                                         (dense rewards), R1 = {ri }ni=0 , which have been studied in
+                   III. P ROBLEM F ORMULATION                            quadruped locomotion tasks [37] and humanoid locomotion
+   This work aims to develop an terrain-aware humanoid loco-             tasks [34], and (ii) the task-specific foothold reward group
+motion policy, where controllers are trained via reinforcement           (sparse reward), R2 = {rfoothold }.
+learning (RL). The RL problem is formulated as a Markov                     The double critic process is illustrated in Fig. 3. Specifically,
+Decision Process (MDP) M = ⟨S, A, T, O, r, γ⟩, where S                   each value network Vϕi is updated independently for its
+and A denote the state and action spaces, respectively. The              corresponding reward group Ri with temporal difference loss
+transition dynamics are represented by T (s′ | s, a), the reward         (TD-loss):
+function by r(s, a), and the discount factor by γ ∈ [0, 1].                                   h                                    i
+                                                                                                                                 2
+The primary objective is to optimize the policy π(at | st ) to                   L(ϕi ) = E ∥Ri,t + γVϕi (st+1 ) − Vϕi (st )∥ ,          (3)
+maximize the discounted cumulative rewards:
+                               "∞                   #                    where γ is the discount factor. Then the respective advantages
+                                                                         {Âi,t } are calculated using Generalized Advantage Estimation
+                                 X
+             max J(M, π) = E         γ t r(st , at ) .       (1)
+               π
+                                     t=0
+                                                                         (GAE) [47]:
+   In this work, the agent only has access to partial obser-                           δi,t = Ri,t + γVϕi (st+1 ) − Vϕi (st ),                  (4)
+vations o ∈ O due to sensory limitations and environmental                                            ∞
+                                                                                                      X
+noise, which provide incomplete information about the true                                    Âi,t =   (γλ)l δi,t+l ,                          (5)
+state. Consequently, the agent functions within the framework                                           l=0
+of a Partially Observable Markov Decision Process (POMDP).
+                                                                         where λ is the balancing parameter. These advantages are
+                          IV. M ETHODS                                   then individually normalized and synthesized into an overall
+                                                                         advantage:
+A. Foothold Reward
+   To accommodate the polygonal foot model of the humanoid                                     Â1,t − µÂ1,t              Â2,t − µÂ2,t
+robot, we introduce a sampling-based foothold reward that                         Ât = w1 ·                      + w2 ·                    ,   (6)
+                                                                                                   σÂ1,t                      σÂ2,t
+evaluates foot placement on sparse footholds.This evaluation
+is determined by the overlap between the foot’s placement and            where wi is the weight for each advantage component, and
+designated safe areas, such as stones and beams. Specifically,           µÂi,t and σÂi,t are the batch mean and standard deviation of
+Fig. 3: Overview of B EAM D OJO. (a) Training in Simulation: In stage 1, proprioceptive and perceptive information, locomotion rewards
+and the foothold reward are decoupled respectively, with the former obtained from flat terrain and the latter from task terrain. The double
+critic module separately learns two reward groups. In stage 2, the policy is fine-tuned on the task terrain, utilizing the full set of observations
+and rewards. (b) Real-world deployment: The robot-centric elevation map, reconstructed using LiDAR data, is combined with proprioceptive
+information to serve as the input for the actor.
+
+
+each component. This overall advantage is then used to update                 1) Stage 1: Soft Terrain Dynamics Constraints Learning:
+the policy:                                                                In this stage, we first map each task terrain (denoted as
+             h                                          i                T ) to a flat terrain (denoted as F) of the same size. Both
+   L(θ) = E min αt (θ)Ât , clip(αt (θ), 1 − ϵ, 1 + ϵ)Ât ,                terrains share the same terrain noise, with points are one-to-
+                                                            (7)            one corresponding. The only difference is that the flat terrain
+where αt (θ) is the probability ratio, and ϵ is the clipping               F fills the gaps in the real terrain T .
+hyperparameter.                                                               We let the humanoid robot traverse the terrain F, receiving
+   This double critic design provides a modular, plug-and-play             proprioceptive observations, while providing perceptual feed-
+solution for handling specialized tasks with sparse rewards,               back in the form of the elevation map of terrain T at the
+while effectively addressing the disparity in reward feedback              corresponding humanoid’s base position. This setup allows the
+frequencies within a mixed dense-sparse environment [62].                  robot to “imagine” walking on the true task terrain while actu-
+The detailed reward terms are provided in Appendix VI-A.                   ally traversing the safer flat terrain, where missteps do not lead
+                                                                           to termination. To expose the robot to real terrain dynamics,
+                                                                           we use the foothold reward (introduced in Section IV-A). In
+C. Learning Terrain-Aware Locomotion via Two-Stage RL                      this phase, this reward is provided by the terrain T , where dij
+   To address the early termination problem in complex terrain             is the height of the true terrain at the sampling point, while
+dynamics and encourage full trial-and-error exploration, we                locomotion rewards are provided by the terrain F.
+design a novel two-stage reinforcement learning (RL) ap-                      This design successfully decouples the standard locomotion
+proach for terrain-aware locomotion in simulation. As illus-               task and the task of traversing sparse footholds: flat terrain, F,
+trated in Fig. 3, in the first stage, termed the “soft terrain             provides proprioceptive information and locomotion rewards
+dynamics constraints” phase, the humanoid robot is trained                 to learn regular gaits, while risky task terrain, T , offers
+on flat terrain while being provided with a corresponding                  perceptive information and the foothold reward to develop
+height map of the true task terrains (e.g., stepping stones). This         terrain-awareness skills. We train these two reward compo-
+setup encourages broad exploration without the risk of early               nents separately using a double critic framework, as described
+termination from missteps. Missteps are penalized but do not               in Section IV-B.
+lead to termination, allowing the humanoid robot to develop                   Furthermore, by allowing the humanoid robot to traverse
+foundational skills for terrain-aware locomotion. In the second            the flat terrain while applying penalties for missteps instead
+stage, termed the “hard terrain dynamics constraints” phase,               of terminating the episode, the robot can continuously at-
+we continue training the humanoid on the real terrains in                  tempt foothold placements, making it much easier to obtain
+simulation, where missteps result in termination. This stage               successful positive samples. In contrast, conventional early
+fine-tunes the robot’s ability to step on challenging terrains             termination disrupts entire trajectories, making it extremely
+accurately.                                                                difficult to acquire safe foothold samples when learning from
+scratch. This approach significantly improves sampling effi-
+ciency and alleviates the challenges of exploring terrains with
+sparse footholds.
+   2) Stage 2: Hard Terrain Dynamics Constraints Learning:
+In the second stage, we fine-tune the policy directly on the
+task terrain T . Unlike in Stage 1, missteps on T now result in
+immediate termination. This enforces strict adherence to the
+true terrain constraints, requiring the robot to develop precise
+and safe locomotion strategies.
+   To maintain a smooth gait and accurate foot placements, we
+continue leveraging the double-critic framework to optimize
+both locomotion rewards and the foothold reward rfoothold Here,
+dij again represents the height of terrain T at the given
+sampling point.
+
+D. Training in Simulation
+  1) Observation Space and Action Space: The policy obser-
+vations, denoted as ot , consist of four components:
+                    h                              i
+               ot = ct , oproprio
+                           t      , opercept
+                                     t       , at−1 .  (8)
+                             3
+               c cct ∈c R specify the desired velocity, rep-
+   The commands
+resented as vx , vy , ωyaw . These denote the linear velocities
+in the longitudinal and lateral directions, and the angular ve-
+locity in the horizontal plane, respectively. The proprioceptive
+observations oproprio
+                 t     ∈ R64 include the base angular velocity
+ωt ∈ R , gravity direction in the robot’s frame gt ∈ R3 ,
+          3
+
+joint positions θt ∈ R29 , and joint velocities θ̇t ∈ R29 .           Fig. 4: Terrain Setting in Simulation. (a) is used for stage 1 training,
+The perceptive observations opercept
+                                 t      ∈ R15×15 correspond to        while (b) and (c) are used for stage 2 training. The training terrain
+                                                                      progression is listed from simple to difficult. (b)-(e) are used for
+an egocentric elevation map centered around the robot. This           evaluation.
+map samples 15 × 15 points within a 0.1 m grid in both the
+longitudinal and lateral directions. The action of last timestep
+at−1 ∈ R12 is also included to provide temporal context.
+   The action at ∈ R12 represents the target joint positions               direction. As the curriculum progresses, the size of the
+for the 12 lower-body joints of the humanoid robot, which are              stones decreases and their lateral distance reduces, even-
+directly output by the actor network. For the upper body joints,           tually forming a single line of balancing beams, as shown
+the default position is used for simplicity. A proportional-               in Fig. 4(c). This terrain is challenging for the robot as it
+derivative (PD) controller converts these joint targets into               must learn to keep its feet together on the beams without
+torques to track the desired positions.                                    colliding with each other, while maintaining the center
+   2) Terrain and Curriculum Design: Inspired by [23, 60,                  of mass. This requires a distinct gait compared to regular
+63], we design five types of sparse foothold terrains for the              locomotion tasks.
+two-stage training and evaluation:                                       • Stepping Beams: This terrain consists of a sequence
+                                                                           of beams to step on, randomly distributed along the
+   • Stones Everywhere: This is a general sparse foothold
+                                                                           longitudinal direction, with two platforms at either end,
+      terrain where stones are scattered across the entire terrain.
+                                                                           as illustrated in Fig. 4(d). This terrain, along with the
+      The center of the terrain is a platform surrounded by
+                                                                           Stones Everywhere and Stepping Stones terrains, requires
+      stones, as shown in Fig. 4(a). The stones are uniformly
+                                                                           the robot to place its footholds with high precision.
+      distributed within sub-square grids. As the curriculum
+                                                                         • Gaps: This terrain consists of several gaps with random
+      progresses, the stone size decreases and the sparsity
+                                                                           distances between them, as shown in Fig. 4(e). This
+      increases.
+                                                                           terrain requires the robot to make large steps to cross
+   • Stepping Stones: This terrain consists of two lines of
+                                                                           the gaps.
+      stepping stones in the longitudinal direction, connected by
+      two platforms at each end, as shown in Fig. 4(b). Each             We begin by training the robot on the Stones Everywhere
+      stone is uniformly distributed in two sub-square grids,         terrain in Stage 1 with soft terrain constraints to develop a
+      with the same curriculum effect as in Stones Everywhere.        generalizable policy. In Stage 2, the policy is fine-tuned on
+   • Balancing Beams: In the initial curriculum level, this           the Stepping Stones and Balancing Beams terrains with hard
+      terrain has two lines of separate stones in the longitudinal    terrain constraints. The commands used in these two stages
+      TABLE I: Commands Sampled in Two Stage RL Training
+                                                                    • Map Repeat: To simulate delays in elevation map updates,
+           Term   Value (stage 1)       Value (stage 2)               we randomly repeat the map from the previous timestep.
+           vxc    U (−1.0, 1.0) m/s     U (−1.0, 1.0) m/s           The detailed domain randomization settings are provided in
+           vyc    U (−1.0, 1.0) m/s     U (0.0, 0.0) m/s          Appendix VI-C.
+             c
+           ωyaw   U (−1.0, 1.0) rad/s   U (0.0, 0.0) m/s
+                                                                  E. Real-world Deployment
+                                                                     1) Hardware Setup: We use Unitree G1 humanoid robot
+are detailed in Table I. Note that in Stage 2, only a single x-   for our experiments in this work. The robot weighs 35 kg,
+direction command is given, with no yaw command provided.         stands 1.32 meters tall, and features 23 actuated degrees of
+This means that if the robot deviates from facing forward,        freedom: 6 in each leg, 5 in each arm, and 1 in the waist. It
+no correction command is applied. We aim for the robot to         is equipped with a Jetson Orin NX for onboard computation
+learn to consistently face forward from preceptive observation,   and a Livox Mid-360 LiDAR, which provides both IMU data
+rather than relying on continuous yaw corrections.                and feature points for perception.
+   For evaluation, the Stepping Stones, Balancing Beams,             2) Elevation Map and System Design: The raw point cloud
+Stepping Beams, and Gaps terrains are employed. Remarkably,       data obtained directly from the LiDAR suffers from significant
+our method demonstrates strong zero-shot transfer capabilities    occlusion and noise, making it challenging to use directly.
+on the latter two terrains, despite the robot being trained       To address this, we followed [34] to construct a robot-
+exclusively on the first three terrains.                          centric, complete, and robust elevation map. Specifically, we
+   The curriculum is designed as follows: the robot progresses    employed Fast LiDAR-Inertial Odometry (FAST-LIO) [57, 58]
+to the next terrain level when it successfully traverses the      to fuse LiDAR feature points with IMU data provided by the
+current terrain level three times in a row. Furthermore, the      LiDAR. This fusion generates precise odometry outputs, which
+robot will not be sent back to an easier terrain level before     are further processed using robot-centric elevation mapping
+it pass all levels, as training on higher-difficulty terrains     methods [10, 11] to produce a grid-based representation of
+is challenging at first. The detailed settings of the terrain     ground heights.
+curriculum are presented in the Appendix VI-B.                       During deployment, the elevation map publishes informa-
+                                                                  tion at a frequency of 10 Hz, while the learned policy operates
+   3) Sim-to-Real Transfer: To enhance robustness and facil-
+                                                                  at 50 Hz. The policy’s action outputs are subsequently sent to
+itate sim-to-real transfer, we employ extensive domain ran-
+                                                                  a PD controller, which runs at 500 Hz, ensuring smooth and
+domization [51, 54] on key dynamic parameters. Noise is
+                                                                  precise actuation.
+injected into observations, humanoid physical properties, and
+terrain dynamics. Additionally, to address the large sim-to-                             V. E XPERIMENTS
+real gap between the ground-truth elevation map in simulation
+and the LiDAR-generated map in reality—caused by factors          A. Experimental Setup
+such as odometry inaccuracies, noise, and jitter—we introduce        We compare our proposed framework B EAM D OJO, which
+four types of elevation map measurement noise during height       integrates two-stage RL training and a double critic, with the
+sampling in the simulator:                                        following baselines:
+  • Vertical Measurement: Random vertical offsets are ap-         BL 1) PIM [34]: This one-stage method is designed for
+    plied to the heights for an episode, along with uniformly             humanoid locomotion tasks, such as walking up stairs
+    sampled vertical noise added to each height sample at ev-             and traversing uneven terrains. We additionally add our
+    ery time step, simulating the noisy vertical measurement              foothold reward rfoothold to encourage the humanoid to
+    of the LiDAR.                                                         step accurately on the foothold areas.
+  • Map Rotation: To simulate odometry inaccuracies, we           BL 2) Naive: This method neither include the two-stage RL
+    rotate the map in roll, pitch, and yaw. For yaw rotation,             nor the double critic. The only addition is the foothold
+    we first sample a random yaw noise. The elevation map,                reward. This is an naive implementation to solve this
+    initially aligned with the robot’s current orientation, is            task.
+    then resampled by adding the yaw noise, resulting in a        BL 3) Ours w/o Soft Dyn: This is an ablation which remov-
+    new elevation map corresponding to the updated orien-                 ing the first stage of training with soft terrain dynamics
+    tation. For roll and pitch rotations, we randomly sample              constraints.
+    the biases [hx , hy ] and perform linear interpolation from   BL 4) Ours w/o Double Critic: This is an ablation which
+    −hx to hx along the x-direction and from −hy to hy                    uses a single critic to handle both locomotion rewards
+    along the y-direction. The resulting vertical height map              and foothold reward, instead of using a double critic.
+    noise is then added to the original elevation map.                    This follows the traditional design in most locomotion
+  • Foothold Extension: Random foothold points adjacent to                tasks.
+    valid footholds are extended, turning them into valid            The training and simulation environments are implemented
+    footholds. This simulates the smoothing effect that occurs    in IsaacGym [36]. To ensure fairness, we adapt all methods to
+    during processing of LiDAR elevation data.                    two stages. For stage 1, we train the humanoid on the Stones
+                                                        TABLE II: Benchmarked Comparison in Simulation.
+
+                                      Stepping Stones                      Balancing Beams                              Stepping Beams                                        Gaps
+                                Rsucc (%, ↑)         Rtrav (%, ↑)    Rsucc (%, ↑)    Rtrav (%, ↑)                Rsucc (%, ↑)        Rtrav (%, ↑)                  Rsucc (%, ↑)        Rtrav (%, ↑)
+    Medium Terrain Difficulty
+    PIM                    71.00 (±1.53)             78.29 (±2.49)   74.67 (±2.08)   82.19 (±4.96)               88.33 (±3.61)       93.16 (±4.78)                 98.00 (±0.57)       99.16 (±0.75)
+    Naive                  48.33 (±6.11)             47.79 (±5.76)   57.00 (±7.81)   71.59 (±8.14)               92.00 (±2.52)       92.67 (±3.62)                 95.33 (±1.53)       98.41 (±0.67)
+    Ours w/o Soft Dyn      65.33 (±2.08)             74.62 (±1.37)   79.00 (±2.64)   82.67 (±2.92)               98.67 (±2.31)       99.64 (±0.62)                 96.33 (±1.53)       98.60 (±1.15)
+    Ours w/o Double Critic 83.00 (±2.00)             86.64 (±1.96)   88.67 (±2.65)   90.21 (±1.95)               96.33 (±1.15)       98.88 (±1.21)                 98.00 (±1.00)       99.33 (±0.38)
+    B EAM D OJO            95.67 (±1.53)             96.11 (±1.22)   98.00 (±2.00)   99.91 (±0.07)               98.33 (±1.15)       99.28 (±0.65)                 98.00 (±2.65)       99.21 (±1.24)
+    Hard Terrain Difficulty
+    PIM                    46.67 (±2.31)             52.88 (±2.86)   33.00 (±2.31)   45.28 (±3.64)               82.67 (±2.31)       90.68 (±1.79)                 96.00 (±1.00)       98.27 (±3.96)
+    Naive                  00.33 (±0.57)             21.17 (±1.71)   00.67 (±1.15)   36.25 (±7.85)               82.00 (±3.61)       88.91 (±3.75)                 31.00 (±3.61)       62.70 (±4.08)
+    Ours w/o Soft Dyn      42.00 (±6.56)             47.09 (±6.97)   51.00 (±4.58)   72.93 (±4.38)               87.33 (±2.08)       89.41 (±1.75)                 93.00 (±1.00)       95.62 (±2.50)
+    Ours w/o Double Critic 55.67 (±3.61)             60.95 (±2.67)   70.33 (±3.06)   85.64 (±3.24)               94.67 (±1.53)       96.57 (±1.42)                 94.33 (±3.06)       95.62 (±2.50)
+    B EAM D OJO            91.67 (±1.33)             94.26 (±2.08)   94.33 (±1.53)   95.15 (±1.82)               97.67 (±2.08)       98.54 (±1.43)                 94.33 (±1.15)       97.00 (±1.30)
+
+
+
+
+        20
+                (a) Stepping Stones              15
+                                                         (b) Balancing Beams                                     (a) Training Stage 1                                  (b) Training Stage 2
+                                                                                                         8                                                     8
+        16                                       12
+                                                                                                         6                                                     6
+
+
+                                                                                         Terrain Level                                         Terrain Level
+Efoot (%)                                Efoot (%)
+        12                                        9
+                                                                                                         4                                                     4
+         8                                        6
+         4                                        3                                                      2                                                     2
+         0                                        0                                                      0                                                     0
+            Naive     Ours w/o Double Critic           Ours w/o Soft Dyn      Ours                           0 1 2 3      5      7        10                       0 1 2 3         5      7      10
+                                                                                                                 Training Steps (k)                                    Training Steps (k)
+Fig. 5: Foothold Error Comparison. The foothold error benchmarks                                         Naive         Ours w/o Soft Dyn                       Ours w/o Double Critic           Ours
+of all methods are evaluated in (a) stepping stones and (b) balancing
+beams, both tested under medium terrain difficulty.                                     Fig. 6: Learning Efficiency. The learning curves show the maximum
+                                                                                        terrain levels achieved in two training stages of all methods. Faster
+                                                                                        attainment of terrain level 8 indicates more efficient learning.
+Everywhere with curriculum learning. In this stage, our method
+and BL 4) use soft terrain dynamics constraints, while all other
+baselines use hard terrain dynamics constraints. For stage 2,                                      single-stage approaches and ablation designs, achieving
+we conduct fine-tuning on the Stepping Stones and Balancing                                        high success rates and low foothold errors across all
+Beams terrains with curriculum learning.                                                           challenging terrains. Notably, the naive implementation
+  For evaluation, we test all methods on the Stepping Stones,                                      struggles significantly and is almost incapable of travers-
+Balancing Beams, Stepping Beams and Gaps terrains. We                                              ing stepping stones and balancing beams at hard difficulty
+evaluate performance using three metrics:                                                          levels.
+                                                                                                 • Existing humanoid controllers [34] face difficulties when
+  • Success Rate Rsucc : The percentage of successful at-
+     tempts to cross the entire terrain.                                                           adapting to risky terrains with fine-grained footholds,
+  • Traverse Rate Rtrav : The ratio of the distance traveled
+                                                                                                   primarily due to sparse foothold rewards and low learning
+     before falling to the total terrain length (8 m).                                             efficiency.
+                                                                                                 • Despite the our method not being explicitly trained on
+  • Foothold Error Efoot : The average proportion of foot
+     samples landing outside the intended foothold areas.                                          Stepping Beams and Gaps, it demonstrates impressive
+                                                                                                   zero-shot generalization capabilities on these terrains.
+B. Simulation Experiments                                                                  2) Detailed Ablation Analysis: We conduct additional ab-
+   1) Quantitative results: We report the success rate (Rsucc )                         lation studies by comparing B EAM D OJO with BL 2), BL 3),
+and traverse rate (Rtrav ) for four terrains at medium and hard                         and BL 4).
+difficulty levels (terrain level 6 and level 8, respectively) in                           Foot Placement Accuracy: As shown in Fig. 5,
+Table II. For each setting, the mean and standard deviation are                         B EAM D OJO achieves highly accurate foot placement with
+calculated over three policies trained with different random                            low foothold error values, largely due to the contribution of
+seeds, each evaluated across 100 random episodes. Our key                               the double critic. In comparison, the naive implementation
+observations are as follows:                                                            shows higher error rates, with a substantial proportion of
+   • Leveraging the efficient two-stage RL framework and                                foot placements landing outside the safe foothold areas. This
+      the double critic, B EAM D OJO consistently outperforms                           demonstrates the precision and effectiveness of our method in
+TABLE III: Gait Regularization. We conduct experiments on                   TABLE IV: Agility Test. We evaluate the agility of the humanoid
+stepping stones and evaluate three representative gait regularization       robot on stepping stones with a total length of 2.8m.
+reward metrics: smoothness, feet air time, and feet clearance. Detailed
+                                                                              c (m/s) Time Cost (s) Average Speed (m/s) Error Rate (%, ↓)
+                                                                             vx
+definitions of the reward functions can be found in Table VII.
+                                                                               0.5      6.33 (±0.15)      0.45 (±0.05)      10.67 (±4.54)
+     Designs                  Smoothness (↓)    Feet Air Time (↑)
+                                                                               0.75     4.33 (±0.29)      0.65 (±0.05)      13.53 (±6.52)
+     Naive                  1.7591 (±0.1316)    −0.0319 (±0.0028)               1.0     3.17 (±0.58)      0.88 (±0.04)      11.83 (±8.08)
+     Ours w/o Soft Dyn      0.9633 (±0.0526)    −0.0169 (±0.0014)              1.25     2.91 (±0.63)      0.96 (±0.03)      22.74 (±5.32)
+     Ours w/o Double Critic 1.2705 (±0.1168)    −0.0229 (±0.0033)               1.5     2.69 (±0.42)      1.04 (±0.05)      30.68 (±6.17)
+     B EAM D OJO            0.7603 (±0.0315)    −0.0182 (±0.0027)
+
+
+                                                                            observe that the double critic also benefits foot placement
+                                                                            planning of the entire sub-process of foot lifting and land-
+                                                                            ing. Our method, B EAM D OJO, enables smoother planning,
+                                                                            allowing the foot to precisely reach the next foothold. In
+                                                                            comparison, the baseline excluding double critic demonstrates
+                                                                            reactive stepping, where adjustments are largely made when
+                                                                            the foot is close to the target stone. This behavior indicates
+                                                                            that the double critic, by learning the sparse foothold reward
+                                                                            separately, helps the policy adjust its motion over a longer
+Fig. 7: Foot Placement Planning Visualization. We illustrate two            horizon.
+trajectories for the foot placement process: the yellow line represents
+B EAM D OJO, while the red line corresponds to Ours w/o Double              C. Real-world Experiments
+Critic. Points along the trajectories are marked at equal time intervals.
+From A to C, the method without the double critic exhibits significant         1) Result: As demonstrated in Fig.1, our framework
+adjustments only when approaching the target stone (at point B).            achieves zero-shot transfer, successfully generalizing to real-
+                                                                            world dynamics. To showcase the effect of height map domain
+                                                                            randomization (introduced in Section IV-D3) in sim-to-real
+challenging terrains.                                                       transfer, we compare our proposed method with an ablation
+   Learning Efficiency: Although we train for 10,000 itera-                 that excludes height map randomization (denoted as “ours
+tions in both stages to ensure convergence across all designs,              w/o HR”). We conduct five trials on each terrain and report
+B EAM D OJO converges significantly faster, as shown in Fig. 6.             the success and traversal rates in Fig. 8, with following
+Both the two-stage training setup and the double critic improve             conclusions:
+learning efficiency, with the two-stage setup contributing the                 • B EAM D OJO achieves a high success rate in real-world
+most. In contrast, the naive implementation struggles to reach                    deployments, demonstrating excellent precise foot place-
+higher terrain levels in both stages.                                             ment capabilities. Similar to simulation results, it also
+   The advantage of two-stage learning lies in its ability to                     exhibits impressive generalization performance on Step-
+allow the agent to continuously attempt foot placements, even                     ping Beams and Gaps, even though these terrains were
+in the presence of missteps, making it easier to accumulate                       not part of the training set.
+a substantial number of successful foot placement samples.                     • The ablation, lacking height map domain randomization,
+Meanwhile, the double-critic setup separates the foothold                         results in a significantly lower success rate, highlighting
+reward from the locomotion rewards, ensuring that its updates                     the importance of this design.
+remain unaffected by the noise of unstable locomotion signals,                 • It is also worth mentioning that B EAM D OJO enables
+particularly in the early training phase. Both strategies play a                  backward movement in risky terrains, as shown in
+crucial role in enhancing learning efficiency.                                    Fig. 1(b). This advantage is achieved by leveraging Li-
+   Gait Regularization: The combination of small-scale gait                       DAR to its full potential, whereas a single depth camera
+regularization rewards with sparse foothold reward can hinder                     cannot handle such scenarios.
+gait performance, as shown in Table III, where the naive                       2) Agility Test: To assess the agility of our method, we
+design and the ablation without the double critic exhibit poor              provide the humanoid robot with five commanded longitudinal
+performance in both smoothness and feet air time. In contrast,              velocities, vxc : 0.5, 0.75, 1.0, 1.25, and 1.5 m/s, and check
+our method and the ablation with double critic demonstrates                 the tracking ability. Each test was conducted over three trials,
+superior motion smoothness and improved feet clearance. This                and the results are reported in Table IV. The results show
+improvement arises because, in the double-critic framework,                 minimal tracking error up to the highest training command
+the advantage estimates for the dense and sparse reward groups              velocity of 1.0 m/s, where the robot achieves an average
+are normalized independently, preventing the sparse rewards                 speed of 0.88 m/s, demonstrating the agility of our policy.
+from introducing noise that could disrupt the learning of                   However, performance degrades significantly beyond 1.25 m/s,
+regularization rewards.                                                     as maintaining such speeds becomes increasingly difficult on
+   Foot Placement Planning: As illustrated in Fig. 7, we                    these highly challenging terrains.
+ Stepping Stones   Rsucc   Rtrav    Balancing Beams Rsucc     Rtrav     Stepping Beams    Rsucc   Rtrav     Gaps            Rsucc      Rtrav
+ Ours w/o HR        1/5    38.20%   Ours w/o HR        0/5   12.37%     Ours w/o HR       1/5     30.00%    Ours w/o HR      3/5       60.00%
+ B EAM D OJO        4/5    92.18%   B EAM D OJO        4/5   88.16%     B EAM D OJO       3/5     70.00%    B EAM D OJO      5/5      100.00%
+
+Fig. 8: Real-world Experiments. We build terrains in the real world similar to those in simulation. (a) Stepping Stones: stones with a size
+of 20 cm, a maximum distance of 45 cm between stones, and a sparsity level of 72.5%. (b) Balancing Beams: beams with a width of 20
+cm. (c) Stepping Beams: beams with a size of 20 cm, a maximum distance of 45 cm between beams, and a sparsity level of 66.6%. (d)
+Gaps: gaps with a maximum distance of 50 cm.
+
+
+
+
+Fig. 9: Robustness Test. We evaluate the robustness of the humanoid robot in real-world scenarios with: (a) heavy payload, (b) external
+forces, and (c) recovering from missteps.
+
+
+                                                                       TABLE V: Comparison of Different Foothold Reward Designs.
+  3) Robustness Test: To evaluate the robustness of our
+                                                                       The success rate and foothold error for each foothold reward design
+precise foothold controller, we conducted the following ex-            are evaluated on stepping stones with medium terrain difficulty.
+periments on real-world experiment terrains:
+                                                                                Designs             Rsucc (%, ↑)      Efoot (%, ↓)
+   • Heavy Payload:As shown in Fig. 9(a), the robot carried
+     a 10 kg payload—approximately 1.5 times the weight of                      foothold-30%        93.67 (±1.96)     11.43 (±0.81)
+                                                                                foothold-50%        92.71 (±1.06)     10.78 (±1.94)
+     its torso—causing a significant shift in its center of mass.
+                                                                                foothold-70%        91.94 (±2.08)     14.35 (±2.61)
+     Despite this challenge, the robot effectively maintained                   B EAM D OJO         95.67 (±1.53)     7.79 (±1.33)
+     agile locomotion and precise foot placements, demon-
+     strating its robustness under increased payload conditions.
+   • External Force: As shown in Fig. 9(b), the robot was
+     subjected to external forces from various directions.             We compare this approach with other binary and coarse reward
+     Starting from a stationary pose, the robot experienced            designs: when p% of the sampled points fall outside the safe
+     external pushes, transitioned to single-leg support, and          area, a full penalty is applied; otherwise, no penalty is given.
+     finally recovered to a stable standing position with two-         This can be defined as:
+                                                                                                                                  
+     leg support.
+                                                                                                                       
+                                                                                         X2          X  n                          
+   • Misstep Recovery: As shown in Fig. 9(c), the robot tra-           rfoothold−p% = −      Ci · 1        1{dij < ϵ} ≥ p% · n .
+     verse terrain without prior scanning of terrain dynamics.                            i=1
+                                                                                                    
+                                                                                                           j=1
+                                                                                                                                    
+     Due to occlusions, the robot lacked information about the                                                                      (9)
+     terrain underfoot, causing initial missteps. Nevertheless,           We compare our continuous foothold reward design with
+     it demonstrated robust recovery capabilities.                     three variants of the coarse-grained approach, where p =
+                                                                       30, 50, and 70 (denoted as foothold-30%, foothold-50%, and
+D. Extensive Studies and Analysis                                      foothold-70% respectively). The success rate Rsucc and the
+   1) Design of Foothold Reward: As discussed in Sec-                  foothold error Efoot on stepping stones are reported in Table V.
+tion IV-A, our sampling-based foothold reward is proportional             It is clear that our fine-grained design enables the robot
+to the number of safe points, making it a relatively continuous        to make more accurate foot placements compared to the
+reward: the larger the overlap between the foot placement and          other designs, as this continuous approach gradually en-
+the safe footholds, the higher the reward the agent receives.          courages maximizing the overlap. Among the coarse-grained
+TABLE VI: Comparison of Different Curriculum Designs. The
+success rate and traverse rate for each curriculum design are evaluated
+on stepping stones with medium and hard terrain difficulty respec-
+tively.
+
+                             Medium Difficulty      Hard Difficulty
+  Designs
+                             Rsucc      Rtrav      Rsucc      Rtrav
+  w/o curriculum-medium      88.33      90.76      2.00      18.36
+                                                                           Fig. 10: Generalization Test on Non-Flat Terrains. We conduct
+  w/o curriculum-hard        40.00      52.49     23.67      39.94
+                                                                           real-world experiments on (a) stairs with a width of 25 cm and a
+  B EAM D OJO                95.67      96.11     82.33      86.87
+                                                                           height of 15 cm, and (b) slopes with a 15-degree incline.
+
+                                                                                                  Ablation on Stone Size         Ablation on Step Distance
+approaches, foothold-50% performs better than foothold-30%                            100                                  100
+                                                                                                                   20cm
+
+
+
+                                                                          Success Rate (%)
+and foothold-70%, as a 30% threshold is too strict to learn                                                        15cm    80
+                                                                                             85
+effectively, while 70% is overly loose.                                                                            10cm
+                                                                                                                           60
+   2) Design of Curriculum: To validate the effectiveness                                    70
+of the terrain curriculum introduced in Section IV-D2, we                                                                  40
+                                                                                                                                       45cm
+                                                                                             55                                        50cm
+introduce an ablation study without curriculum learning. In                                                                20
+                                                                                                                                       55cm
+this design, we train using only medium and hard terrain dif-                                40                             0
+ficulties in both stages (denoted as “w/o curriculum-medium”                                       20       15       10           40     45     50    55
+                                                                                                   Min Stone Size (cm)            Max Step Distance (cm)
+and “w/o curriculum-hard”). Similarly, we report the Rsucc
+and Rtrav for both ablation methods, along with our method,                Fig. 11: Failure Case Analysis. We evaluate the success rate on
+on stepping stones terrain at two different difficulty levels              varying (a) stone sizes, and (b) step distances.
+in Table VI. The results show that incorporating curriculum
+learning significantly improves both performance and gen-
+eralization across terrains of varying difficulty. In contrast,            base height reward relative to the foot height rather than the
+without curriculum learning, the model struggles significantly             ground height on these uneven surfaces. Additionally, Stage,1
+with challenging terrain when learning from scratch (“ours w/o             pre-training becomes unnecessary for stairs and slopes, as
+curriculum-hard”), and also faces difficulties on other terrain            the footholds are no longer sparse. We validate our approach
+types, severely limiting its generalization ability (“ours w/o             through hardware experiments on stairs and slopes, as shown
+curriculum-medium”).                                                       in Fig. 10. The results demonstrate that B EAM D OJO enables
+   3) Design of Commands: As mentioned in Section IV-D2,                   the robot to successfully traverse stairs and slopes with success
+in the second stage, no heading command is applied, and                    rates of 8/10 and 10/10, respectively.
+the robot is required to learn to consistently face forward                   5) Failure Cases: To investigate the framework’s perfor-
+through terrain dynamics. We compare this approach with                    mance limitations, we evaluate its performance across varying
+one that includes a heading command (denoted as “ours                      stone sizes and step distances, as shown in Fig. 11. We
+w/ heading command”), where deviation from the forward                     compare policies trained with different terrain parameters, with
+direction results in a corrective yaw command based on the                 the smallest stone size (20 cm, 15 cm and 10 cm) or largest
+current directional error. In the deployment, we use the LiDAR             step distance (45 cm, 50 cm and 55 cm). The results indicate
+odometry module to update the heading command in real time,                that while tougher training enhances adaptability, performance
+based on the difference between the current orientation and the            still drops sharply on 10 cm stones (approximately half the
+initial forward direction.                                                 foot length) and 55 cm steps (roughly equal to the leg length),
+   We conduct five trials on the stepping stones terrain in the            even under the most challenging training settings. In these
+real world, comparing our proposed method with the “ours w/                cases, the difficulty shifts toward maintaining balance on very
+heading command” design. The success rates are 4/5 and 1/5,                small footholds and executing larger strides—challenges that
+respectively. The poor performance of the heading command                  the current reward function does not adequately address.
+design is primarily due to two factors: (1). In the simulation,               6) Limitations: On the one hand, the performance of our
+the model overfits the angular velocity of the heading com-                method is significantly constrained by the limitations of the
+mand, making it difficult to handle noisy real-world odometry              perception module. Inaccuracies in LiDAR odometry, along
+data; (2). In the real world, precise manual calibration of the            with issues such as jitter and map drift, present considerable
+initial position is required to determine the correct forward              challenges for real-world deployment. Furthermore, when pro-
+direction, making the heading command approach less robust.                cessing LiDAR data, the trade-off between the confidence in
+In contrast, B EAM D OJO, without heading correction, proves               noisy measurements and the dynamic changes in terrain—such
+to be more effective.                                                      as the jitter of stones, which is difficult to simulate in the
+   4) Generalization to Non-Flat Terrains: We observe that                 simulation—makes it challenging to effectively handle sudden
+B EAM D OJO also generalizes well to non-flat terrains such as             disturbances or variations. As a result, the system struggles
+stairs and slopes. The main adaptation involves calculating the            to quickly and flexibly adapt to unexpected changes in the
+environment.                                                            Koushil Sreenath, Saurabh Gupta, et al. Learning smooth
+   On the other hand, our method has yet to fully leverage              humanoid locomotion through lipschitz-constrained poli-
+the information provided by the elevation map, and has not              cies. arXiv preprint arXiv:2410.11825, 2024.
+adequately addressed the challenges of terrains with significant    [3] Xuxin Cheng, Yandong Ji, Junming Chen, Ruihan Yang,
+foothold height variations. In future work, we aim to develop           Ge Yang, and Xiaolong Wang. Expressive whole-
+a more generalized controller that enables agile locomotion,            body control for humanoid robots. arXiv preprint
+extending to a broader range of terrains, including stairs and          arXiv:2402.16796, 2024.
+other complex surfaces that require footstep planning, as well      [4] Xuxin Cheng, Kexin Shi, Ananye Agarwal, and Deepak
+as terrains with significant elevation changes.                         Pathak. Extreme parkour with legged robots. In IEEE
+                                                                        International Conference on Robotics and Automation
+                      VI. C ONCLUSION
+                                                                        (ICRA), pages 11443–11450. IEEE, 2024.
+  In this paper, we proposed a novel framework, B EAM D OJO,        [5] Joel Chestnutt, Manfred Lau, German Cheung, James
+which enables humanoid robots to traverse with agility and              Kuffner, Jessica Hodgins, and Takeo Kanade. Footstep
+robustness on sparse foothold terrains such as stepping stones          planning for the honda asimo humanoid. In Proceedings
+and balance beams, and generalize to a wider range of                   of the 2005 IEEE international conference on robotics
+challenging terrains (e.g., gaps, balancing beams). The key             and automation, pages 629–634. IEEE, 2005.
+conclusions are summarized as follows:                              [6] Wenhao Cui, Shengtao Li, Huaxing Huang, Bangyu Qin,
+   • Accuracy of Foot Placement: We introduced a foothold               Tianchu Zhang, Liang Zheng, Ziyang Tang, Chenxu Hu,
+     reward for polygonal feet, which is proportional to the            NING Yan, Jiahao Chen, et al. Adapting humanoid loco-
+     contact area between the footstep and the safe foothold            motion over challenging terrain via two-phase training.
+     region. This continuous reward effectively encourages              In Conference on Robot Learning (CoRL), 2024.
+     precise foot placements.                                       [7] Hongkai Dai and Russ Tedrake. Planning robust walk-
+   • Training Efficiency and Effectiveness: By incorporat-              ing motion on uneven terrain via convex optimization.
+     ing a two-stage reinforcement learning training process,           In 2016 IEEE-RAS 16th International Conference on
+     B EAM D OJO enables full trial-and-error exploration. Ad-          Humanoid Robots (Humanoids), pages 579–586. IEEE,
+     ditionally, the double-head critic significantly enhances          2016.
+     the learning of sparse foothold rewards, regularizes gait      [8] Robin Deits and Russ Tedrake. Footstep planning on
+     patterns, and facilitates long-distance foot placement             uneven terrain with mixed-integer convex optimization.
+     planning.                                                          In 2014 IEEE-RAS international conference on humanoid
+   • Agility and Robustness in the Real World: Our experi-              robots, pages 279–286. IEEE, 2014.
+     ments demonstrate that B EAM D OJO empowers humanoid           [9] Johannes Englsberger, Christian Ott, Máximo A Roa,
+     robots to exhibit agility and achieve a high success               Alin Albu-Schäffer, and Gerhard Hirzinger. Bipedal
+     rate in real-world scenarios. The robots maintain stable           walking control based on capture point dynamics. In
+     walking even under substantial external disturbances and           IEEE/RSJ International Conference on Intelligent Robots
+     the inevitable sway of beams in real world. Notably, by            and Systems (IROS), pages 4420–4427. IEEE, 2011.
+     leveraging LiDAR-based mapping, we have achieved sta-         [10] Péter Fankhauser, Michael Bloesch, Christian Gehring,
+     ble backward walking, a challenge typically encountered            Marco Hutter, and Roland Siegwart. Robot-centric eleva-
+     with depth cameras.                                                tion mapping with uncertainty estimates. In International
+                                                                        Conference on Climbing and Walking Robots (CLAWAR),
+                    ACKNOWLEDGMENTS
+                                                                        2014.
+   This work is funded in part by the National Key R&D             [11] Péter Fankhauser, Michael Bloesch, and Marco Hutter.
+Program of China (2022ZD0160201), and Shanghai Artificial               Probabilistic terrain mapping for mobile robots with
+Intelligence Laboratory. We thank the authors of PIM [34]               uncertain localization. IEEE Robotics and Automation
+for their kind help with the deployment of the elevation map.           Letters (RA-L), 3(4):3019–3026, 2018. doi: 10.1109/
+We thank Unitree Robotics for their help with the Unitree G1            LRA.2018.2849506.
+humanoid robot. We thank RSS reviewers for their careful and       [12] Zipeng Fu, Ashish Kumar, Jitendra Malik, and Deepak
+insightful feedback, which helped improve the quality of this           Pathak. Minimizing energy consumption leads to the
+work.                                                                   emergence of gaits in legged robots. In Conference on
+                                                                        Robot Learning (CoRL), 2021.
+                        R EFERENCES                                [13] Zipeng Fu, Qingqing Zhao, Qi Wu, Gordon Wetzstein,
+ [1] Ananye Agarwal, Ashish Kumar, Jitendra Malik, and                  and Chelsea Finn. Humanplus: Humanoid shadowing and
+     Deepak Pathak. Legged locomotion in challenging ter-               imitation from humans. In Conference on Robot Learning
+     rains using egocentric vision. In Conference on Robot              (CoRL), 2024.
+     Learning (CoRL), pages 403–415. PMLR, 2023.                   [14] Kunihiko Fukushima. Visual feature extraction by a
+ [2] Zixuan Chen, Xialin He, Yen-Jen Wang, Qiayuan Liao,                multilayered network of analog threshold elements. IEEE
+     Yanjie Ze, Zhongyu Li, S Shankar Sastry, Jiajun Wu,                Transactions on Systems Science and Cybernetics, 5(4):
+     322–333, 1969.                                                   motion in rough terrain–online foothold optimization.
+[15] Siddhant Gangapurwala, Mathieu Geisert, Romeo Or-                IEEE Robotics and Automation Letters (RA-L), 5(4):
+     solino, Maurice Fallon, and Ioannis Havoutis. Rloc:              5370–5376, 2020.
+     Terrain-aware legged locomotion using reinforcement         [27] Fabian Jenelten, Junzhe He, Farbod Farshidian, and
+     learning and optimal control. IEEE Transactions on               Marco Hutter. Dtc: Deep tracking control. Science
+     Robotics, 38(5):2908–2927, 2022.                                 Robotics, 9(86):eadh5401, 2024.
+[16] Ruben Grandia, Fabian Jenelten, Shaohui Yang, Farbod        [28] Mazeyu Ji, Xuanbin Peng, Fangchen Liu, Jialong Li,
+     Farshidian, and Marco Hutter. Perceptive locomotion              Ge Yang, Xuxin Cheng, and Xiaolong Wang. Ex-
+     through nonlinear model-predictive control. IEEE Trans-          body2: Advanced expressive humanoid whole-body con-
+     actions on Robotics, 39(5):3402–3421, 2023.                      trol. arXiv preprint arXiv:2412.13196, 2024.
+[17] Robert J Griffin, Georg Wiedebach, Stephen McCrory,         [29] Zhenyu Jiang, Yuqi Xie, Jinhan Li, Ye Yuan, Yifeng Zhu,
+     Sylvain Bertrand, Inho Lee, and Jerry Pratt. Footstep            and Yuke Zhu. Harmon: Whole-body motion generation
+     planning for autonomous walking over rough terrain.              of humanoid robots from language descriptions. In
+     In 2019 IEEE-RAS 19th international conference on                Conference on Robot Learning (CoRL), 2024.
+     humanoid robots (humanoids), pages 9–16. IEEE, 2019.        [30] Shuuji Kajita, Fumio Kanehiro, Kenji Kaneko, Kazuhito
+[18] Xinyang Gu, Yen-Jen Wang, Xiang Zhu, Chengming Shi,              Yokoi, and Hirohisa Hirukawa. The 3d linear inverted
+     Yanjiang Guo, Yichen Liu, and Jianyu Chen. Advancing             pendulum mode: A simple modeling for a biped walking
+     humanoid locomotion: Mastering challenging terrains              pattern generation. In Proceedings 2001 IEEE/RSJ Inter-
+     with denoising world model learning. In Robotics:                national Conference on Intelligent Robots and Systems.
+     Science and Systems (RSS), 2024.                                 Expanding the Societal Role of Robotics in the the Next
+[19] Tairan He, Zhengyi Luo, Xialin He, Wenli Xiao, Chong             Millennium (Cat. No. 01CH37180), volume 1, pages
+     Zhang, Weinan Zhang, Kris Kitani, Changliu Liu, and              239–246. IEEE, 2001.
+     Guanya Shi. Omnih2o: Universal and dexterous human-         [31] Ashish Kumar, Zipeng Fu, Deepak Pathak, and Jitendra
+     to-humanoid whole-body teleoperation and learning. In            Malik. Rma: Rapid motor adaptation for legged robots.
+     Conference on Robot Learning (CoRL), 2024.                       In Robotics: Science and Systems (RSS), 2021.
+[20] Tairan He, Zhengyi Luo, Wenli Xiao, Chong Zhang, Kris       [32] Joonho Lee, Jemin Hwangbo, Lorenz Wellhausen,
+     Kitani, Changliu Liu, and Guanya Shi. Learning human-            Vladlen Koltun, and Marco Hutter. Learning quadrupedal
+     to-humanoid real-time whole-body teleoperation. In               locomotion over challenging terrain. Science robotics, 5
+     IEEE/RSJ International Conference on Intelligent Robots          (47):eabc5986, 2020.
+     and Systems (IROS), pages 8944–8951. IEEE, 2024.            [33] Junfeng Long, Zirui Wang, Quanyi Li, Liu Cao, Jiawei
+[21] Tairan He, Chong Zhang, Wenli Xiao, Guanqi He,                   Gao, and Jiangmiao Pang. Hybrid internal model:
+     Changliu Liu, and Guanya Shi. Agile but safe: Learning           Learning agile legged locomotion with simulated robot
+     collision-free high-speed legged locomotion. In Robotics:        response. In International Conference on Learning
+     Science and Systems (RSS), 2024.                                 Representations (ICLR), 2024.
+[22] Tairan He, Wenli Xiao, Toru Lin, Zhengyi Luo, Zhenjia       [34] Junfeng Long, Junli Ren, Moji Shi, Zirui Wang, Tao
+     Xu, Zhenyu Jiang, Jan Kautz, Changliu Liu, Guanya                Huang, Ping Luo, and Jiangmiao Pang. Learning hu-
+     Shi, Xiaolong Wang, et al. Hover: Versatile neural               manoid locomotion with perceptive internal model. IEEE
+     whole-body controller for humanoid robots. In IEEE               International Conference on Robotics and Automation
+     International Conference on Robotics and Automation              (ICRA), 2025.
+     (ICRA), 2025.                                               [35] Yidan Lu, Yinzhao Dong, Ji Ma, Jiahui Zhang, and
+[23] Nicolas Heess, Dhruva Tb, Srinivasan Sriram, Jay Lem-            Peng Lu. Learning an adaptive fall recovery controller
+     mon, Josh Merel, Greg Wayne, Yuval Tassa, Tom Erez,              for quadrupeds on complex terrains. arXiv preprint
+     Ziyu Wang, SM Eslami, et al. Emergence of locomo-                arXiv:2412.16924, 2024.
+     tion behaviours in rich environments. arXiv preprint        [36] Viktor Makoviychuk, Lukasz Wawrzyniak, Yunrong
+     arXiv:1707.02286, 2017.                                          Guo, Michelle Lu, Kier Storey, Miles Macklin, David
+[24] Armin Hornung and Maren Bennewitz. Adaptive level-               Hoeller, Nikita Rudin, Arthur Allshire, Ankur Handa,
+     of-detail planning for efficient humanoid navigation. In         et al. Isaac gym: High performance gpu-based physics
+     IEEE International Conference on Robotics and Automa-            simulation for robot learning. In Thirty-fifth Conference
+     tion (ICRA), pages 997–1002. IEEE, 2012.                         on Neural Information Processing Systems Datasets and
+[25] Changxin Huang, Guangrun Wang, Zhibo Zhou, Ronghui               Benchmarks Track (Round 2), 2021.
+     Zhang, and Liang Lin. Reward-adaptive reinforce-            [37] Gabriel B Margolis and Pulkit Agrawal. Walk these
+     ment learning: Dynamic policy gradient optimization for          ways: Tuning robot control for generalization with mul-
+     bipedal locomotion. IEEE transactions on pattern anal-           tiplicity of behavior. In Conference on Robot Learning
+     ysis and machine intelligence, 45(6):7686–7695, 2022.            (CoRL), pages 22–31. PMLR, 2023.
+[26] Fabian Jenelten, Takahiro Miki, Aravind E Vijayan,          [38] Gabriel B Margolis, Tao Chen, Kartik Paigwar, Xiang
+     Marko Bjelonic, and Marco Hutter. Perceptive loco-               Fu, Donghyun Kim, Sangbae Kim, and Pulkit Agrawal.
+     Learning to jump from pixels. In Conference on Robot             2014.
+     Learning (CoRL), 2021.                                      [50] Richard Stuart Sutton. Temporal credit assignment in
+[39] Gabriel B Margolis, Ge Yang, Kartik Paigwar, Tao Chen,           reinforcement learning. University of Massachusetts
+     and Pulkit Agrawal. Rapid locomotion via reinforcement           Amherst, 1984.
+     learning. The International Journal of Robotics Research,   [51] Josh Tobin, Rachel Fong, Alex Ray, Jonas Schneider,
+     43(4):572–587, 2024.                                             Wojciech Zaremba, and Pieter Abbeel. Domain ran-
+[40] Carlos Mastalli, Ioannis Havoutis, Michele Focchi, Dar-          domization for transferring deep neural networks from
+     win G Caldwell, and Claudio Semini. Motion planning              simulation to the real world. In IEEE/RSJ International
+     for quadrupedal locomotion: Coupled planning, terrain            Conference on Intelligent Robots and Systems (IROS),
+     mapping, and whole-body control. IEEE Transactions               pages 23–30. IEEE, 2017.
+     on Robotics, 36(6):1635–1648, 2020.                         [52] Bart van Marum, Aayam Shrestha, Helei Duan, Pranay
+[41] Oliwier Melon, Romeo Orsolino, David Surovik, Math-              Dugar, Jeremy Dao, and Alan Fern. Revisiting reward
+     ieu Geisert, Ioannis Havoutis, and Maurice Fallon.               design and evaluation for robust humanoid standing and
+     Receding-horizon perceptive trajectory optimization for          walking. In IEEE/RSJ International Conference on
+     dynamic legged locomotion with learned initialization.           Intelligent Robots and Systems (IROS), 2024.
+     In IEEE International Conference on Robotics and Au-        [53] Alexander W Winkler, C Dario Bellicoso, Marco Hutter,
+     tomation (ICRA), pages 9805–9811. IEEE, 2021.                    and Jonas Buchli. Gait and trajectory optimization for
+[42] Takahiro Miki, Joonho Lee, Jemin Hwangbo, Lorenz                 legged systems through phase-based end-effector param-
+     Wellhausen, Vladlen Koltun, and Marco Hutter. Learning           eterization. IEEE Robotics and Automation Letters (RA-
+     robust perceptive locomotion for quadrupedal robots in           L), 3(3):1560–1567, 2018.
+     the wild. Science robotics, 7(62):eabk2822, 2022.           [54] Zhaoming Xie, Xingye Da, Michiel Van de Panne, Buck
+[43] Bhavyansh Mishra, Duncan Calvert, Sylvain Bertrand,              Babich, and Animesh Garg. Dynamics randomization
+     Hakki Erhan Sevil, and Robert Griffin. Efficient terrain         revisited: A case study for quadrupedal locomotion. In
+     map using planar regions for footstep planning on hu-            IEEE International Conference on Robotics and Automa-
+     manoid robots. In 2024 IEEE International Conference             tion (ICRA), pages 4955–4961. IEEE, 2021.
+     on Robotics and Automation (ICRA), pages 8044–8050.         [55] Zhaoming Xie, Xingye Da, Buck Babich, Animesh
+     IEEE, 2024.                                                      Garg, and Michiel van de Panne. Glide: Generalizable
+[44] I Made Aswin Nahrendra, Byeongho Yu, and Hyun                    quadrupedal locomotion in diverse environments with
+     Myung. Dreamwaq: Learning robust quadrupedal loco-               a centroidal model. In International Workshop on the
+     motion with implicit terrain imagination via deep rein-          Algorithmic Foundations of Robotics, pages 523–539.
+     forcement learning. In IEEE International Conference             Springer, 2022.
+     on Robotics and Automation (ICRA), pages 5078–5084.         [56] Pei Xu, Xiumin Shang, Victor Zordan, and Ioannis
+     IEEE, 2023.                                                      Karamouzas. Composite motion learning with task
+[45] Ilija Radosavovic, Sarthak Kamat, Trevor Darrell, and            control. ACM Transactions on Graphics (TOG), 42(4):
+     Jitendra Malik. Learning humanoid locomotion over                1–16, 2023.
+     challenging terrain. arXiv preprint arXiv:2410.03654,       [57] Wei Xu and Fu Zhang. Fast-lio: A fast, robust lidar-
+     2024.                                                            inertial odometry package by tightly-coupled iterated
+[46] Ilija Radosavovic, Bike Zhang, Baifeng Shi, Jathushan            kalman filter. IEEE Robotics and Automation Letters
+     Rajasegaran, Sarthak Kamat, Trevor Darrell, Koushil              (RA-L), 6(2):3317–3324, 2021.
+     Sreenath, and Jitendra Malik. Humanoid locomotion           [58] Wei Xu, Yixi Cai, Dongjiao He, Jiarong Lin, and
+     as next token prediction. In The Thirty-eighth Annual            Fu Zhang. Fast-lio2: Fast direct lidar-inertial odometry.
+     Conference on Neural Information Processing Systems,             IEEE Transactions on Robotics, 38(4):2053–2073, 2022.
+     2024.                                                       [59] Ruihan Yang, Ge Yang, and Xiaolong Wang. Neural
+[47] John Schulman, Philipp Moritz, Sergey Levine, Michael            volumetric memory for visual locomotion control. In
+     Jordan, and Pieter Abbeel. High-dimensional continu-             Proceedings of the IEEE/CVF Conference on Computer
+     ous control using generalized advantage estimation. In           Vision and Pattern Recognition, pages 1430–1440, 2023.
+     International Conference on Learning Representations        [60] Ruiqi Yu, Qianshi Wang, Yizhen Wang, Zhicheng Wang,
+     (ICLR), 2015.                                                    Jun Wu, and Qiuguo Zhu. Walking with terrain recon-
+[48] John Schulman, Filip Wolski, Prafulla Dhariwal, Alec             struction: Learning to traverse risky sparse footholds.
+     Radford, and Oleg Klimov. Proximal policy optimization           arXiv preprint arXiv:2409.15692, 2024.
+     algorithms. arXiv preprint arXiv:1707.06347, 2017.          [61] Wenhao Yu, Deepali Jain, Alejandro Escontrela, Atil
+[49] Alexander Stumpf, Stefan Kohlbrecher, David C Conner,            Iscen, Peng Xu, Erwin Coumans, Sehoon Ha, Jie Tan,
+     and Oskar von Stryk. Supervised footstep planning for            and Tingnan Zhang. Visual-locomotion: Learning to walk
+     humanoid robots in rough terrain tasks using a black             on complex terrains with vision. In Conference on Robot
+     box walking controller. In 2014 IEEE-RAS International           Learning (CoRL), 2021.
+     Conference on Humanoid Robots, pages 287–294. IEEE,         [62] Fatemeh Zargarbashi, Jin Cheng, Dongho Kang, Robert
+     Sumner, and Stelian Coros. Robotkeyframing: Learning
+     locomotion with high-level objectives via mixture of
+     dense and sparse rewards. In Conference on Robot
+     Learning (CoRL), 2024.
+[63] Chong Zhang, N. Rudin, David Hoeller, and Marco
+     Hutter. Learning agile locomotion on risky terrains. In
+     IEEE/RSJ International Conference on Intelligent Robots
+     and Systems (IROS), 2023.
+[64] Shaoting Zhu, Runhan Huang, Linzhan Mou, and Hang
+     Zhao. Robust robot walker: Learning agile locomotion
+     over tiny traps. In IEEE International Conference on
+     Robotics and Automation (ICRA), 2024.
+[65] Ziwen Zhuang, Zipeng Fu, Jianren Wang, Christopher
+     Atkeson, Sören Schwertfeger, Chelsea Finn, and Hang
+     Zhao. Robot parkour learning. In Conference on Robot
+     Learning (CoRL), 2023.
+[66] Ziwen Zhuang, Shenzhe Yao, and Hang Zhao. Humanoid
+     parkour learning. In Conference on Robot Learning
+     (CoRL), 2024.
+                                A PPENDIX                                         We define terrain difficulty levels ranging from 0 to 8,
+A. Reward Functions                                                            denoted as l. The specific terrain curriculum at each difficulty
+                                                                               level are as follows:
+   The reward functions we used during the training are shown
+                                                                                  • Stones Everywhere: The stone size is max{0.25, 1.5(1 −
+in Table VII, which mainly comes from [1, 12, 31, 37, 34].
+The corresponding symbols and their descriptions are provided                       0.1l)}, and the stone distance is 0.05⌈l/2⌉.
+                                                                                  • Stepping Stones: The stone sizes follow the sequence
+in Table VIII.
+                                                                                    [0.8, 0.65, 0.5, 0.4, 0.35, 0.3, 0.25, 0.2, 0.2], with a maxi-
+                    TABLE VII: Reward Functions                                     mum stone distance of 0.1 + 0.05l.
+                                                                                  • Balancing Beams: The stone size is 0.3 − 0.05⌊l/3⌋,
+  Term                     Equation                               Weight
+                                                                                    with the stone distance in x-direction 0.4 − 0.05l, and
+                 Group 1: Locomotion Reward Group
+  xy velocity tracking
+                                      c ∥2 /σ
+                        exp n−∥vxy − vxy                          1.0
+                                                                                    in y-direction [0.2, 0.2, 0.2, 0.25, 0.3, 0.35, 0.35, 0.4, 0.2].
+                                          2
+                                        c
+  yaw velocity tracking exp − ωyaw − ωyaw
+                                          2 o
+                                             /σ                   1.0
+                                                                                    At the highest difficulty level, the terrain forms a single
+                                                                                    continuous balancing beam.
+  base height              (h − htarget )2                        −10.0
+  orientation              ∥gx ∥22 + ∥gy ∥22                      −2.0         C. Domain Randomization
+  z velocity               vz2                                    −2.0
+  roll-pitch velocity      ∥ωxy ∥22                               −0.05                       TABLE IX: Domain Randomization Setting
+  action rate              ∥at − at−1 ∥22                         −0.01
+  smoothness               ∥at − 2at−1 + at−2 ∥22                 −1e − 3                Term                              Value
+  stand still              ∥θ∥22 · 1{∥vxy
+                                        c ∥2 < ϵ}
+                                             2                    −0.05
+                                                                                                              Observations
+  joint velocities         ∥θ̇∥22                                 −1e − 4
+                                                                                         angular velocity noise          U (−0.5, 0.5) rad/s
+  joint accelerations      ∥θ̈∥22                                 −2.5e − 8              joint position noise            U (−0.05, 0.05) rad/s
+                           ReLU(θ − θmax )+                                              joint velocity noise            U (−2.0, 2.0) rad/s
+  joint position limits                                           −5.0
+                                   ReLU(θmin − θ)                                        projected gravity noise         U (−0.05, 0.05) rad/s
+  joint velocity limits    ReLU(|θ̇| − |θ̇max |)                  −1e − 3
+                                                                                                    Humanoid Physical Properties
+                           |τ ∥θ̇|T / ∥v∥22 + 0.2 ∗ ∥ω∥22
+                                                             
+  joint power                                                     −2e − 5
+                           P2                                                            actuator offset              U (−0.05, 0.05) rad
+  feet ground parallel        i=1 Var(pz,i )                      −0.02                  motor strength noise         U (0.9, 1.1)
+  feet distance            ReLU (|p  y,1 − py,2 |− dmin )        0.5                    payload mass                 U (−2.0, 2.0) kg
+                           P2               target
+  feet air time               i=1 tair,i − tair      · Fi         1.0                    center of mass displacement  U (−0.05, 0.05) m
+                           P2                target 2
+                                                                                        Kp, Kd noise factor          U (0.85, 1.15)
+  feet clearance              i=1 pz,i − pz            · ṗxy,i   −1.0
+                                                                                                            Terrain Dynamics
+                   Group 2: Foothold Reward Group                                        friction factor                U (0.4, 1.0)
+                         − 2i=1 Ci n                                                     restitution factor             U (0.0, 1.0)
+                           P        P
+  foothold                            j=1 1{dij < ϵ}              1.0
+                                                                                         terrain height noise           U (−0.02, 0.02) m
+                                                                                                             Elevation Map
+                        TABLE VIII: Used Symbols
+                                                                                         vertical offset                U (−0.03, 0.03) m
+                                                                                         vertical noise                 U (−0.03, 0.03) m
+ Symbols     Description                                                                 map roll, pitch rotation noise U (−0.03, 0.03) m
+    σ        Tracking shape scale, set to 0.25.                                          map yaw rotation noise         U (−0.2, 0.2) rad
+    ϵ        Threshold for determining zero-command in stand still re-                   foothold extension probability 0.6
+             ward, set to 0.1.                                                           map repeat probability         0.2
+    τ        Computed joint torques.
+  htarget    Desired base height relative to the ground, set to 0.725.
+ ReLU(·)     Function that clips negative values to zero [14].                 D. Hyperparameters
+  pi , ṗi   Spatial position and velocity of all sampled points on the i-th
+             foot respectively.                                                                     TABLE X: Hyperparameters
+    target
+  pz         Target foot-lift height, set to 0.1.
+  tair,i     Air time of the i-th foot.                                             Hyperparameter                Value
+   target
+  tair       Desired feet air time, set to 0.5.                                                                  General
+    Fi       Indicator specifying whether foot i makes first ground contact.        num of robots                 4096
+  dmin       Minimum allowable distance between two feet, set to 0.18.              num of steps per iteration    100
+                                                                                    num of epochs                 5
+                                                                                    gradient clipping             1.0
+                                                                                    adam epsilon                  1e − 8
+B. Terrain Curriculum
+                                                                                                               PPO
+   The training terrains using curriculum comprises Stones Ev-                      clip range                 0.2
+erywhere, Stepping Stones, and Balancing Beams. The Stones                          entropy coefficient        0.01
+                                                                                    discount factor γ          0.99
+Everywhere terrain spans an area of 8m × 8m, while both                             GAE balancing factor λ     0.95
+Stepping Stones and Balancing Beams are 2m in width and                             desired KL-divergence      0.01
+8m in length, with single-direction commands. The depth of                          actor and double critic NN MLP, hidden units [512, 216, 128]
+gaps relative to the ground is set to 1.0m, and all stones and                                               B EAM D OJO
+beams exhibit height variations within ±0.05m. The depth                            w1 , w2                     1.0, 0.25
+tolerance threshold, ϵ, is set to −0.1m.
+

@@ -1,0 +1,913 @@
+                                         Parkour in the wild: Learning a general and extensible agile
+                                         locomotion policy using multi-expert distillation and RL
+                                         Fine-tuning
+                                         Nikita Rudin1,2 , Junzhe He1 , Joshua Aurand1 , and Marco Hutter1
+
+
+
+                                         Abstract
+                                         Legged robots are well-suited for navigating terrains inaccessible to wheeled robots, making them ideal for applications
+                                         in search and rescue or space exploration. However, current control methods often struggle to generalize across
+                                         diverse, unstructured environments. This paper introduces a novel framework for agile locomotion of legged robots by
+                                         combining multi-expert distillation with reinforcement learning (RL) fine-tuning to achieve robust generalization. Initially,
+                                         terrain-specific expert policies are trained to develop specialized locomotion skills. These policies are then distilled into a
+
+
+
+
+arXiv:2505.11164v1 [cs.RO] 16 May 2025
+                                         unified foundation policy via the DAgger algorithm. The distilled policy is subsequently fine-tuned using RL on a broader
+                                         terrain set, including real-world 3D scans. The framework allows further adaptation to new terrains through repeated
+                                         fine-tuning. The proposed policy leverages depth images as exteroceptive inputs, enabling robust navigation across
+                                         diverse, unstructured terrains. Experimental results demonstrate significant performance improvements over existing
+                                         methods in synthesizing multi-terrain skills into a single controller. Deployment on the ANYmal D robot validates the
+                                         policy’s ability to navigate complex environments with agility and robustness, setting a new benchmark for legged robot
+                                         locomotion.
+
+                                         Keywords
+                                         Legged Robots, Reinforcement Learning, Distillation
+
+
+
+                                         1   Introduction                                                 to handle successfully. The pipeline must facilitate training
+                                                                                                          the controller for the missing skills while preventing it from
+                                         Legged robots have long been promising to conquer terrains
+                                                                                                          forgetting any of the previously acquired knowledge.
+                                         inaccessible to their wheeled counterparts. While we saw
+                                                                                                             In the context of legged locomotion, skills represent
+                                         tremendous progress in the field, these robots are still far
+                                                                                                          motions required to cross different terrains and obstacles. A
+                                         from matching the performance of humans or animals in
+                                                                                                          general controller would then be capable of crossing a large
+                                         complex environments. Due to this gap, applications such
+                                                                                                          variety of terrains using a diverse set of motions and adapting
+                                         as search and rescue and space exploration, which would
+                                                                                                          to previously unseen complex and unstructured scenarios.
+                                         benefit the most from a versatile legged robot remain
+                                                                                                             As an additional challenge, policies trained for agile
+                                         impractical. While robotic hardware continues to evolve,
+                                                                                                          locomotion must perceive the obstacles they are navigating.
+                                         software is the current bottleneck and is far from using the
+                                                                                                          Standard methods of terrain reconstruction are insufficient
+                                         hardware to its full potential.
+                                                                                                          since they rely on precise state estimation, which is
+                                            Control methods have been developing quickly in recent        unavailable during agile motions. Furthermore, parts of the
+                                         years. The democratization of reinforcement learning (RL)        obstacles often remain outside the sensors’ field of view
+                                         has allowed robots to get out of the lab and tackle              during the approach phase. Reconstructing the terrain is not
+                                         unstructured terrains with unprecedented robustness Lee          possible in that case, but the policy must nevertheless execute
+                                         et al. (2020); Miki et al. (2022a); Choi et al. (2023). More     the correct motion.
+                                         recently, researchers have been using RL to train agile
+                                         policies capable of traversing complex obstacles Cheng et al.
+                                                                                                          1.1    Contribution
+                                         (2024); Zhuang et al. (2023); Hoeller et al. (2023).
+                                            These works demonstrated the maturity of RL and its           We propose a three-stage approach to provide quadrupedal
+                                         capacity to solve various specific tasks. Still, the resulting   robots with unprecedented locomotion capabilities. First, the
+                                         policies can only be applied in the narrow domain where they     different experts are trained separately using RL.
+                                         were trained. For each new task, a policy is typically trained      We then examine different methods to combine them
+                                         from scratch without any benefits from the knowledge             into a common controller. We compare our previously
+                                         contained in previously trained policies. We lack a system
+                                         capable of re-using and combining the abilities of individual
+                                                                                                          1 Robotic Systems Lab, ETH Zurich
+                                         skills into a general controller, which would preserve the
+                                                                                                          2 NVIDIA Switzerland
+                                         performance of individual skills but also be adaptable to
+                                         new scenarios. The system must be easily extensible to new       Corresponding author:
+                                         tasks. As the robot is deployed in the real world, there will    Nikita Rudin
+                                         be unforeseen scenarios that the controller will not be able     Email: rudinn@ethz.ch
+Figure 1. Deployment of our policy on the ANYmal D robot in real-world environments. The robot performs a variety of motions to
+cross the different unstructured obstacles. A single policy is used in all deployments.
+
+
+developed hierarchical approach (Hoeller et al. (2023)), skill             We show that after fine-tuning on a diverse set of terrains,
+encoding through a variational auto-encoder, and multi-                 the policy’s performance increases on basic terrains, and
+expert distillation. We find that in their standard form,               it learns to solve more complex terrains for which experts
+none of the methods achieve reasonable performance on                   could not be trained directly. Interestingly, it even learns new
+complex terrains for which expert policies are unavailable.             behaviors, for example, to improve the visibility of obstacles
+Hierarchical and latent-encoding approaches tend to fall                in the depth camera’s field of view by adapting the motion
+into local minima solving only subsets of terrains and                  of the body. A policy trained in this way can be successfully
+failing to generalize to more complex obstacles. Distillation           deployed on new terrains that were not seen during training.
+achieves non-trivial performance on all terrains, but due to               Furthermore, we show that new skills can be added using
+the multi-modal nature of the problem, its performance is               repeated fine-tuning by simply adding new terrains to the
+inferior to that of individual experts, and its generalization to       training set. The policies learn unique motions to solve new
+unseen terrains is limited. However, a distilled policy can be          obstacles while maintaining their performance on previously
+considered as a foundation model and repeatedly fine-tuned              seen tasks.
+with RL. This training is done on various terrains, combining              To solve the perception problem, we examine the
+the ones used during distillation with new ones that were not           feasibility of directly using depth camera images as inputs
+seen during the training of experts.                                    to the locomotion policy. We show that, with a carefully
+                                                                        designed noise model, this approach yields a robust
+
+                                                                    2
+perceptive locomotion policy that uses only depth images                Additionally, it is sensitive to state-estimation drift results
+and allows the robot to cross a variety of unstructured terrains        on a map too imprecise to be used for crossing challenging
+with large obstacles and navigate complex environments in               obstacles. Hence, Hoeller et al. (2023) proposes a neural
+ways that were previously considered unachievable.                      terrain reconstruction to achieve accurate 3D terrain
+   We test the resulting policy extensively in both indoor              representations. The approach can accurately reconstruct
+and outdoor scenarios. We deploy the robot in search and                obstacles under state estimation drift, noisy measurements,
+rescue training facilities, where we test the generalization            and partial observability. Unfortunately, the performance
+of the policy across unseen piles of rubble, rocks, and                 drops significantly in unstructured terrains since it can not
+collapsed buildings. These deployments also demonstrate                 properly guess unseen parts of obstacles. Instead, recent
+the robustness of the policy to degraded perception (tall               works have shown that a locomotion policy can learn to use
+grass, changing luminosity, reflections, direct sunlight), and          the output of depth cameras. The training of the policy can be
+physical disturbances such as slippery terrain (gravel, mud),           done directly with end-to-end RL Yang et al. (2022); Yu et al.
+unstable obstacles (rolling rocks, unstable rubble), and foot           (2022), but most works (Agarwal et al. (2022); Cheng et al.
+traps (concrete rebar, small cracks).                                   (2024); Zhuang et al. (2023)) choose to use a teacher-student
+   With this, we demonstrate the first scalable training                approach, where a teacher is first trained with privileged
+approach for legged locomotion that is able to handle                   information, then a student policy is trained to imitate the
+increasing complexity by repeated fine-tuning without a                 actions of the teacher using supervised training. The student
+significant loss in performance. This training approach                 policy does not have access to the privileged information and
+results in a complete locomotion controller with an                     must reconstruct it using depth images with noise models and
+unparalleled level of agility, robustness, and generalization           further processing to bridge the sim-to-real gap.
+to unseen scenarios.                                                       Previously described approaches can produce agile and
+                                                                        robust motions, but additional mechanisms are required to
+1.2    Related work                                                     combine these motions into a common control strategy.
+1.2.1 Legged locomotion : Model-Predictive Control                      Recently, the Parkour setting has proven to be a great
+(MPC) has been used extensively to control legged robots on             benchmark for the combination of multiple agile motions.
+different terrains Grandia et al. (2022); Jenelten et al. (2022);       In that setting, the robot must cross multiple obstacles, each
+Kim et al. (2020). In particular, it can successfully solve             requiring a different motion or skill. The robot does not
+high-precision tasks such as careful foot placement on sparse           know the arrangements of obstacles in advance and must,
+or narrow obstacles. MPC, however, relies on high-quality               therefore, adapt its behavior based on its perceptive inputs.
+models and can fail due to noisy terrain reconstruction or              Various approaches have tackled this challenge. Hoeller et al.
+slippage. Additionally, MPC makes use of highly constrained             (2023) presents a hierarchical formulation where a high-level
+contact schedules which are suitable for walking but can                policy selects lower-level expert skills based on environment
+inhibit more complex types of motion. RL presents a                     perception. In contrast to that, Cheng et al. (2024) trains a
+promising alternative to the more traditional model-based               single policy on different obstacles, while Caluwaerts et al.
+approaches, requiring fewer assumptions and heuristics.                 (2023) and Zhuang et al. (2023) use a distillation of expert
+Typically relying on simulation, RL is used to explore                  policies to train a single policy capable of performing all
+and find control policies through a trial-and-error process.            skills, similar to the first step of our proposed approach.
+While such learned policies can achieve good performance                Those works, however, only train a limited number of new
+even on challenging terrains Rudin et al. (2022a), Zhang                skills and do not show signs of generalization to new terrains.
+et al. (2024), Cheng et al. (2024), Han et al. (2024) there                In the broader machine learning community, foundation
+is still a considerable performance gap compared to MPC                 models - models trained on a large variety of data capable
+in high-precision tasks and extensive work is required to               of performing many different tasks (Brown et al. (2020),
+train each motion. Finally, researchers have explored hybrid            Alayrac et al. (2022)), have shown to be able to generalize
+approaches combining MPC with RL in different ways to                   to untrained scenarios with ease. However, such models
+bypass the limitations of each method. Gangapurwala et al.              are not yet as common in robotics. PaLM-E (Driess et al.
+(2022); Xie et al. (2023) use DRL to predict footholds that             (2023)) is a language model that is trained on multi-modal
+are then tracked by model-based controllers. Jenelten et al.            inputs, including robotics data. It is capable of reasoning
+(2024); Kang et al. (2023) utilize model-based approaches               about different modalities and acting as a high-level control
+to generate optimal trajectories that are then tracked or               policy. Ge et al. (2023) proposed to fine-tune policies in new
+imitated by an RL policy. Unfortunately, while such hybrid              environments by using a pre-trained foundation model to
+approaches can combine the strengths of both methods, they              label the demonstrations. Utilizing a large dataset collected
+also tend to combine the weaknesses. In practice, these                 in 17 months on 13 robots, Robotics Transformer (RT-1
+approaches retain the limiting assumptions of MPC while                 Brohan et al. (2023)) takes multi-modal inputs to generate
+also requiring the extensive tuning effort of RL.                       joint actions that are shown to be capable of robustly
+   While robust walking can rely purely on proprioception               generalizing to untrained tasks. A follow-up work, Robotic
+Lee et al. (2020), perception of the environment is needed              Transformer 2 (RT2 Zitkovich et al. (2023)), demonstrates
+to overcome more challenging obstacles. Elevation maps                  a generalized robot control framework by fine-tuning a pre-
+are a standard method to provide a robot with information               trained vision-language model on robot trajectories, resulting
+about its surrounding terrain Fankhauser et al. (2014);                 in a vision-language-action (VLA) model that enables more
+Miki et al. (2022b). This approach is fundamentally                     complicated semantic reasoning. Building on RT-2, RT-
+limited to 2D and cannot represent over-hanging obstacles.              X (Collaboration et al. (2024)), introduces X-embodiment
+
+
+                                                                    3
+Table 1. Symbols.                                                       Table 3. Observations.
+    Symbol         Description                                                Observation        Expert        Student      Critic
+    r, r∗          Current and target base positions                          vb                 ×             ×            ×
+    ψ, ψ ∗         Current and target base headings                           ωb                 ×             ×            ×
+    t∗             Remaining time to reach the target                         gb                 ×             ×            ×
+    α              Angle between base z-axis and gravity                      q, q̇              ×             ×            ×
+    vb , ω b       Base velocities in base frame                              r∗ , t∗ , ψ ∗      ×             ×            ×
+    gb             Gravity vector in base frame                               Em2 m×1 m          ×                          ×
+    q, q̇, τ       Joint positions and velocities                             Em6 m×3 m                                     ×
+    qlim , q̇lim   Joint limits                                               Ls1ray/30◦                                    ×
+    q∗ , qd        Desired and default joint positions                        4×I                              ×
+    τ , τ lim      Joint Torques and torque limits
+    v f , Ff       Feet linear velocity and contact force
+    Em             Elevation map around the robot                       facilities representing piles of rubble, rocks, and collapsed
+    Ls             Lidar (horizontal) scan around the robot             buildings.
+    I              Depth images                                            The remainder of this section describes each part of our
+    SL             Target reached,                                      proposed approach.
+                   SL = 1∥rxy −r∗xy ∥<0.25 1∥ψ−ψ∗ ∥<0.5
+                                                                        2.1     Expert skill training
+Table 2. Rewards used during fine-tuning.
+                                                                        The first step of our pipeline is to train the expert skills on
+                                                                        individual terrains. We closely follow the training procedure
+ Reward Term           Expression                          Weight
+                                                                        used for the locomotion module of Hoeller et al. (2023). We
+ Track position        1t∗ <1 (1 − 0.5∥rxy − r∗xy ∥)       10           use the position-based task description proposed in Rudin
+ Track heading         1t∗ <1 (1 − 0.5∥ψ − ψ ∗ ∥)          5            et al. (2022a) with symmetry data-augmentation of Mittal
+ Joint velocity        ∥q̇∥2                               -1e-3        et al. (2024). On top of the five skills used by Hoeller
+ Torque                ∥τ ∥2                               -1e-5        et al. (2023) (walk, climb, climb down, jump, and crouch),
+                       P12
+ Joint vel. limit              max(|q̇i | − q̇lim , 0)     -1           we add four additional skills. These include jumping over
+                       Pi=1
+                          12
+ Torque limit             i=1 max(|τ i | − τlim , 0)       -0.2         low walls, walking on stepping stones, crossing narrow
+ Base acc.             ∥v̇∥2 + 0.02∥ω̇∥2                   -1e-3        beams, and climbing piles of boulders. Each of the expert
+                       P4
+ Feet acc.                f =1 ∥v̇f ∥                      -2e-3        skills requires a specialized curriculum, reward-tuning, and
+ Action rate           ∥q∗t − q∗t−1 ∥2                     -1e-2        training procedure. For example, the low-wall policy was
+                       P4                              2
+                          f =1 max(∥Ff ∥ − 700, 0)
+ Feet force                                                -1e-5        initialized with the weights of the climbing policy. Finding
+ Don’t wait            1(∥vb ∥ < 0.2)                      -1           the right procedure and tuning all parameters can be lengthy
+ Stand at target       SL ∥q − qd ∥                        -0.5         and cumbersome, but it only needs to be done once for each
+ Collision             1knee/shank collision               -1           skill. Once sufficient performance is achieved, the trained
+ Termination           1α>135◦ + 1q̇>q̇lim                 -2e3         policy can be stored and reused without further modifications
+                                                                        or fine-tuning.
+
+capabilities – it learns from a diverse array of robot types and        2.2     Distillation
+environments across various datasets. This cross-platform
+learning allows RT-X to generalize skills across different              Once the different expert policies πexpert,i are trained,
+robot platforms (e.g., robotic arms, drones) and adapt better           they are distilled into a single foundation policy πstudent .
+to new contexts, effectively bridging the embodiment gap                Formally this means that on every terrain i given
+and enhancing robustness in real-world applications. Gupta              observations ostudent , oexpert the distilled policy should
+et al. (2022) proposes a foundation model capable of                    achieve πstudent (ostudent ) ≈ πexpert,i (oexpert ). This highlights
+controlling different robots across a fixed design space.               two abilities πstudent has to learn. First, the policy has to
+                                                                        extract the type of terrain it currently encounters, i.e. it has to
+                                                                        learn an internal mapping ostudent 7→ i. Otherwise, it would
+2    Method                                                             not be possible for πstudent to choose the right course of
+In this work, we design 9 basic terrains requiring different            action. Then, it must predict the action chosen by that expert.
+locomotion skills and train expert policies for each one.                  The distilled policy is trained online using supervised
+We then distill those skills into a single policy. During               learning similar to the DAgger algorithm proposed in Ross
+distillation, we modify the perceptive input. While the expert          et al. (2011). We create a simulated environment that
+skills receive information about the terrain height around the          combines all terrains used for expert training. We then use
+robot’s base in the form of an elevation map, the distilled             the massively parallel simulation setting of Rudin et al.
+policy must infer that information from the images of four              (2022b) and assign a subset of robots to each terrain.
+onboard depth cameras. The policy must use its memory                   Each robot is then assigned an expert based on its terrain
+to infer parts of the obstacles that are not in the field of            type. We collect trajectories by deploying πstudent in that
+view of the cameras. Finally, we fine-tune the distilled policy         environment. At each timestep, we query both the student
+using RL. During the fine-tuning stage, we extend the set of            and the assigned expert for each robot. The student’s actions
+terrains by adding 3D scans of real-world search and rescue             are sent to the simulation while the student’s observations
+
+                                                                    4
+Figure 2. Description of our approach. The training is decomposed into three stages. First, 9 individual skills are trained separately
+using RL. The skills use elevation maps as perceptive input. Second, the skills are distilled into a single network using supervised
+learning and the Dagger approach. The distilled policy receives depth images instead of elevation maps. We use the 9 skills and
+terrains of the first phase during distillation. Finally, the distilled policy is fine-tuned using RL. During this phase, there is no
+supervision from experts, and the policy is trained on a combination of the 9 terrains of the previous phase as well as 15 new
+terrains, which are obtained from 3D scans of real-world piles of rubble in search-and-rescue training facilities. Only 4 out of 15
+scans are shown in the figure.
+
+                        Depth images                     Proprioception                  Commands
+
+
+
+
+                                                               CNN                      LSTM                    MLP           Actions
+
+
+
+
+Figure 3. Architecture of the policy used during distillation and fine-tuning. Three types of inputs are given to the policy: 4 depth
+images, proprioceptive information, and task commands. The depth images are processed individually by a CNN with 3
+convolutional and max-pool layers, followed by two fully connected layers with an output dimension of 64. The features of the last
+fully connected layer of all images are then concatenated with the vector of proprioceptive information and fed through 2 LSTM
+layers. Finally, the output of the LSTM is concatenated with the vectors of proprioception and task commands and fed through an
+MLP composed of 3 fully connected layers with ELU activation.
+
+
+and the expert actions are collected in a dataset D =                        is robust to action noise is beneficial for the RL fine-
+{ostudent,t , aexpert,t }Tt=1 . After collecting D, the student policy       tuning stage, where such noise is added for exploration. The
+is
+PN trained in a supervised fashion by minimizing the loss                    complete algorithm is outlined in Algorithm (1).
+                                            2
+   t=1 (πstudent (ostudent,t ) − aexpert,t ) .
+                                                                                The action space of the student policy is identical to
+                                                                             the experts. All policies use proprioceptive information
+                                                                             consisting of base linear and angular velocity, joint positions
+   During the trajectory collection, zero-mean Gaussian                      and velocities, the previous action, and the gravity vector
+noise is added to the actions. This leads to more robust                     projected into the base frame. Commands are given as target
+distilled policies as it prevents overfitting to a small subset              positions and orientations and a time to reach the target as
+of trajectories. Additionally, having a student policy that                  proposed in Rudin et al. (2022a).
+
+
+                                                                         5
+Algorithm 1 Training Scheme for Policy Distillation                      precision of a critic network, we find that we need to pre-
+  Ei ← GET E XPERT I DS ()                                               train the critic network to a sufficient level before starting
+  for k in ≤ NEpochs do                                                  to update the policy. We achieve this by having an initial
+      D←∅                                                                phase of the RL training where the policy weights are frozen,
+      for t ← 0 to T do                          ▷ Data Collection       and hyper-parameters are tuned to maximize the training
+          astudent ← πstudent (ostudent ) + N (0, σ 2 )                  efficiency of the critic.
+          for e ← 0 to Nexperts do
+               aexpert,I[E=e] ← πexpert, e (oexpert )                    2.4    Depth image noise-model
+          end for                                                        Training policies directly from depth images create
+          D ← D ∪ {(ostudent , aexpert )}                                the challenge of sim-to-real transfer for those images.
+          ostudent,t+1 , oexpert,t+1 ← ENV. STEP(astudent )              Specifically, the characteristics of the ANYmal’s Realsense
+      end for                                                            D435i cameras need to be replicated in simulation. These
+      πstudent ← TRAIN(πstudent , D) ▷ Supervised Training               cameras rely on stereo-matching as well as infrared
+  end for                                                                projection to compute depth information. These processes
+                                                                         have limitations that lead to imperfections in the images.
+                                                                         These limitations include missing data due to a lack of
+   Expert policies use exteroceptive information in the form             stereo-matching around the edges of objects, on some
+of an elevation map around the base. Due to the robustness               surfaces, for objects too close to the camera, and depending
+and generalization issues described above, we instead use                on the distance on the left or right side of the image.
+depth images for the student policy. We use 4 depth maps                 Additionally, the depth precision is degraded at larger
+in total, two at the front of the robot and two at the back.             distances.
+   We use a relatively simple network architecture for πstudent             While getting ground truth depth information from the
+composed of 3 smaller building blocks. A convolutional                   simulation is relatively straightforward, properly simulating
+network (CNN) processes each depth image individually                    the stereo-matching process is not practical. To bridge the
+to extract relevant exteroceptive information. Proprioceptive            gap, we process both real and simulated images as shown in
+information is then combined with the exteroceptive features             Fig. 4. In simulation, we begin by rendering a low-resolution
+and used as input to a recurrent network (LSTM) (Hochreiter              image of 48x32 pixels. We then degrade the image using the
+and Schmidhuber (1997)). Finally, the LSTM’s output                      following steps:
+is concatenated with the proprioceptive information and
+commands and fed through a fully connected network                           1. Clip: The depth is clipped at 2 m. Additionally, pixels
+(MLP), which predicts the next action. The network                              with a value below 0.15 m are considered empty (set
+architecture is visualized in Figure 3.                                         to 2 m as well).
+                                                                             2. Edge noise: we identify edges by thresholding the
+                                                                                depth gradient across the image. Pixels around the
+2.3    RL-finetuning                                                            edges are then randomly set to empty or shuffled with
+After distillation, the student policy is capable of imitating                  neighboring pixels.
+the actions of all experts. However, as can be seen in Table                 3. Holes: Patches of the image are set to the maximum
+4, the performance on individual skills decreases, and the                      depth. The patches are identified by thresholding
+generalization to unseen terrains is low. The problems lie                      slowly evolving Perlin noise Perlin (2002), which
+in the fact that during distillation, the policy is not directly                ensures temporal consistency of the missing data.
+trained to solve the task, but rather, guess which of the                    4. Blind spot: we remove data in the leftmost 1 to 5
+experts it should imitate and what that expert would do. We                     columns of the image. This mimics the blind spot of
+propose to improve the performance of the distilled policy                      stereo-matching at small distances.
+using RL. On its own, RL is not suitable for training a policy               5. Gaussian Blur: we blur the whole image using a
+for all terrains from scratch. Due to inefficient exploration,                  Gaussian kernel, which removes minor details and
+the policy collapses to a single mode and only learns to                        further helps bridge the sim-to-real gap.
+solve a subset of the different tasks or terrains. However, if
+a policy reaches sufficient performance through distillation,               We apply simple processing steps to real-world images to
+it can then be fine-tuned with RL leading to an increased                match the characteristics of the simulated ones. We clip the
+performance across all tasks. Unfortunately, training a                  depth the same way as for simulated images, down-sample
+distilled foundation policy with supervised learning and then            to the correct size, and finally apply the same Gaussian blur
+fine-tuning it with RL tends to be unstable. Done naively, the           as in the simulation.
+performance of the policy steadily degrades once the RL loss
+is applied. This problem can be circumvented using three key             3     Experiments
+components: maximum performance and robustness of the
+foundation policy under the action noise added during fine-              3.1    Success rate on different terrains
+tuning, conservative tuning of the RL hyper-parameters, and              First, we examine the performance of different policies
+efficient pre-training of the critic network.                            across various terrains, both seen and unseen during training.
+   We achieve robustness by adding action noise during                   In particular, we compare the performance of individual
+the distillation process and reducing the initial standard               skills, the distilled policy, and finally, the fine-tuned policy.
+deviation of the RL policy distribution. In terms of the                 The experiment is done on the following terrains:
+
+
+                                                                     6
+Simulation
+
+
+                                                         Edge noise                          Holes, blind spot                  Gaussian blur
+
+
+
+
+Real-world
+
+
+                                                   Clip depth, crop sides                      Downsample                       Gaussian blur
+
+
+Figure 4. Processing applied to simulated and real depth images. Simulated images are degraded using the following steps: 1)
+pixels surrounding edges are shuffled and/or removed, 2) random holes are added using slowly evolving Perlin noise, and 3) the
+image is blurred using a Gaussian filter. Real images are 4) clipped, downsampled, and cropped, and 5) blurred using the same
+Gaussian filter as in simulation.
+
+Table 4. Success rate of policies on different terrains. πw to πss are the experts trained on Walk, Climb, Climb down, Jump, Tables,
+Rock pile, Low wall, Beams, and Stepping stones, respectively. πD and πRL are the distilled and fine-tuned policies. Terrains from
+Walk to Stepping stones are used during distillation. Parkour line and Scanned meshes (train) terrains are added during fine-tuning.
+The other terrains are never seen during training and are used only to evaluate the generalization capabilities of policies. πRL∗ is
+fine-tuned again on the Climb down on stones. The highest success rate across policies and all rates within 0.5 % are in bold.
+       Terrain                                πw        πc      πcd         πj         πt     πrp      πlw       πb     πss    πD      πRL      πRL∗
+       Walk                                   94.6     54.4     36.7    43.8          23.4    96.4    30.4       25.4   33.2   99.3   100.0      99.8
+       Climb                                  0.0      98.8      0.0     0.0           0.0     0.0     0.0        0.0    0.0   98.1   99.5       99.4
+       Climb Down                             2.6      13.4     99.9    47.6          3.1     43.0    2.1         8.8   6.0    84.3   99.7       99.6
+       Jump                                   0.7       2.9      0.0    98.4          0.0     9.7     0.0        0.0     0.0   93.5   98.0      97.7
+       Tables                                 0.2      24.4      0.0     0.0          99.4    37.2     0.0        0.0    0.0   78.9   100.0     100.0
+       Rock pile                              34.6     14.6     31.5    25.9           2.6    92.2    24.9        4.0   12.4   82.6    96.5     97.1
+       Low wall                               0.0      14.8      0.0    0.0           0.0     21.8    84.8        0.0    0.0   77.0   99.9      100.0
+       Beams                                  0.3       3.2      0.0     8.7          0.3      0.4    0.1        97.3    0.3   85.2   99.5       99.5
+       Stepping stones                        1.1       1.3      0.0    23.4          0.0      0.0     0.0        1.0   98.8   73.0   98.8       98.9
+       Parkour line                           0.2       0.0     0.1         0.2       18.6    17.2     0.0       0.0    0.0    5.8     98.5     98.7
+       Scanned meshes (train)                 0.2       1.6     0.0         0.0        0.0    44.8     0.0       0.0    0.0    11.9    99.1     98.8
+       Scanned meshes (test)                  0.2      1.6      0.0      0.0           0.0    44.8    0.0        0.0    0.0    14.9    94.9     93.9
+       Arranged rocks                         31.1     55.6     17.2    17.0           6.8    67.7    13.7       13.0   9.7    62.9    93.2     92.8
+       Gap - climb                            0.0      0.0      0.0      0.0           0.0     0.0    0.0        0.0    0.0    10.2    82.0     86.6
+       Down - stones                          0.0      0.0      0.0     17.8           0.0    0.0     0.0        0.0    1.3    11.3    54.4     92.4
+
+
+
+
+             • Terrains for expert training and distillation                                   – Gap - climb - elevated platform separated by a
+                                                                                                 gap, requiring a mix of the Climb up/down and
+                  – The nine terrains with individual experts.                                   Jump skills.
+             • Terrains added during RL Fine-tuning                                            – Climb down on stones - elevated platform sep-
+                                                                                                 arated surrounded by stepping stones, requiring
+                  – Parkour line - a mix of boxes, gaps, tables, stairs,                         a mix of the Climb down and Stepping stones
+                    and slopes, identical to one of the terrains used in                         skills.
+                    Hoeller et al. (2023).                                            Table 4 shows the average success rate computed by
+                  – Scanned meshes (train) - real-world scans of                      collecting 1000 roll-outs in simulation on randomized
+                    search and rescue training facilities used during                 terrains at 90% of the maximum training difficulty. The
+                    fine-tuning.                                                      results of the experiments provide insights into both the
+             • Unseen terrains                                                        distillation and fine-tuning processes.
+                                                                                         After distillation, the resulting policy is capable of
+                  – Scanned meshes (test) - real-world scans that                     imitating all expert skills, but its performance is uneven.
+                    were not used during fine-tuning.                                 On average, there is 10.4 % drop in success rate, but we
+                  – Arranged rocks - manual arrangement of rocks                      see a larger decrease on terrains with ambiguity between
+                    requiring motions similar to expert skills.                       skills, such as Tables versus Climb and Climb Down versus
+
+
+                                                                                  7
+Jump. In those cases, the distilled policy does not always                      type when fine-tuned for it. Based on the results of Table
+succeed at identifying the terrain and tends to learn a sub-                    4, we select the Climb down on stones terrain for this
+optimal mix of experts’ behaviors. Additionally, we see a                       experiment. We compare training a policy from scratch, fine-
+significant decrease in terrains requiring precision, such as                   tuning from the distilled policy, and repeated fine-tuning
+Stepping stones and Beams, where the policy may not be                          from the policy that was already fine-tuned with RL on
+able to imitate the expert due to the change of the perceptive                  other terrains. For the repeated fine-tuning approach, we
+modality. Interestingly, the distilled policy performs better                   additionally compare training on only the new terrain with
+than the expert skill on the standard Walk terrains. This                       training on a combination of all of the previously used
+shows that there is some level of knowledge reuse between                       terrains extended with the new one. In that case, the new
+skills that naturally emerge from the distillation. By learning                 terrain represents only 3 % of the collected samples.
+complex motions on other terrains, the policy naturally starts                     Figure 5 shows the success rate of the different policies
+using them and manages to cross some of the obstacles                           during training. We see that a policy trained from scratch
+that the expert skill could not. Looking at terrains not                        on this terrain does not find a suitable solution. The prior
+present during distillation, we see a low success rate overall,                 contained in the distilled policy is sufficient to start training
+which shows that despite being able to imitate nine different                   and leads to non-trivial performance. However, starting the
+experts, the distilled policy does not generalize to unseen                     training from the already fine-tuned policy leads to both
+terrains.                                                                       faster training and higher final performance. Interestingly,
+   After fine-tuning, the average performance increases                         training on all terrains leads to better final performance than
+significantly and matches or even surpasses the success                         using only the new terrain, even though, in that case, only
+rate of all nine experts. On average, it has a success rate                     3 % of samples are collected on the new terrain. Keeping
+3.1% higher than the corresponding expert with a significant                    a diversity of training terrains seems important to achieve
+increase on the Low wall terrain. As expected, the success                      the highest performance on new and complex obstacles.
+rate is also significantly higher for the Parkour line and                      Additionally, we show the success rate of the resulting policy
+Scanned meshes added during the fine-tuning stage. Finally,                     on other terrains in the last column of Table 4. We see that
+we get mixed results on terrains not seen during any of the                     the performance does not change significantly on previously
+training stages. While we see good generalization to unseen                     seen terrains while increasing on the newly added one, which
+meshes, arranged rocks, and the Gap - climb terrain, the                        shows that continual fine-tuning is a viable approach to
+combination of motion in Climb down on stones proves to                         adding new capabilities to the policy. We note that more
+be a significant challenge for policies even with a lower                       analysis is needed to understand the limits of this method.
+platform and larger stones compared to the Climb down                           While it allows us to train a policy on tens of different
+and Stepping stones terrains. This forces us to conclude                        terrains, we expect to see decreasing performance when
+that while we see signs of generalization emerging from                         more terrains requiring specialized motions are added to the
+our method, the policy can still fail on out-of-distribution                    training.
+terrains, even in relatively simpler scenarios.
+                                                                                3.3    Skill combination methods
+3.2       Repeated Fine-tuning on new terrains                                  We compare our proposed approach with other methods used
+Our method allows us to keep fine-tuning the policy on                          in previous work to combine separate motor skills. The first
+new terrains. This allows us to continually extend the                          baseline is the hierarchical approach of Hoeller et al. (2023),
+capabilities of the policy when, during testing, we encounter                   where a policy is trained to select and command one of the
+a new type of obstacle on which the performance of the                          expert skills. The high-level policy can choose a different
+policy is unsatisfactory. To test the viability of the repeated                 skill and change its command at every timestep. Second,
+fine-tuning approach, we select a terrain that none of the                      we develop an approach similar to Bohez et al. (2022); Luo
+policies were capable of solving successfully and analyze the                   et al. (2024). We use a variational autoencoder (VAE) to
+capacity of different policies to adapt to that new obstacle                    embed motions of the different skills into a common latent
+                                                                                space. Then, the decoder is frozen, and a new policy is
+                                                                                trained to control the robot through that latent space. The
+                               Climb Down on Stones Fine-tuning                 purpose of this approach is to create a new action space that
+                                                                                simplifies the exploration problem and is potentially better
+                     0.8
+                                                                                suited for interpolation between skills. For all approaches,
+
+
+      Success Rate
+                     0.6                                                        we compare training from scratch as well as starting from
+                                                                                a network pre-trained in the distillation environment. Note
+                     0.4                 Random init.
+                                                                                that our approach without pre-training is standard end-to-end
+                                         From distilled
+                     0.2                 From fine-tuned (single terrain)       RL. Figure 6 shows the results of the comparison on three
+                                         From fine-tuned (all terrains)         different sets of terrains, including the terrains of expert skills
+                     0.0                                                        used during distillation, a combination of new terrains added
+                           0      2000     4000     6000    8000    10000
+                                             Iteration
+                                                                                during fine-tuning, and the Gap-Climb terrain mentioned
+                                                                                above which is designed to test interpolation between the
+Figure 5. Reconstruction loss during distillation for two                       climbing and jumping skills.
+observation modalities (elevation map and depth images) and                        The results show that our proposed distillation and fine-
+two network architectures with and without memory (LSTM and                     tuning approach outperforms all others. Focusing first on pre-
+MLP, respectively). Average and standard deviation over 8 runs.                 trained networks (second row of the figure), we can see that
+
+
+                                                                            8
+                            Expert Skills Terrains                               New Terrains                                                        Gap-Climb Terrain
+               1.0                                                  1.0                                                                1.0
+
+
+
+
+Success Rate
+               0.8                                                  0.8                                                                0.8
+
+               0.6                                                  0.6                                                                0.6
+
+               0.4                                                  0.4                                                                0.4
+                                   RL + distillation (ours)
+               0.2                 VAE + distillation               0.2                                                                0.2
+                                   Hierarchical + distillation
+               0.0                                                  0.0                                                                0.0
+                     1000      2000     3000      4000       5000         1000   2000       3000      4000                      5000          1000     2000    3000      4000     5000
+
+           1.0                     RL random init.                  1.0                                                                1.0
+                                   VAE random init.
+                                                                    0.8
+
+
+
+Success Rate
+           0.8                                                                                                                         0.8
+                                   Hierarchical random init.
+           0.6                                                      0.6                                                                0.6
+
+           0.4                                                      0.4                                                                0.4
+
+           0.2                                                      0.2                                                                0.2
+
+           0.0                                                      0.0                                                                0.0
+                     1000      2000     3000      4000       5000         1000   2000       3000      4000                      5000          1000     2000    3000      4000     5000
+                                   Iteration                                        Iteration                                                             Iteration
+
+  Figure 6. Comparison of three skill combination methods. We compare our proposed distillation + fine-tuning approach to a
+  hierarchical approach where a policy is trained to switch between experts and a method in which we use a VAE to encode motions
+  of skills into a latent space, freeze the decoder and then train a new policy controlling the robot through the resulting latent space.
+  The top row shows the results for pre-trained policies. Both the hierarchical and VAE policies can be trained from scratch or
+  pre-trained in the setup used for distillation by adapting the desired output (one hot encoding and latent vector, respectively). The
+  bottom row shows the results without pre-training (Note that our approach without pre-training is standard RL training from scratch).
+  We evaluate the performance using 1000 robots on 100 randomized terrains with difficulties from 50 % to 100 % of the maximum
+  training difficulty. We use the mean and mode of the policies. The solid curve shows the mean success rate across all 100 terrains.
+  The shaded areas show the minimum and maximum success rates across terrain types.
+
+
+  both our and VAE approaches perform well across all sets                                  tasks with a single controller. As shown by prior work, both
+  of terrains. On new terrains, the distillation and fine-tuning                            methods can be used successfully for a reduced set of tasks,
+  approach performs better. This can be explained by the fact                               but our results indicate that they lack scalability when more
+  that new motions required by those terrains are harder to                                 skills or tasks are added.
+  achieve for the VAE since the decoder was trained only on                                    Both distillation with fine-tuning or VAE latent space
+  the motions of the skills. The hierarchical method does not                               encoding with re-training seem to be possible approaches.
+  reach satisfactory performance. It struggles even on terrains                             However, given the slightly higher performance of the
+  with expert skills where it only needs to select the correct                              distillation approach on new terrains and the additional
+  skills and forward the command. It tends to perform well                                  complexity of the VAE approach, we select distillation with
+  on most of the skills but completely stops using some of                                  RL fine-tuning as our proposed method.
+  them, leading to constant failure on corresponding terrains.
+  Additionally, it completely fails on the Gap-Climb. This                                  3.4      Effect of network architecture
+  is expected as this terrain requires motions combining two
+  skills, which is not possible with the hard-switching of the                              In the next experiment, we analyze the necessity of having
+  hierarchical approach.                                                                    a memory mechanism in the neural network architecture
+                                                                                            when using different observation modalities. In particular,
+     For networks trained from scratch (1st row of the figure),                             we compare the distillation performance of a neural network
+  we can see a clear advantage for the VAE over both other
+  methods. We see that exploration in the latent space indeed
+  leads to more efficient training. The hierarchical policy
+                                                                                                                         0.45
+  quickly reaches the same performance level as its pre-trained                                                                                        Height-scan - MLP
+  version but does not outperform it. Standard RL with random                                                            0.40                          Height-scan - LSTM
+
+
+
+
+                                                                                                   Mean absolute error
+                                                                                                                                                       Depth - CNN-MLP
+  initialization takes a long time to learn anything and does                                                            0.35
+                                                                                                                                                       Depth - CNN-LSTM
+  not manage to find solutions for all terrains. Similar to the                                                          0.30
+  hierarchical approach it manages to solve a sub-set of the                                                         0.25
+  terrains while remaining completely stuck on others. Note
+                                                                                                                     0.20
+  that this comparison is not completely fair since the Standard
+                                                                                                                     0.15
+  RL method requires no prior training, while both the VAE
+  and the hierarchical approach require training expert skills.                                                                 0       200    400       600     800       1000
+  The VAE additionally requires training the decoder before                                                                                      Iteration
+
+  the RL stage begins.
+                                                                                            Figure 7. Reconstruction loss during distillation for two
+     From these results, we can conclude that the hierarchical                              observation modalities (elevation map and depth images) and
+  approach and RL without distillation are not viable methods                               two network architectures with and without memory (LSTM and
+  for solving a large variety of terrains or, more generally,                               MLP, respectively). Average and standard deviation over 8 runs.
+
+
+                                                                                        9
+with and without a recurrent LSTM component. The LSTM                   motion might be sub-optimal under its perception modality.
+version is identical to the architecture described in Section           However, once we fine-tune the policy with RL, it can learn
+2.2. The MLP version simply removes the LSTM and                        to modify its behavior to increase the success rate of the
+directly feeds the CNN features to the MLP.                             motion.
+   We use two types of perceptive observations: depth                      Figure 8 shows an example of such adaptation. The
+images and elevation maps. The elevation maps contain a                 climbing expert skill learns to stop very close to the box
+combination of small fine-grained (1x2m at 0.1m resolution)             it is about to climb. While this reduces torques during the
+and larger coarse (3x6m at 0.5m resolution) terrain data.               stand-up phase, it significantly reduces the field of view
+We add a horizontal, Lidar-like scan, allowing the policy to            of the depth cameras. We can see that the robot reaches
+distinguish overhanging obstacles. The depth images come                for the top of the box without seeing it. Performing this
+from the two forward and two backward-facing onboard                    motion is possible by memorizing the image of the obstacle
+cameras of the robot. They are processed with the noise                 seen during the approach, but it results in lower reliability
+model described above.                                                  and robustness to disturbances. After fine-tuning, the policy
+   Figure 7 shows the mean absolute error for the two                   learns to stop further away from the obstacle and tilts the
+architectures with the two observation types. The results               body of the robot in a way that brings the top of the box
+indicate that while both architectures perform well with                within the field of view before the leg touches it. This
+the elevation map observations, a memory component is                   behavior is consistent across different training runs and
+needed to extract useful information from the depth images.             obstacle shapes. Similarly, the policy changes its approach
+Additionally, we see that even with memory the error                    behavior for other obstacles, such as stepping stones or
+remains higher when the depth images are used. This can be              tables, but the benefits of those behaviors are less obvious
+explained by the fact that in some cases the distilled policy           to the human eye.
+does not have enough information to distinguish the terrains,
+for example, thin walls and boxes are indistinguishable until           3.6   Real-world deployment
+the robot starts climbing.                                              After fine-tuning, the policy is ready to be deployed in the
+                                                                        real world. We deploy the policy on a standard ANYmal
+3.5     Active perception                                               D robot. Our policy uses four out of the six available
+                                                                        depth cameras and does not use the onboard Lidar or any
+                                                                        external sensors. All computations happen on the onboard
+                                                                        CPU at 50Hz. The depth images are updated at 15Hz and
+                                                                        processed as described in Section 2.4. Internally, the cameras
+                                                                        update and send images as ROS messages at 60Hz. Since
+                                                                        we randomize the delay of each camera during training, we
+                                                                        do not need to use any synchronization mechanism during
+                                                                        deployment. We simply provide the latest received image for
+                                                                        each camera.
+                                                                           We deploy the robot in various indoor and outdoor
+                                                                        environments. Indoor, we show that the policy can execute
+                                                                        the correct skills across isolated obstacles as well as handle
+                                                                        an unstructured collection of obstacles. Outdoors, we test
+                                                                        our policy in search and rescue training facilities on piles
+                                                                        of rubble imitating collapsed buildings. The terrains used
+                                                                        during these tests were not seen during training. The
+                                                                        supplementary video shows these deployments. The robot
+                                                                        can successfully navigate different environments. The robot
+                                                                        executes dynamic motions such as climbing and jumping
+(a) After distillation           (b) After fine-tuning
+                                                                        while adapting the motion to unstructured terrains. The
+Figure 8. Change of behavior between the distilled and                  policy shows exceptional robustness to various disturbances,
+fine-tuned policy. After fine-tuning, the policy learns to stay         including slippery or moving ground, feet being caught
+further away from the obstacle to maximize the visibility of the        in cracks or steel wire, and visual distractors such as tall
+obstacle in the depth camera’s field of view.                           grass or degraded depth due to reflective surfaces and direct
+                                                                        sunlight.
+   Finally, we show that our approach allows the policy to                 On the other hand, the behavior, and more specifically,
+learn new behaviors enhancing its perceptive capabilities.              the precision of the policy, can still be improved. The
+Our expert skills are trained with nearly perfect elevation             footstep selection is not perfect. Even though the robot
+maps. The information contained in these maps is                        recovers quickly, it could easily avoid some of the missteps.
+independent of the pitch and roll of the robot and is not               Additionally, during climbs and jumps, the policy learns
+altered by occlusions. On the other hand, depth cameras are             to use the knees of the robot more than the expert skills.
+rigidly fixed to the robot, they follow the full pose, and due          This is understandable since it is a safer approach compared
+to their position have a reduced view of the obstacles.                 to trying to land on the feet directly, but it also leads to
+   During distillation, the student policy is trained to imitate        increased impacts on the motors and, thus, faster wear of the
+the motion of the expert without considering that this                  hardware.
+
+
+                                                                   10
+ (a) Search and rescue facility.                                    (b) Indoor
+
+Figure 9. Real-world deployment of the ANYmal D robot controlled by the fine-tuned policy. Both indoor and outdoor terrains are
+not seen during training.
+
+
+4     Discussion                                                        a unique sub-optimal solution that can be applied across
+                                                                        multiple tasks. Finally, extensive tuning of rewards, terrain,
+4.1    Skill combination methods                                        and curriculum is required to achieve a suitable solution even
+In line with previous work (Cheng et al. (2024)), we have               for the expert skills. When trained separately the effort is
+shown that a policy resulting from standard distillation from           manageable since the tuning can be specialized to each task
+multiple experts performs worse than the experts on their               independently. However, when training all of the skills at the
+respective tasks and does not generalize to new scenarios.              same time, a tuning decision for one task creates unintended
+The performance loss can be explained by the fact that the              consequences for others. Thus, achieving the desired quality
+experts choose different actions from the same (or similar)             of solutions for all tasks becomes untractable.
+states, which makes the imitation problem ill-posed. The
+                                                                           A suitable method for skill combination should allow
+change of perception modality between experts and the
+                                                                        training these skills separately and subsequently freeze
+student exacerbates the challenge since the distilled policy
+                                                                        them. The resulting controller should then retain the motion
+does not always have enough information to imitate the
+                                                                        quality of those skills without the needed for further
+expert.
+                                                                        extensive tuning. Our approach does not entirely fulfill this
+   While the distilled policy does not offer sufficient
+                                                                        requirement. While the distillation process uses frozen skills,
+robustness to be deployed in the real world, it does extract
+                                                                        the fine-tuning process changes the behavior of the policy
+a nontrivial amount of knowledge from the experts, and
+                                                                        and re-creates some of the challenges that appear when
+its behavior needs only minor modifications to successfully
+                                                                        training from scratch. Since the skills were trained with
+solve all of the expert tasks. We show that this minor
+                                                                        slightly different rewards and termination, a new common
+modification can be effectively achieved by fine-tuning the
+                                                                        setup is needed. Minor changes in the setup can lead
+distilled policy with RL. Additionally, during the fine-tuning
+                                                                        to significant differences in the final behavior, favoring
+process, new tasks can be added for which no expert exists.
+                                                                        some of the terrains over others. The tuning effort is
+   It is tempting to directly train a policy from scratch on
+                                                                        reduced compared to training from scratch but is nevertheless
+the final set of tasks, and in theory, nothing prevents this
+                                                                        substantial.
+from being a suitable approach. In practice however, we find
+that this method is not practical. There are multiple issues               In this work, we examine various methods to combine
+related to the challenge of exploration. First, the policy needs        skills effectively. We attempt to reuse the hierarchical setup
+to learn a diverse set of behaviors to solve the different              of our previous work but find that it does not scale well to
+tasks. We see that when the number of tasks increases, the              the complex and unstructured terrains present in this work.
+RL process tends to focus on a subset of them and never                 Since the high-level policy can only select skills without any
+recovers to find a suitable solution for the others. Second,            blending or interpolation, we find that the number of skills
+even for the tasks where the policy finds a solution, it tends          needs to be increased. Unfortunately, going from five to nine
+to lack specialization in each task. Instead, the policy learns         skills prevents the high-level policy from learning to use all
+
+
+                                                                   11
+of them. In our experiments, pre-training on expert terrains            improving the sim-to-real transfer of the depth cameras while
+does not help with this problem.                                        reducing the effects of the noise model can lead to significant
+   Skill encoding, where motions of the different skills are            improvements in the behavior.
+encoded into a common latent space and a new policy is                     Another drawback of the current policy is its limited use
+trained to control the robot through that latent space, has been        of memory. While in Sec. 3.4, we have shown that having
+studied extensively throughout this work. Our experiments               a memory mechanism is crucial to learning the required
+show the advantages of such an approach in specific cases,              behaviors, we see a lack of longer-term memory. As an
+but once again, scaling to an increasing number of skills and           example, we let the robot slowly approach a box until it
+terrains proves to be a challenge. While this method allows             is within the near-field clipping range of the camera. If the
+us to efficiently train a policy for a single terrain requiring         robot is commanded to move forward immediately, it will
+interpolation of two skills, once we add all of the terrains            climb on the box directly, while if we let it stand for a few
+used during fine-tuning, the training efficiency deteriorates           seconds, it will hit the box. This shows a limitation of the
+and eventually becomes inferior to our proposed approach.               LSTM architecture with a hidden state that gets updated
+                                                                        at every time-step. The relevant information about the box
+4.2    Perception modality                                              gets diluted while the robot is standing, even though no new
+                                                                        information is coming in. A Transformer architecture with
+Choosing the right perception modality is a considerable                an attention mechanism (Vaswani et al. (2017)) could be
+challenge when learning agile locomotion. In our previous               beneficial for such scenarios.
+work (Hoeller et al. (2023)), we developed a standalone
+perception module producing 3D and 2D representations of
+the terrain from depth images. Those representations were               5   Conclusion
+then used by the different policies. Following other works              This work focuses on developing a general locomotion
+(Cheng et al. (2024); Zhuang et al. (2023)), we choose                  policy combining the agility of different locomotion skills
+to directly use depth images as input to the locomotion                 into a single controller capable of tackling a large variety of
+policy. This end-to-end approach has both advantages and                obstacles in unstructured terrains. To that end, we develop a
+disadvantages compared to the modularized approach.                     three-staged pipeline, where first individual skills are trained
+   On one hand, having specialized modules requires the                 separately. Then the different skills are distilled into a single
+definition of interfaces, which can lead to a loss of                   policy. Finally, the distilled policy is fine-tuned using RL
+information and capability. For example, the perception                 on a new set of terrains, including the ones used to train
+module of (Hoeller et al. (2023)) is predicting a 3D point              the skills, but also 3D scans of real-world search-and-rescue
+cloud, which then needs to be converted to an elevation map.            training grounds. We use depth images as the only perceptive
+This conversion significantly deteriorates the information              input to the policy. This reduces the dependency on state
+contained in the map. Additionally, every module requires an            estimation and mapping, which tend to be unreliable in such
+extensive development effort and expertise, while the end-to-           scenarios. During training, we develop a custom depth noise
+end approach is more straightforward to implement.                      model, which allows the transfer of the policy to the real
+   On the other hand, the end-to-end approach is harder to              world. We show that with our policy, the robot is capable of
+control and understand. Untangling different parts of the               reaching places that were previously considered outside the
+pipeline and attributing their errors to the final behavior of          capabilities of a legged robot. Furthermore, the capabilities
+the robot becomes untractable. When the robot missteps or               of the policy can be continuously extended by adding new
+hits an obstacle, it is not possible to differentiate perception        terrains to the training set and using repeated fine-tuning.
+issues or sub-optimal locomotion behaviors. Furthermore,                   We compare different methods previously used to combine
+the tuning effort is significantly increased since it is not            skills and find that our approach outperforms others when
+possible to fine-tune components separately.                            increasing the number of skills and terrains.
+                                                                           Nevertheless, both the qualitative and quantitative
+4.3    Possible policy improvements                                     performance of the policy can be improved. In particular
+                                                                        future work should revisit the noise model, making it, if
+On top of the issues related to training and tuning described
+                                                                        possible, less aggressive to provide more precise information
+above, some limitations remain in the behavior learned by
+                                                                        to the policy. Furthermore, the long-term memory of the
+the policy. First, some of the robot’s motions lack precision.
+                                                                        policy can be improved by switching to another neural
+On sparse terrains such as Beams or Stepping-stones, the
+                                                                        network architecture. Finally, the performance of the policy
+policy tends to misstep and quickly recover rather than find a
+                                                                        after distillation can be improved using a method capable of
+proper foothold directly. During deployment on unstructured
+                                                                        learning from a contradicting set of experts.
+terrains, the robot’s feet often stumble on obstacles before
+overcoming them. Similarly, the robot sometimes needs to                Funding statement : The project was funded by NVIDIA,
+hit a table or another overhanging obstacle before initiating           the Swiss National Science Foundation (SNF) through the
+the crouching motion. These behaviors lead us to conclude               National Centre of Competence in Research Robotics, the
+that the policy learns to understand the presence of obstacles          European Research Council (ERC) under the European
+using proprioceptive information when perception fails. This            Union’s Horizon 2020 research and innovation program
+is a great emerging behavior that significantly increases               grant agreement No 852044 and No 780883. The work has
+robustness, but by improving perception, we could reduce                been conducted as part of ANYmal Research, a community
+the need to use proprioception and improve the quality of the           to advance legged robotics.
+resulting motion. In particular, increasing the resolution and
+
+
+                                                                   12
+References                                                                     Devin C, Xu D, Morton D, Driess D, Chen D, Pathak D, Shah
+                                                                               D, Büchler D, Jayaraman D, Kalashnikov D, Sadigh D, Johns
+Agarwal A, Kumar A, Malik J and Pathak D (2022) Legged
+                                                                               E, Foster E, Liu F, Ceola F, Xia F, Zhao F, Frujeri FV, Stulp
+    locomotion in challenging terrains using egocentric vision. In:
+                                                                               F, Zhou G, Sukhatme GS, Salhotra G, Yan G, Feng G, Schiavi
+    6th Annual Conference on Robot Learning. URL https:
+                                                                               G, Berseth G, Kahn G, Yang G, Wang G, Su H, Fang HS, Shi
+    //openreview.net/forum?id=Re3NjSwf0WF.
+                                                                               H, Bao H, Amor HB, Christensen HI, Furuta H, Bharadhwaj
+Alayrac JB, Donahue J, Luc P, Miech A, Barr I, Hasson Y, Lenc
+                                                                               H, Walke H, Fang H, Ha H, Mordatch I, Radosavovic I, Leal I,
+    K, Mensch A, Millican K, Reynolds M, Ring R, Rutherford
+                                                                               Liang J, Abou-Chakra J, Kim J, Drake J, Peters J, Schneider
+    E, Cabi S, Han T, Gong Z, Samangooei S, Monteiro M,
+                                                                               J, Hsu J, Vakil J, Bohg J, Bingham J, Wu J, Gao J, Hu J,
+    Menick J, Borgeaud S, Brock A, Nematzadeh A, Sharifzadeh
+                                                                               Wu J, Wu J, Sun J, Luo J, Gu J, Tan J, Oh J, Wu J, Lu J,
+    S, Binkowski M, Barreira R, Vinyals O, Zisserman A and
+                                                                               Yang J, Malik J, Silvério J, Hejna J, Booher J, Tompson J,
+    Simonyan K (2022) Flamingo: a visual language model for
+                                                                               Yang J, Salvador J, Lim JJ, Han J, Wang K, Rao K, Pertsch
+    few-shot learning.    URL https://arxiv.org/abs/
+                                                                               K, Hausman K, Go K, Gopalakrishnan K, Goldberg K, Byrne
+    2204.14198.
+                                                                               K, Oslund K, Kawaharazuka K, Black K, Lin K, Zhang K,
+Bohez S, Tunyasuvunakool S, Brakel P, Sadeghi F, Hasenclever
+                                                                               Ehsani K, Lekkala K, Ellis K, Rana K, Srinivasan K, Fang K,
+    L, Tassa Y, Parisotto E, Humplik J, Haarnoja T, Hafner R,
+                                                                               Singh KP, Zeng KH, Hatch K, Hsu K, Itti L, Chen LY, Pinto
+    Wulfmeier M, Neunert M, Moran B, Siegel N, Huber A,
+                                                                               L, Fei-Fei L, Tan L, Fan LJ, Ott L, Lee L, Weihs L, Chen M,
+    Romano F, Batchelor N, Casarini F, Merel J, Hadsell R and
+                                                                               Lepert M, Memmel M, Tomizuka M, Itkina M, Castro MG,
+    Heess N (2022) Imitate and repurpose: Learning reusable robot
+                                                                               Spero M, Du M, Ahn M, Yip MC, Zhang M, Ding M, Heo M,
+    movement skills from human and animal behaviors. URL
+                                                                               Srirama MK, Sharma M, Kim MJ, Kanazawa N, Hansen N,
+    https://arxiv.org/abs/2203.17138.
+                                                                               Heess N, Joshi NJ, Suenderhauf N, Liu N, Palo ND, Shafiullah
+Brohan A, Brown N, Carbajal J, Chebotar Y, Dabis J, Finn C,                    NMM, Mees O, Kroemer O, Bastani O, Sanketi PR, Miller PT,
+    Gopalakrishnan K, Hausman K, Herzog A, Hsu J, Ibarz J,                     Yin P, Wohlhart P, Xu P, Fagan PD, Mitrano P, Sermanet P,
+    Ichter B, Irpan A, Jackson T, Jesmonth S, Joshi N, Julian                  Abbeel P, Sundaresan P, Chen Q, Vuong Q, Rafailov R, Tian
+    R, Kalashnikov D, Kuang Y and Zitkovich B (2023) Rt-1:                     R, Doshi R, Mart’in-Mart’in R, Baijal R, Scalise R, Hendrix
+    Robotics transformer for real-world control at scale. DOI:                 R, Lin R, Qian R, Zhang R, Mendonca R, Shah R, Hoque R,
+    10.15607/RSS.2023.XIX.025.                                                 Julian R, Bustamante S, Kirmani S, Levine S, Lin S, Moore S,
+Brown TB, Mann B, Ryder N, Subbiah M, Kaplan J, Dhariwal                       Bahl S, Dass S, Sonawani S, Tulsiani S, Song S, Xu S, Haldar
+    P, Neelakantan A, Shyam P, Sastry G, Askell A, Agarwal S,                  S, Karamcheti S, Adebola S, Guist S, Nasiriany S, Schaal
+    Herbert-Voss A, Krueger G, Henighan T, Child R, Ramesh A,                  S, Welker S, Tian S, Ramamoorthy S, Dasari S, Belkhale S,
+    Ziegler DM, Wu J, Winter C, Hesse C, Chen M, Sigler E,                     Park S, Nair S, Mirchandani S, Osa T, Gupta T, Harada T,
+    Litwin M, Gray S, Chess B, Clark J, Berner C, McCandlish                   Matsushima T, Xiao T, Kollar T, Yu T, Ding T, Davchev T,
+    S, Radford A, Sutskever I and Amodei D (2020) Language                     Zhao TZ, Armstrong T, Darrell T, Chung T, Jain V, Kumar V,
+    models are few-shot learners. URL https://arxiv.org/                       Vanhoucke V, Zhan W, Zhou W, Burgard W, Chen X, Chen X,
+    abs/2005.14165.                                                            Wang X, Zhu X, Geng X, Liu X, Liangwei X, Li X, Pang Y,
+Caluwaerts K, Iscen A, Kew JC, Yu W, Zhang T, Freeman D,                       Lu Y, Ma YJ, Kim Y, Chebotar Y, Zhou Y, Zhu Y, Wu Y, Xu
+    Lee KH, Lee L, Saliceti S, Zhuang V, Batchelor N, Bohez                    Y, Wang Y, Bisk Y, Dou Y, Cho Y, Lee Y, Cui Y, Cao Y, Wu
+    S, Casarini F, Chen JE, Cortes O, Coumans E, Dostmohamed                   YH, Tang Y, Zhu Y, Zhang Y, Jiang Y, Li Y, Li Y, Iwasawa
+    A, Dulac-Arnold G, Escontrela A, Frey E, Hafner R, Jain D,                 Y, Matsuo Y, Ma Z, Xu Z, Cui ZJ, Zhang Z, Fu Z and Lin Z
+    Jyenis B, Kuang Y, Lee E, Luu L, Nachum O, Oslund K, Powell                (2024) Open x-embodiment: Robotic learning datasets and rt-x
+    J, Reyes D, Romano F, Sadeghi F, Sloat R, Tabanpour B, Zheng               models. URL https://arxiv.org/abs/2310.08864.
+    D, Neunert M, Hadsell R, Heess N, Nori F, Seto J, Parada               Driess D, Xia F, Sajjadi MSM, Lynch C, Chowdhery A, Ichter B,
+    C, Sindhwani V, Vanhoucke V and Tan J (2023) Barkour:                      Wahid A, Tompson J, Vuong Q, Yu T, Huang W, Chebotar Y,
+    Benchmarking animal-level agility with quadruped robots.                   Sermanet P, Duckworth D, Levine S, Vanhoucke V, Hausman
+Cheng X, Shi K, Agarwal A and Pathak D (2024) Extreme parkour                  K, Toussaint M, Greff K, Zeng A, Mordatch I and Florence P
+    with legged robots. In: 2024 IEEE International Conference                 (2023) Palm-e: An embodied multimodal language model. In:
+    on Robotics and Automation (ICRA). pp. 11443–11450. DOI:                   arXiv preprint arXiv:2303.03378.
+    10.1109/ICRA57147.2024.10610200.                                       Fankhauser P, Bloesch M, Gehring C, Hutter M and
+Choi S, Ji G, Park J, Kim H, Mun J, Lee JH and Hwangbo                         Siegwart R (2014) Robot-centric elevation mapping with
+    J (2023) Learning quadrupedal locomotion on deformable                     uncertainty estimates.    In: Mobile Service Robotics. pp.
+    terrain. Science Robotics 8(74): eade2256. DOI:10.1126/                    433–440.       DOI:10.1142/9789814623353 0051.          URL
+    scirobotics.ade2256. URL https://www.science.org/                          https://www.worldscientific.com/doi/abs/
+    doi/abs/10.1126/scirobotics.ade2256.                                       10.1142/9789814623353_0051.
+Collaboration E, O’Neill A, Rehman A, Gupta A, Maddukuri A,                Gangapurwala S, Geisert M, Orsolino R, Fallon M and Havoutis
+    Gupta A, Padalkar A, Lee A, Pooley A, Gupta A, Mandlekar                   I (2022) Rloc: Terrain-aware legged locomotion using
+    A, Jain A, Tung A, Bewley A, Herzog A, Irpan A, Khazatsky                  reinforcement learning and optimal control. IEEE Transactions
+    A, Rai A, Gupta A, Wang A, Kolobov A, Singh A, Garg A,                     on Robotics 38(5): 2908–2927.          DOI:10.1109/tro.2022.
+    Kembhavi A, Xie A, Brohan A, Raffin A, Sharma A, Yavary                    3172469. URL http://dx.doi.org/10.1109/TRO.
+    A, Jain A, Balakrishna A, Wahid A, Burgess-Limerick B, Kim                 2022.3172469.
+    B, Schölkopf B, Wulfe B, Ichter B, Lu C, Xu C, Le C, Finn C,          Ge Y, Macaluso A, Li L, Luo P and Wang X (2023) Policy
+    Wang C, Xu C, Chi C, Huang C, Chan C, Agia C, Pan C, Fu C,                 adaptation from foundation model feedback. pp. 19059–19069.
+
+
+                                                                      13
+    DOI:10.1109/CVPR52729.2023.01827.                                    Perlin K (2002) Improving noise.               In: Proceedings of
+Grandia R, Jenelten F, Yang S, Farshidian F and Hutter M (2022)               the 29th Annual Conference on Computer Graphics and
+    Perceptive locomotion through nonlinear model predictive                  Interactive Techniques, SIGGRAPH ’02. New York, NY, USA:
+    control. URL https://arxiv.org/abs/2208.08373.                            Association for Computing Machinery. ISBN 1581135211,
+Gupta A, Fan L, Ganguli S and Fei-Fei L (2022) Metamorph:                     p. 681–682. DOI:10.1145/566570.566636. URL https:
+    Learning universal controllers with transformers.                         //doi.org/10.1145/566570.566636.
+Han L, Zhu Q, Sheng J, Zhang C, Li T, Zhang Y, Zhang                     Ross S, Gordon GJ and Bagnell JA (2011) A reduction of imitation
+    H, Liu Y, Zhou C, Zhao R, Li J, Zhang Y, Wang R,                          learning and structured prediction to no-regret online learning.
+    Chi W, Li X, Zhu Y, Xiang L, Teng X and Zhang Z                      Rudin N, Hoeller D, Bjelonic M and Hutter M (2022a) Advanced
+    (2024) Lifelike agility and play in quadrupedal robots using              skills by learning locomotion and local navigation end-to-end.
+    reinforcement learning and generative pre-trained models.            Rudin N, Hoeller D, Reist P and Hutter M (2022b) Learning to
+    Nature Machine Intelligence 6(787–798).          DOI:10.1038/             walk in minutes using massively parallel deep reinforcement
+    s42256-024-00861-3. URL https://www.nature.com/                           learning.
+    articles/s42256-024-00861-3.                                         Vaswani A, Shazeer N, Parmar N, Uszkoreit J, Jones L, Gomez
+Hochreiter S and Schmidhuber J (1997) Long Short-Term Memory.                 AN, Kaiser L and Polosukhin I (2017) Attention is all you
+    Neural Computation 9(8): 1735–1780. DOI:10.1162/neco.                     need. In: Guyon I, Luxburg UV, Bengio S, Wallach H,
+    1997.9.8.1735.      URL https://doi.org/10.1162/                          Fergus R, Vishwanathan S and Garnett R (eds.) Advances
+    neco.1997.9.8.1735.                                                       in Neural Information Processing Systems, volume 30.
+Hoeller D, Rudin N, Sako D and Hutter M (2023) Anymal parkour:                Curran Associates, Inc. URL https://proceedings.
+    Learning agile navigation for quadrupedal robots.                         neurips.cc/paper_files/paper/2017/file/
+Jenelten F, Grandia R, Farshidian F and Hutter M (2022) Tamols:               3f5ee243547dee91fbd053c1c4a845aa-Paper.
+    Terrain-aware motion optimization for legged systems. IEEE                pdf.
+    Transactions on Robotics 38(6): 3395–3413.                           Xie Z, Da X, Babich B, Garg A and de Panne Mv (2023) Glide:
+Jenelten F, He J, Farshidian F and Hutter M (2024) Dtc: Deep                  Generalizable quadrupedal locomotion in diverse environments
+    tracking control. Science Robotics 9(86). DOI:10.1126/                    with a centroidal model. In: LaValle SM, O’Kane JM, Otte
+    scirobotics.adh5401.     URL http://dx.doi.org/10.                        M, Sadigh D and Tokekar P (eds.) Algorithmic Foundations of
+    1126/scirobotics.adh5401.                                                 Robotics XV. Cham: Springer International Publishing. ISBN
+Kang D, Cheng J, Zamora M, Zargarbashi F and Coros S (2023)                   978-3-031-21090-7, pp. 523–539.
+    Rl + model-based control: Using on-demand optimal control            Yang R, Zhang M, Hansen N, Xu H and Wang X (2022) Learning
+    to learn versatile legged locomotion. IEEE Robotics and                   vision-guided quadrupedal locomotion end-to-end with cross-
+    Automation Letters 8(10): 6619–6626. DOI:10.1109/LRA.                     modal transformers.
+    2023.3307008.                                                        Yu W, Jain D, Escontrela A, Iscen A, Xu P, Coumans E, Ha S, Tan
+Kim D, Carballo D, Di Carlo J, Katz B, Bledt G, Lim B and Kim                 J and Zhang T (2022) Visual-locomotion: Learning to walk on
+    S (2020) Vision aided dynamic exploration of unstructured                 complex terrains with vision. In: Faust A, Hsu D and Neumann
+    terrain with a small-scale quadruped robot. In: 2020 IEEE                 G (eds.) Proceedings of the 5th Conference on Robot Learning,
+    International Conference on Robotics and Automation (ICRA).               Proceedings of Machine Learning Research, volume 164.
+    pp. 2464–2470.                                                            PMLR, pp. 1291–1302. URL https://proceedings.
+Lee J, Hwangbo J, Wellhausen L, Koltun V and Hutter M (2020)                  mlr.press/v164/yu22a.html.
+    Learning quadrupedal locomotion over challenging terrain.            Zhang C, Rudin N, Hoeller D and Hutter M (2024) Learning agile
+    Science Robotics 5(47). DOI:10.1126/scirobotics.abc5986.                  locomotion on risky terrains. URL https://arxiv.org/
+    URL http://dx.doi.org/10.1126/scirobotics.                                abs/2311.10484.
+    abc5986.                                                             Zhuang Z, Fu Z, Wang J, Atkeson C, Schwertfeger S, Finn C
+Luo Z, Cao J, Merel J, Winkler A, Huang J, Kitani KM and Xu W                 and Zhao H (2023) Robot parkour learning. URL https:
+    (2024) Universal humanoid motion representations for physics-             //arxiv.org/abs/2309.05665.
+    based control. In: The Twelfth International Conference on           Zitkovich B, Yu T, Xu S, Xu P, Xiao T, Xia F, Wu J, Wohlhart
+    Learning Representations. URL https://openreview.                         P, Welker S, Wahid A, Vuong Q, Vanhoucke V, Tran H,
+    net/forum?id=OrOd8PxOO2.                                                  Soricut R, Singh A, Singh J, Sermanet P, Sanketi PR, Salazar
+Miki T, Lee J, Hwangbo J, Wellhausen L, Koltun V and                          G, Ryoo MS, Reymann K, Rao K, Pertsch K, Mordatch I,
+    Hutter M (2022a) Learning robust perceptive locomotion for                Michalewski H, Lu Y, Levine S, Lee L, Lee TWE, Leal I,
+    quadrupedal robots in the wild. Science Robotics 7(62). DOI:              Kuang Y, Kalashnikov D, Julian R, Joshi NJ, Irpan A, brian
+    10.1126/scirobotics.abk2822. URL http://dx.doi.org/                       ichter, Hsu J, Herzog A, Hausman K, Gopalakrishnan K, Fu C,
+    10.1126/scirobotics.abk2822.                                              Florence P, Finn C, Dubey KA, Driess D, Ding T, Choromanski
+Miki T, Wellhausen L, Grandia R, Jenelten F, Homberger T and                  KM, Chen X, Chebotar Y, Carbajal J, Brown N, Brohan A,
+    Hutter M (2022b) Elevation mapping for locomotion and                     Arenas MG and Han K (2023) RT-2: Vision-language-action
+    navigation using gpu. URL https://arxiv.org/abs/                          models transfer web knowledge to robotic control. In: 7th
+    2204.12876.                                                               Annual Conference on Robot Learning. URL https://
+Mittal M, Rudin N, Klemm V, Allshire A and Hutter M                           openreview.net/forum?id=XMQgwiJ7KSX.
+    (2024) Symmetry considerations for learning task symmetric
+    robot policies. URL https://arxiv.org/abs/2403.
+    04359.
+
+
+                                                                    14
+

@@ -1,0 +1,601 @@
+                                          Learning Human-to-Humanoid Real-Time Whole-Body Teleoperation
+                                            Tairan He†         Zhengyi Luo†       Wenli Xiao       Chong Zhang        Kris Kitani      Changliu Liu      Guanya Shi
+                                                                                             Carnegie Mellon University
+                                                                           †
+                                                                             Equal Contributions https://human2humanoid.com
+                                        (a) Step forward and punch
+
+
+
+
+arXiv:2403.04436v1 [cs.RO] 7 Mar 2024
+                                        (b) Sidestep and kick ball
+
+
+
+
+                                        (c) Walk with a stroller
+
+
+
+
+                                        (d) Box handover and placement
+
+
+
+
+                                        Fig. 1: The humanoid robot is teleoperated in real-time using an RGB camera by the human teleoperator. (a) The
+                                        humanoid mimics the human teleoperator, advancing one step while delivering a punch to displace a box, followed by a
+                                        victory gesture. (b) The humanoid executes a precise sidestep to align with a ball and delivers a controlled kick using its right
+                                        foot. (c) The humanoid demonstrates forward walking while pushing a stroller. (d) The operator teleoperates the humanoid
+                                        to catch a box, rotate its waist, and drop the box into a waste bin. Videos: see the website.
+
+                                           Abstract— We present Human to Humanoid (H2O), a rein-             camera. Humanoid robots, with their physical form closely
+                                        forcement learning (RL) based framework that enables real-           mirroring that of humans, present an unparalleled opportu-
+                                        time whole-body teleoperation of a full-sized humanoid robot         nity for real-time teleoperation. This alignment of the embod-
+                                        with only an RGB camera. To create a large-scale retargeted
+                                        motion dataset of human movements for humanoid robots,               iment allows for a seamless integration of human cognitive
+                                        we propose a scalable “sim-to-data” process to filter and pick       skills with versatile humanoid capabilities [1]. Such synergy
+                                        feasible motions using a privileged motion imitator. Afterwards,     stimulated by human-to-humanoid teleoperation is crucial for
+                                        we train a robust real-time humanoid motion imitator in              complex tasks (e.g., household chores, medical assistance,
+                                        simulation using these refined motions and transfer it to the real   high-risk rescue operations) that are yet too challenging for
+                                        humanoid robot in a zero-shot manner. We successfully achieve
+                                        teleoperation of dynamic whole-body motions in real-world            a fully autonomous robot, but possible for existing hardware
+                                        scenarios, including walking, back jumping, kicking, turning,        teleoperated by humans [2, 3]. In this paper, we transfer
+                                        waving, pushing, boxing, etc. To the best of our knowledge, this     human motions to humanoid behaviors in a real-time fashion
+                                        is the first demonstration to achieve learning-based real-time       using an RGB camera. This system also has the potential to
+                                        whole-body humanoid teleoperation.                                   enable large-scale and high-quality data collection of human
+                                                                                                             operations for robotics [2, 4], where human-teleoperated
+                                                                   I. I NTRODUCTION
+                                                                                                             actions can be used for imitation learning.
+                                          We aim to enable real-time teleoperation of a full-sized              However, whole-body control of full-sized humanoids is
+                                        humanoid robot by a human teleoperator using an RGB                  a long-standing problem in robotics [5], and complexity
+increases when controlling the humanoid to replicate free-        for the humanoid to track.
+form human movements in real-time [1]. Existing work on              In summary, we demonstrate the feasibility of an RL-based
+whole-body humanoid teleoperation has achieved remarkable         real-time Human-to-Humanoid (H2O) teleoperation system.
+results via model-based controllers [6–9], but they all use       Our contributions include:
+simplified models due to the high computational cost of              1) A scalable retargeting and “sim-to-data” process to
+modeling the full dynamics of the system [10, 11], which                 obtain a large-scale motion dataset feasible for the real-
+limits the scalability to dynamic motions. Furthermore, these            world humanoid robot;
+works are highly dependent on contact measurement [12,               2) Sim-to-real transfer of the RL-based whole-body track-
+13], leading to reliance on external setups such as the                  ing controller that scales to a large number of motions;
+exoskeleton [9] and force sensors [8, 14] for teleoperation.         3) A real-time teleoperation system with an RGB camera
+   Recent advances in reinforcement learning (RL) for hu-                and 3D human pose estimation, demonstrating fulfill-
+manoid control provide a promising alternative. First, in the            ment of various whole-body motions including walk-
+graphics community, RL has been used to generate complex                 ing, pick-and-place, stroller pushing, boxing, hand-
+human movements [15, 16], perform a variety of tasks [17],               waving, ball kicking, etc.
+and track real-time human motions captured by a webcam
+[18] in simulation. However, due to unrealistic state-space                           II. R ELATED W ORKS
+design and partial disregard of the hardware limit (e.g. torque   A. Physics-Based Animation of Human Motions
+/ joint limit), it remains a question whether these methods can      Physics-based simulation has been used to generate re-
+be applied to a full-sized humanoid. On the other hand, RL        alistic and natural motions for avatars [15–18, 28–33].
+has achieved robust and agile biped locomotion in the real        With motion capture as the main source of human motion
+world [19–21]. To date, however, there has been no existing       data [26], RL is often used to learn avatar controllers that
+work on RL-based whole-body humanoid teleoperation. The           can mimic these motions, offering distinctive styles [15, 31],
+most closely related effort is a concurrent study [22], which     scalability [16, 18, 34], and reusability [17, 32].
+focuses on learning to replicate upper-body motions and uses         However, realistic animation in physics-based simulators
+root velocity tracking for the lower body, from offline human     does not guarantee real-world applicability, especially for
+motions rather than real-time teleoperation.                      humanoids. Simulated humanoid avatars typically have high
+   In this paper, we design a complete system for hu-             degrees of freedom and large joint torques [35], and some-
+manoid teleportation in real time. First, we identify one         times need non-physical assistive external forces [36]. In
+of the primary challenges in whole-body humanoid tele-            this work, we demonstrate that, with carefully designed
+operation as the lack of a dataset with feasible motions          sim-to-real training, approaches in the humanoid animation
+tailored to the humanoid, which is essential for training a       community can be applied to a real-world humanoid robot.
+controller that can track diverse motions. Although direct
+human-to-humanoid retargeting has been explored in previ-         B. Transferring Human Motions to Real-World Humanoids
+ous locomotion-focused efforts [23–25], retargeting a large-         Before the emergence of RL-based humanoid controllers,
+scale human motion dataset to the humanoid presents new           traditional methods typically employ model-based optimiza-
+challenges. That is, the significant dynamics discrepancy         tion to track retargeted motions while maintaining stabil-
+between humans and humanoids means that some human                ity [1]. To this end, these methods minimize tracking errors
+motions could be infeasible for the humanoid (e.g. cartwheel-     under the constraints of stability and contacts, requiring
+ing, steps wider than the leg lengths of the humanoid).           predefined contact states [6, 10, 12, 13, 37–40] or estimated
+In light of this, we introduce an automated “sim-to-data”         contacts from sensors [7, 9, 14, 41, 42], hindering large-
+process to retarget and refine a large-scale human motion         scale deployment outside the laboratory. Zhang et al. [11]
+dataset [26] into motions that are feasible for real-world        use contact-implicit model predictive control (MPC) to track
+humanoid embodiment. Specifically, we first retarget the          motions extracted from videos, but trajectories must first be
+human motions to the humanoid via inverse kinematics,             optimized offline to ensure dynamic feasibility. Furthermore,
+and train a humanoid controller with access to privileged         the model used in MPC needs to be simplified due to
+state information [18] to imitate the unfiltered motions in       computational burden [6, 11, 14], which limits the capability
+simulation. Afterwards, we remove the motion sequences that       of trackable motions.
+the privileged imitator fails to track. By doing so, we create       RL-based controllers may provide an alternative that does
+a large-scale humanoid-compatible motion dataset.                 not require explicit contact information. Some works [43,
+   After obtaining a dataset of feasible motions, we develop      44] use imitation learning to transfer human-style motions
+a scalable training process for the real-world motion imitator    to the controller, but do not accurately track human motions.
+that incorporates extensive domain randomization to bridge        Cheng et al. [22] train whole-body humanoid controllers that
+the sim-to-real gap. To facilitate real-time teleoperation, we    can replicate upper body movements from offline human
+design a state space that prioritizes the inputs available in     motions, but the lower body relies on root velocity tracking
+the real world using an RGB camera, such as the keypoint          and does not track precise lower body movements. In com-
+positions. During inference, we use an off-the-shelf human        parison, our work achieves real-time whole-body tracking of
+pose estimator [27] to provide global human body positions        human motions.
+C. Teleoperation of Humanoids
+   Teleoperation of humanoids can be categorized into three
+types: 1) task-space teleoperation [45, 46], 2) upper-body-
+retargeted teleoperation [47, 48], and 3) whole-body teleop-
+eration [6, 7, 13, 42, 49]. For the first and second types,
+the shared morphology between humans and humanoids is
+not fully utilized, and whole-body control must be solved
+in a task-specified way. This also raises the concern that,
+if tracking lower body movement is not necessary, the
+robot could opt for designs with better stability, such as a       Fig. 2: Fitting the SMPL body to the H1 humanoid. (a) Visu-
+quadruped [50] or wheeled configuration [51].                      alization of the humanoid keypoints (red dots) (b) Humanoid
+   Our work belongs to the third type and is the first to          keypoints vs SMPL keypoints (green dots and mesh) before
+achieve learning-based whole-body teleoperation. Moreover,         and after fitted SMPL shape β ′ . (c) Corresponding 12 joint
+our approach does not require capture markers or force             position before and after fitting.
+sensors on the human teleoperator, as we directly employ
+an RGB camera to capture human motions for tracking, po-
+tentially paving the way for collecting large-scale humanoid
+data for training autonomous agents.
+                    III. P RELIMINARIES
+   The whole-body real-time humanoid teleoperation we are
+tackling is formulated as a goal-conditioned RL problem,
+which tracks versatile human motion with a single RL control
+policy. In Section III-A, we set up the preliminary for our
+control framework. Section III-B describes the human model
+and dataset we use in the RL policy training. As a nota-           Fig. 3: Effect of using a fitted SMPL shape β ′ instead of
+tion convention, we use e· to represent kinematic quantities       mean body shape on position-based retargeting. (a) Retargt-
+(without physics simulation) from pose estimator/keypoint          ing without using β ′ , which results in unstable “in-toed”
+detectors, b· to denote ground truth quantities from Motion        humanoid motion. (b) Retargeting using β ′ , which result in
+Capture (MoCap), and normal symbols without accents for            balanced humanoid motion.
+values from the physics simulation.
+A. Goal-conditioned RL for Humanoid Control                        parameters θ ∈ R24×3 , and root translation p ∈ R24×3 .
+                                                                   Given β, θ and p, S denotes the SMPL function, where
+    We formulate our problem as goal-conditioned RL where
+                                                                   S(β, θ, p) : β, θ, p → R6890×3 maps the parameters to
+π is trained to track real-time human motions. We for-
+                                                                   the position of the vertices of a triangular human mesh of
+mulate the learning task as a Markov Decision Process
+                                                                   6890 vertices. The AMASS [26] dataset contains 40 hours
+(MDP) defined by the tuple M = ⟨S, A, T , R, γ⟩ of state
+                                                                   of motion capture expressed in the SMPL parameters.
+st ∈ S, action at ∈ A, transition dynamics T , reward
+function R, and discount factor γ. The state st contains            IV. R ETARGETING H UMAN M OTIONS FOR H UMANOID
+the proprioception spt and the goal state sgt . The goal state        To enable humanoid motion imitation for unscripted hu-
+sgt is a unified representation of the whole-body motion of        man motion, we require a large amount of whole-body mo-
+the human teleoperator, which we will discuss in detail in         tion to train a robust motion imitation policy. Since humans
+Section V-A. Based on proprioception spt and goal state           and humanoids also have a nontrivial difference in body
+sgt , we define the reward rt = R spt , sgt for the policy         structure, shape, and dynamics, naively retargeted motion
+training. The action at ∈ R19 specifies the joint target           from a human motion dataset can result in a large number
+positions that the PD controller will use to actuate the           of motions impossible for our humanoid to perform. These
+degrees of freedom. We apply the proximal policy gradient          imfeasible motion sequences can hinder imitation training
+(PPO)
+   hP [52] to maximize
+                   i        the cumulative discounted reward       as observed in prior work [32]. To resolve these issues, we
+       T     t−1
+E      t=1 γ     rt . We formulate the teleoperation task as the   design a “sim-to-data” approach to complement traditional
+motion imitation/tracking/mimicking task, where we train the       retargeting to convert a large-scale human motion dataset to
+humanoid to track the reference motion at every frame.             feasible motions for humanoids.
+B. Parametric Human Model and Human Motion Dataset                 A. Motion Retargeting
+   Popular in the vision and graphics community, parametric           As there is a non-trivial difference between the SMPL
+human models such as SMPL [53] are easy to work with rep-          kinematic structure and the humanoid kinematic tree, we
+resentations of human shapes and motions. SMPL represents          perform a two-step process for the initial retargeting. First,
+the human body as body shape parameters β ∈ R10 , pose             since the SMPL body model can represent different body
+  (a) Retargeting                                (b) Sim-to-Real Training               (c) Real-time Teleoperation
+           Motion Dataset (Raw)                       Simulation (Issac Gym)               Human                     Humanoid
+                                                                                         Teleoperator                 Robot
+
+
+
+
+             Inverse
+          Kinematics                                                PD Controller
+       Motion Dataset (Shape Fitted)            Proprioception       a t Joint
+                                                                          Targets
+                                                                     Sim-to-Real         RGB Camera              PD Controller
+                                                                   Imitation Policy                                       200Hz
+                                                            p
+                                                           st                                                        at   Joint
+                                                                                                                          Targets
+         Retargeting                                                   Domain                     30Hz
+                                                                    Randomization                                 Sim-to-Real
+         Privileged Imitation Policy
+                                                                                                                Imitation Policy
+     Imitation-based                                                  Dynamics                                             50Hz
+            Filtering                                                                     3D Human
+                                                                                        Pose Estimator           p         g
+   Motion Dataset (Embodiment Feasible)          Imitation Goal        Terrain                                  st        st
+     ✅       ✅          ✅       ✅       ❎                                                                    Proprioception
+                                                                     Input Noises
+                                                                                                              (Real-Time)
+
+                                                            g
+                                                                         ……
+                                                           st                                                    Imitation Goal
+                                                                                                 30Hz             (Real-Time)
+
+Fig. 4: Overview of H2O: (a) Retargeting (Section IV): H2O first aligns the SMPL body model to a humanoid’s structure
+by optimizing shape parameters. Then H2O retargets and removes the infeasible motions using a trained privileged imitation
+policy, producing a clean motion dataset. (b) Sim-to-Real Training: (Section V) An imitation policy is trained to track
+motion goals sampled from a cleaned dataset. (c) Real-time Teleoperation Deployment (Section VI-B): The real-time
+teleoperation deployment captures human motion through an RGB camera and a pose estimator, which is then mimicked
+by a humanoid robot using the trained sim-to-real imitation policy.
+
+
+proportions, we first find a body shape β ′ closest to the         the humanoid, as shown in Fig.3. From the AMASS dataset
+humanoid structure. We choose 12 joints that have a cor-           Q̂ that contains 13k motion sequences, this process computes
+respondence between humans and humanoids, as shown in              10k retargted motion sequences Q̂retarget .
+Fig.2 and perform gradient descents on the shape parameter         B. Simulation-based Data Cleaning
+s to minimize the joint distances using a common rest pose.
+After finding the optimal β ′ , given a sequence of motions ex-       As shown in Figure 4, Q̂retarget contain a large number of
+pressed in SMPL parameters, we use the original translation        implausible motions for the humanoid due to the significant
+p and pose θ, but the fitted shape β ′ to obtain the set of body   gap between the capabilities of a human and a motor-actuated
+keypoint positions. Then we retarget motion from human to          humanoid. Manually finding these data sequences from a
+humanoid by minimizing the 12 joint position differences           large-scale dataset can be a rather cumbersome process.
+using Adam optimizer [54]. Notice that our retargeting             Thus, we propose a “sim-to-data” procedure, where we train
+process try to match the end effectors of the human to the         a motion imitator πprivileged (similar to PHC [18]) with access
+humanoid (e.g. ankles, elbows, wrists) to preserve the overall     to privileged information and no domain randomization to
+motion pattern. Another approach is direct copying the local       imitate all uncleaned data Q̂retarget . Without domain random-
+joint angles from human to humanoid, but that approach             ization, πprivileged can perform well in motion imitation, but
+can lead to large differences in end-effector positions due to     is not suitable for transfer to the real humanoid. However,
+the large difference in kinematic trees. During this process,      πprivileged represents the upper bound of motion imitation
+we also add some heuristic-based filtering to remove unsafe        performance, and sequences which πprivileged fails to imitate
+sequences, such as sitting on the ground. The motivation           represent implausible ones. Specifically, we train πprivileged
+to find β ′ before retargeting is that in the rest pose, our       following the same state space, control parameters, and hard-
+humanoid has a large gap between its feet. If naively trying       negative mining procedure proposed in PULSE [32], and
+to match the foot movement between the human and the               train a single imitation policy to imitate the entire retargeted
+humanoid, the humanoid motion can have an in-toed artifact.        dataset. After training, ∼8.5k out of 10k motion sequences
+Using β ′ , we can find a human body structure has a large gap     from AMASS turn out to be plausible for the H1 humanoid,
+between its rest pose (as shown in Fig.2). Using β ′ during        and we denote the obtained clean dataset as Q̂clean .
+fitting can effectively create motion that is more feasible for    Privileged Motion Imitation Policy. To train πprivileged , we
+                                                                   follow PULSE [32] and train a motion imitator with access
+to the full rigid body state of the humanoid. Specifically, for              TABLE I: Reward components and weights: penalty rewards
+the privileged policy πprivileged , its proprioception is defined            for preventing undesired behaviors for sim-to-real transfer,
+as sp-privileged  ≜ [pt , θ t , vt , ω t ], which contains the global        regularization to refine motion, and task reward to achieve
+        t
+3D rigid body position pt , orientation θ t , linear velocity                successful whole-body tracking in real-time.
+vt , and angular velocity ω t of all rigid bodies in the                                 Term                      Expression              Weight
+humanoid. The goal state is defined as sg-privileged
+                                                   t         ≜ [θ̂t+1 ⊖                                               Penalty
+                                                                                    Torque limits          1(τ t ∈  / [τmin , τmax ])      −2e−1
+θ t , p̂t+1 −pt , v̂t+1 −vt , ω̂t −ωt , θ̂t+1 , p̂t+1 ], which contains           DoF position limits      1(q t ∈  / [qmin , qmax ])      −1e2
+the one-frame difference between the reference and current                           Termination                    1termination           −2e2
+simulation result for all rigid bodies on the humanoid. It also                                                 Regularization
+contains the next frame’s reference rigid body orientation                         DoF acceleration                    ∥q̈t ∥22            −8.4e−6
+                                                                                     DoF velocity                      ∥q̇t ∥22            −3e−3
+and position. All values are normalized to the humanoid’s                             Action rate               ∥at − at−1 ∥22             −9e−1
+coordinate system. Notice that all values are global, and                                Torque                        ∥τ t ∥              −9e−5
+values such as global rigidbody linear velocity vt and angular                       Feet air time             Tair − 0.25 [55]              8e2
+velocity ω t are hard to obtain accurately in the real world.                      Feet contact force                ∥Ffeet ∥22            −1e−1
+                                                                                                                   xy            z )
+                                                                                        Stumble              1(Ffeet    > 5 × Ffeet         −1e3
+ V. W HOLE -B ODY T ELEOPERATION P OLICY T RAINING                                      Slippage          ∥vt feet ∥22 × 1(Ffeet ≥ 1)       −3e1
+                                                                                                                 Task Reward
+A. State Space                                                                      DoF position          exp(−0.25∥q̂ t − q t ∥2 )         2.4e1
+                                                                                    DoF velocity          exp(−0.25∥q̇      ˆ − q̇t ∥2 )    2.4e1
+   To achieve real-time teleoperation of humanoid robots,                                                                     t      2
+                                                                                    Body position          exp(−0.5∥pt − p̂t ∥22 )           4e1
+the state space of RL policy must contain only quantities                           Body rotation           exp(−0.1∥θ t ⊖ θ̂t ∥)           1.6e1
+available in the real world. This differs from the simulation-                      Body velocity         exp(−10.0∥vt − v̂t ∥2 )            6e1
+only approaches, where all the physics information (e.g., foot                   Body angular velocity    exp(−0.01∥ω t − ω̂t ∥2 )           6e1
+contact force) is available. For example, in the real world, we
+have no access to each joint’s precise global angular velocity               TABLE II: The range of dynamics randomization. Describing
+due to the lack of IMUs, but the privileged policy πprivileged               simulated dynamics randomization, external perturbation,
+requires them.                                                               and randomized terrain, which are important for sim-to-real
+   In our state space design, proprioception is defined by                   transfer and boost robustness and generalizability.
+spt ≜ [q t , q̇t , v t , ωt , gt , at−1 ], with joint position q t ∈ R19
+                                                                                             Term                       Value
+(DoF position), joint velocity q̇t ∈ R19 (DoF velocity), root                                      Dynamics Randomization
+linear velocity v t ∈ R3 , root angular velocity ωt ∈ R3 ,                                 Friction                  U (0.2, 1.1)
+root projected gravity gt ∈ R3 , and last action at−1 ∈ R19 .                          Base CoM offset             U (−0.1, 0.1)m
+                                                                                          Link mass          U (0.7, 1.3) × default kg
+                                                   kp ˆkp      kp
+The goal state is sgt ≜ [p̂kp               kp
+                                      t , p̂t − pt , ṗt ]. p̂t ∈ R
+                                                                      8×3
+                                                                                           P Gain             U (0.75, 1.25) × default
+is the position of eight selected reference body positions                                 D Gain             U (0.75, 1.25) × default
+                                                                                       Torque RFI [56]       0.1 × torque limit N · m
+(shoulders, elbows, hands, ankles); p̂kp         t − pt
+                                                        kp
+                                                           is the position              Control delay               U (20, 60)ms
+difference between the reference joints and humanoid’s own                                          External Perturbation
+        ˆkp
+joints; ṗ t is the linear velocity of the reference joints. All
+                                                                                         Push robot        interval = 5s, vxy = 0.5m/s
+                                                                                                     Randomized Terrain
+values are normalized to the humanoid’s own coordinate                                   Terrain type     flat, rough, low obstacles [57]
+system. As a comparison, we also consider a reduced goal
+state sg-reduced
+        t            ≜ (p̂kp  t ), where only the reference position
+  kp
+p̂t but not the position difference. The action space of the                 sim-to-real transfers [19, 58]. All the domain randomization
+agile policy consists of 19-dim joint targets. A PD controller               we use in H2O are listed in Table II, including ground friction
+tracks these joint targets by converting them to joint torques:              coefficient, link mass, Centor-of-Mass (CoM) position of the
+τ = Kp (at − q t ) − Kd q̇t .                                                torso link, PD gains of the PD controller, torque noise on
+                                                                             the actually applied torques on each joint, control delay,
+B. Reward Design                                                             terrain types. The link mass and PD gains are independently
+   We formulate the reward function rt with the summation                    randomized for each link and joint, and the rest are episodic
+of three terms: 1) penalty; 2) regularization; and 3) task                   randomized. These domain randomization together can ef-
+rewards, which are summarized in detail in Table I. Note                     fectively facilitate the sim-to-real transfer for the real-world
+that while we only have eight selected body positions p̂kpt                  dynamics and hardware gaps.
+in our state space, we provide six full-body reward terms
+for all joints (DoF position, DoF velocity, body position,                   D. Early Termination Conditions
+body rotation, body velocity, body angular velocity) for the
+imitation task. These expressive rewards give more dense                        We introduce three early termination conditions to make
+reward signals for efficient RL training.                                    the RL training process more sample-efficient: 1) low height:
+                                                                             the base height is lower than 0.3m; 2) orientation: the
+C. Domain Randomization                                                      projected gravity on x or y axis exceeds 0.7; 3) teleoperation
+  Domain randomization has been shown to be the key                          tolerance: the average link distance between the robot and
+source of robustness and generalization to achieve successful                reference motions is further than 0.5m.
+              TABLE III: Quantitative motion imtiation results the uncleaned retargeted AMASS dataset Q̂retarget .
+                                                                   All sequences                                     Successful sequences
+ Method              State Dimension   Sim2Real   Succ ↑   Eg-mpjpe ↓   Empjpe ↓   Eacc ↓      Evel ↓   Eg-mpjpe ↓      Empjpe ↓    Eacc ↓    Evel ↓
+ Privileged policy     S ⊂ R778           ✗       85.5%         50.0        43.6         6.9      7.8        46.0           40.9      5.2       6.2
+ H2O-reduced            S ⊂ R90           ✓       53.2%        200.2       115.8        11.2     13.8       182.5          111.0      3.0       8.1
+ H2O-w/o-sim2data      S ⊂ R138           ✓       67.9%        176.6        95.0        10.2     12.2       163.1           93.8      3.0       7.5
+ H2O                   S ⊂ R138           ✓       72.5%        166.7        91.7         8.9     11.0       151.0           88.8      2.9       7.0
+
+
+
+                 VI. E XPERIMENTAL R ESULTS                             TABLE IV: Quantitative results of H2O on different sizes
+                                                                        of motion dataset for training, evaluated on the uncleaned
+A. Simulation Experiments                                               retargeted AMASS dataset Q̂retarget .
+Baselines. To reveal the effect of different retargeting, state                                                 All sequences
+space designs, and sim-to-real training techniques on whole-
+                                                                         Dataset Size          Succ ↑   Eg-mpjpe ↓       Empjpe ↓    Eacc ↓    Evel
+body teleoperation performance, we consider four baselines:
+                                                                         0.1% of Q̂clean       52.0%         198.0          107.9     12.4     13.7
+  1) Privileged policy πprivileged : The privileged policy
+                                                                         1% of Q̂clean         58.8%         183.8           96.4     10.7     12.0
+      (trained without any sim-to-real regularizations or do-            10% of Q̂clean        61.3%         174.3           92.3     10.8     12.1
+      main randomizations) is used to filter the dataset to              100% of Q̂clean       72.5%         166.7           91.7      8.9     11.0
+      find infeasible motion. It has no sim-to-real capability
+      and has a much higher input dimension.
+  2) H2O-w/o-sim2data: H2O without the “sim-to-data” re-                policy; 2) H2O is trained with all sim-to-real regularizations
+      targeting, trained on the Q̂retarget ;                            and domain randomization. These two factors will both lead
+  3) H2O-reduced: H2O with a state space of goal state                  to degradation in simulation performance. This shows that
+      consisting only of selected body positions sg-reduced
+                                                    t       .           while the RL-based avatar control frameworks have achieved
+  4) H2O: Our full H2O system, with all the retargeting                 impressive results in simulation, transferring them to the
+      process introduced in Section IV and the state space              real world requires more robustness and stability. With the
+      design introduced in Section V-A, trained on Q̂clean ;            carefully chosen dataset and the state space, we could make
+                                                                        H2O achieve a higher success rate compared to H2O-w/o-
+Metrics. We evaluate these baselines in simulation on the un-           sim2data and H2O-reduced. By comparing H2O with H2O-
+cleaned retargeted AMASS dataset (10k sequences Q̂retarget ).           w/o-sim2data, we can see that our “sim-to-data” process is
+The metrics are as follows:                                             effective in obtaining higher success rate, even when the
+   1) Success rate: the success rate (Succ) as in PHC [18],             RL policy is trained on less data. Intuitively, an implausible
+      deeming imitation unsuccessful when, at any point dur-            motion may cause the policy to waste resources trying to
+      ing imitation, the average difference in body distance is         achieve them, and filtering them out can lead to better overall
+      on average further than 0.5m. Succ measures whether               performance, as also observed in PULSE [32]. Comparing
+      the humanoid can track the reference motion without               H2O with H2O-reduced, the only difference is the design of
+      losing balance or significantly lag behind.                       the state space of the goal, which indicates that including
+   2) Empjpe and Eg−mpjpe : the global MPJPE Eg−mpjpe and               more informative physical information about motions helps
+      the root-relative mean per-joint position error (MPJPE)           RL to generalize to large-scale motion imitation.
+      Empjpe (in mm), measuring our imitator’s ability to               Ablation on Motion Dataset Size. To show how motion
+      imitate the reference motion both globally and locally            tracking performance scales with the size of the motion
+      (root-relative).                                                  dataset, we test H2O with different size of Q̂clean by randomly
+   3) Eacc and Evel : To show physical realism, we also                 selecting 1%, 10% of Q̂clean . The results are summarized
+      compare acceleration Eacc (mm/frame2 and velocity                 in Table IV, where policies trained larger motion datasets
+      Evel (mm/frame) difference.                                       continue to improve the tracking performance. Notice that
+Results. The experimental results are summarized in Ta-                 a policy trained on only 0.1% of the data can achieve a
+ble III, where H2O significantly outperforms H2O-w/o-                   surprisingly high success rate, most likely due to the ample
+sim2data and H2O-reduced by a large margin, demonstrating               domain randomization applied to the humanoid, such as
+the importance of the “sim-to-data” process and the state-              push robot significantly widens the state the humanoid has
+space design of motion goals for RL. Note that the privileged           encountered, improving its generalization capability.
+policy and H2O-w/o-sim2data are trained on the entire retar-
+                                                                        B. Real-world Demonstrations
+geted AMASS dataset Q̂retarget while H2O and H2O-reduced
+are trained on the filtered dataset Q̂clean . The success rate          Deployment Details. For real-world deployment tests, we
+gap between H2O and the privileged policy comes from                    use a standard 1080P webcam as the RGB camera, and use
+two factors: 1) H2O uses a much more practical and less                 HybrIK [27] as the 3D human pose estimator running at
+informative observation space compared to the privileged                30Hz. For the linear velocity estimation of the robot, we
+leverage the motion capture system (50Hz), and all the other
+proprioception is obtained from built-in sensors (200Hz) of
+Unitree H1 humanoid. Linear velocity state estimation could
+be replaced by onboard visual/LiDAR odometry methods,
+though we opt in to MoCap for this work due to its simplicity.
+Real-world Teleoperation Results. For real-time teleopera-         (a) Stable robustness
+tion, the 3D pose estimation from the RGB camera is noisy
+and can suffer from perspective bias, but our H2O policy
+shows a strong generalization ability to real-world estimated
+motion goals in real-time. The real-world teleoperation is
+shown in Figure 1, Figure 5 and Figure 6, where H2O enables
+precise real-time teleoperation of humanoids to do whole-
+                                                                   (b) Dynamic robustness
+body dynamic motions like ball kicking, walking, and back
+jumping. More demonstrations can be found on our website.          Fig. 7: Robustness Tests of our H2O system under powerful
+                                                                   kicking. The policy is able to maintain balance for both stable
+                                                                   and dynamic teleoperated motions.
+
+                                                                   work [32], training on infeasible or damaged motions might
+                                                                   largely harm performance. The feasibility of motions varies
+                                                                   from robot to robot due to hardware constraints, and we
+                                                                   lack systematic algorithms to identify feasible motions. We
+                                                                   need more efforts to close this embodiment gap: on one end,
+                                                                   more human-like humanoids would help; on the other, more
+(a) Left-right kick              (b) Right-left kick               teleoperation research is expected to improve the learnability
+Fig. 5: The humanoid robot is able to track the precise lower-     of human motions. 3) Closing the sim-to-real gap: to achieve
+body movements of the human teleoperator.                          a successful sim-to-real transfer, regularization (e.g., reward
+                                                                   regularization) and domain randomization are needed. How-
+                                                                   ever, over-regularization and over-randomization will also
+                                                                   hinder the policy from learning the motions. It remains
+                                                                   unknown how to strike the best trade-off between motion
+                                                                   imitation leaning and sim-to-real transfer into a universal
+                                                                   humanoid control policy.
+                                                                   Towards Real-time Humanoid Teleoperation. In this work,
+                                                                   we leverage RGB and 3D pose estimator to transform the
+                                                                   motions of human teleoperators into humanoid robots. The
+(a) Walking                      (b) Back Jumping
+                                                                   latency and error from RGB cameras and pose estimation
+Fig. 6: The humanoid robot is able to track walking motions        also lead to an inevitable trade-off between efficiency and
+of human-style pace and imitate continuous back jumping.           precision in teleoperation. Also, in this work, the human
+                                                                   teleoperator receives feedback from the humanoid only in
+Robustness. Our H2O system can keep balance under ex-              the form of visual perception. More research is needed on
+ternal force disturbances, as shown in Figure 7. These tests       human-robot interaction to study this emerging multimodal
+demonstrate the robustness of our system.                          interaction (e.g., force feedback [59], verbal and conver-
+                                                                   sational feedback [60]), which could further enhance the
+ VII. D ISCUSSIONS , L IMITATIONS , AND F UTURE W ORK              capability of humanoid teleoperation.
+Towards Universal Humanoid Teleoperation. Our ultimate             Towards Whole-body Humanoid Teleoperation. One may
+goal is to enable the humanoid to follow as many human-            wonder if lower-body tracking is necessary, as the major
+demonstrated motions as possible. We emphasize three key           embodiment gap between humans and humanoids is the
+factors that can be improved in the future. 1) Closing the         lower-body capability. A large proportion of skillful motions
+representation gap: as shown in Section VI-A, the state repre-     of humans (e.g., sports, dancing) need diverse agile lower-
+sentation of the motion goals critically affects the scalability   body movements. We emphasize the scenarios where legged
+of RL training with more diverse motions, leading to a trade-      robots hold an advantage over wheeled robots, in which
+off. While incorporating more expressive motion representa-        lower-body tracking is necessary to follow human lower-
+tions into the state space can accommodate finer-grained and       body movements, including stepping stones, kicking, spread
+more diverse motions, the expanded dimensionality will lead        legs, etc. In the future, a teleoperated humanoid system
+to a curse of sample efficiency in scalable RL. 2) Closing         that learns to switch between robust locomotion and skillful
+the embodiment gap: as evident in Section VI-A and prior           lower-body tracking would be a promising research direction.
+                   VIII. C ONCLUSIONS                           [10]   K. Yamane, S. O. Anderson, and J. K. Hodgins,
+   In this study, we introduced Human to Humanoid (H2O),               “Controlling humanoid robots with human motion
+a scalable learning-based framework that enables real-time             data: Experimental validation,” in 2010 10th IEEE-
+whole-body humanoid robot teleoperation using just an RGB              RAS International Conference on Humanoid Robots,
+camera. Our approach, leveraging reinforcement learning and            IEEE, 2010, pp. 504–510.
+a novel “sim-to-data” process, addresses the complex chal-      [11]   J. Z. Zhang et al., “Slomo: A general system for
+lenge of translating human motion into actions a humanoid              legged robot motion imitation from casual videos,”
+robot can perform. Through comprehensive simulation and                IEEE Robotics and Automation Letters, 2023.
+real-world tests, H2O demonstrated its capability to perform    [12]   A. Di Fava, K. Bouyarmane, K. Chappellet, E. Ruf-
+a wide range of dynamic tasks with high fidelity and minimal           faldi, and A. Kheddar, “Multi-contact motion retar-
+hardware requirements.                                                 geting from human to humanoid robot,” in 2016
+                                                                       IEEE-RAS 16th international conference on humanoid
+                 ACKNOWLEDGMENT                                        robots (humanoids), IEEE, 2016, pp. 1081–1086.
+   The authors express their gratitude to Jessica Hodgins for   [13]   K. Otani and K. Bouyarmane, “Adaptive whole-body
+providing assistance in conducting hardware experiments.               manipulation in human-to-humanoid multi-contact
+Special thanks are extended to Ziqiao Ma, Zhongyu Li, Yiyu             motion retargeting,” in 2017 IEEE-RAS 17th Inter-
+Chen, Xuxin Cheng, and Unitree for their valuable help on              national Conference on Humanoid Robotics (Hu-
+graphics design and hardware debugging. Furthermore, we                manoids), IEEE, 2017, pp. 446–453.
+acknowledge the significance of CMU Wean Hall room 1334,        [14]   J. Ramos and S. Kim, “Dynamic locomotion syn-
+formerly utilized as the recording location for the CMU                chronization of bipedal robot and human operator via
+MoCap dataset. In the present study, this dataset is used for          bilateral feedback teleoperation,” Science Robotics,
+real-world humanoid teleoperation within the same room.                vol. 4, no. 35, eaav4282, 2019.
+                                                                [15]   X. B. Peng, P. Abbeel, S. Levine, and M. Van de
+                       R EFERENCES                                     Panne, “Deepmimic: Example-guided deep reinforce-
+ [1]   K. Darvish et al., “Teleoperation of humanoid robots:           ment learning of physics-based character skills,” ACM
+       A survey,” IEEE Transactions on Robotics, 2023.                 Transactions On Graphics (TOG), vol. 37, no. 4,
+ [2]   Z. Fu, T. Z. Zhao, and C. Finn, “Mobile                         pp. 1–14, 2018.
+       aloha: Learning bimanual mobile manipulation with        [16]   J. Won, D. Gopinath, and J. Hodgins, “A scalable
+       low-cost whole-body teleoperation,” arXiv preprint              approach to control diverse behaviors for physically
+       arXiv:2401.02117, 2024.                                         simulated characters,” ACM Transactions on Graphics
+ [3]   C. Chi et al., “Universal manipulation interface: In-           (TOG), vol. 39, no. 4, pp. 33–1, 2020.
+       the-wild robot teaching without in-the-wild robots,”     [17]   X. B. Peng, Y. Guo, L. Halper, S. Levine, and S.
+       arXiv preprint arXiv:2402.10329, 2024.                          Fidler, “Ase: Large-scale reusable adversarial skill
+ [4]   T. Z. Zhao, V. Kumar, S. Levine, and C. Finn, “Learn-           embeddings for physically simulated characters,” ACM
+       ing fine-grained bimanual manipulation with low-cost            Transactions On Graphics (TOG), vol. 41, no. 4,
+       hardware,” arXiv preprint arXiv:2304.13705, 2023.               pp. 1–17, 2022.
+ [5]   D. Kulić, G. Venture, K. Yamane, E. Demircan, I.        [18]   Z. Luo, J. Cao, AlexanderWinkler, K. Kitani, and
+       Mizuuchi, and K. Mombaur, “Anthropomorphic move-                W. Xu, “Perpetual humanoid control for real-time
+       ment analysis and synthesis: A survey of methods and            simulated avatars,” in Proceedings of the IEEE/CVF
+       applications,” IEEE Transactions on Robotics, vol. 32,          International Conference on Computer Vision (ICCV),
+       no. 4, pp. 776–795, 2016.                                       Oct. 2023, pp. 10 895–10 904.
+ [6]   F.-J. Montecillo-Puente, M. Sreenivasa, and J.-P. Lau-   [19]   Z. Li, X. B. Peng, P. Abbeel, S. Levine, G. Berseth,
+       mond, “On real-time whole-body human to humanoid                and K. Sreenath, “Reinforcement learning for versa-
+       motion transfer,” 2010.                                         tile, dynamic, and robust bipedal locomotion control,”
+ [7]   Y. Ishiguro et al., “High speed whole body dynamic              arXiv preprint arXiv:2401.16889, 2024.
+       motion experiment with real time master-slave hu-        [20]   I. Radosavovic, T. Xiao, B. Zhang, T. Darrell, J. Malik,
+       manoid robot system,” in 2018 IEEE International                and K. Sreenath, “Learning humanoid locomotion
+       Conference on Robotics and Automation (ICRA),                   with transformers,” arXiv preprint arXiv:2303.03381,
+       IEEE, 2018, pp. 5835–5841.                                      2023.
+ [8]   J. Ramos and S. Kim, “Humanoid dynamic synchro-          [21]   J. Siekmann, K. Green, J. Warila, A. Fern,
+       nization through whole-body bilateral feedback tele-            and J. Hurst, “Blind bipedal stair traversal via
+       operation,” IEEE Transactions on Robotics, vol. 34,             sim-to-real reinforcement learning,” arXiv preprint
+       no. 4, pp. 953–965, 2018.                                       arXiv:2105.08328, 2021.
+ [9]   Y. Ishiguro et al., “Bilateral humanoid teleoperation    [22]   X. Cheng, Y. Ji, J. Chen, R. Yang, G. Yang, and X.
+       system using whole-body exoskeleton cockpit tablis,”            Wang, “Expressive whole-body control for humanoid
+       IEEE Robotics and Automation Letters, vol. 5, no. 4,            robots,” arXiv preprint arXiv:2402.16796, 2024.
+       pp. 6419–6426, 2020.
+[23]   K. Darvish et al., “Whole-body geometric retarget-        [37]   L. Penco et al., “Robust real-time whole-body motion
+       ing for humanoid robots,” in 2019 IEEE-RAS 19th                  retargeting from human to humanoid,” in 2018 IEEE-
+       International Conference on Humanoid Robots (Hu-                 RAS 18th International Conference on Humanoid
+       manoids), IEEE, 2019, pp. 679–686.                               Robots (Humanoids), IEEE, 2018, pp. 425–432.
+[24]   R. Cisneros-Limón et al., “A cybernetic avatar sys-      [38]   J. Koenemann, F. Burget, and M. Bennewitz, “Real-
+       tem to embody human telepresence for connectivity,               time imitation of human whole-body motions by
+       exploration, and skill transfer,” International Journal          humanoids,” in 2014 IEEE International Conference
+       of Social Robotics, pp. 1–28, 2024.                              on Robotics and Automation (ICRA), IEEE, 2014,
+[25]   I. Radosavovic et al., “Humanoid locomotion as next              pp. 2806–2812.
+       token prediction,” arXiv preprint arXiv:2402.19469,       [39]   O. E. Ramos, N. Mansard, O. Stasse, C. Benazeth,
+       2024.                                                            S. Hak, and L. Saab, “Dancing humanoid robots: Sys-
+[26]   N. Mahmood, N. Ghorbani, N. F. Troje, G. Pons-Moll,              tematic use of osid to compute dynamically consistent
+       and M. J. Black, “Amass: Archive of motion capture               movements following a motion capture pattern,” IEEE
+       as surface shapes,” in Proceedings of the IEEE/CVF               Robotics & Automation Magazine, vol. 22, no. 4,
+       international conference on computer vision, 2019,               pp. 16–26, 2015.
+       pp. 5442–5451.                                            [40]   L. Penco et al., “Mixed reality teleoperation assistance
+[27]   J. Li, C. Xu, Z. Chen, S. Bian, L. Yang, and C. Lu,              for direct control of humanoids,” IEEE Robotics and
+       “Hybrik: A hybrid analytical-neural inverse kinemat-             Automation Letters, 2024.
+       ics solution for 3d human pose and shape estima-          [41]   K. Ayusawa and E. Yoshida, “Motion retargeting for
+       tion,” in Proceedings of the IEEE/CVF conference                 humanoid robots based on simultaneous morphing pa-
+       on computer vision and pattern recognition, 2021,                rameter identification and motion optimization,” IEEE
+       pp. 3383–3393.                                                   Transactions on Robotics, vol. 33, no. 6, pp. 1343–
+[28]   X. B. Peng, G. Berseth, K. Yin, and M. Van De Panne,             1357, 2017.
+       “Deeploco: Dynamic locomotion skills using hierar-        [42]   K. Hu, C. Ott, and D. Lee, “Online human walking
+       chical deep reinforcement learning,” ACM Transac-                imitation in task and joint space based on quadratic
+       tions on Graphics (TOG), vol. 36, no. 4, pp. 1–13,               programming,” in 2014 IEEE International Confer-
+       2017.                                                            ence on Robotics and Automation (ICRA), IEEE, 2014,
+[29]   T. Wang, Y. Guo, M. Shugrina, and S. Fidler, “Unicon:            pp. 3458–3464.
+       Universal neural controller for physics-based character   [43]   S. Bohez et al., “Imitate and repurpose: Learning
+       motion,” arXiv preprint arXiv:2011.15119, 2020.                  reusable robot movement skills from human and
+[30]   L. Fussell, K. Bergamin, and D. Holden, “Supertrack:             animal behaviors,” arXiv preprint arXiv:2203.17138,
+       Motion tracking for physically simulated characters              2022.
+       using supervised learning,” ACM Transactions on           [44]   A. Tang et al., “Humanmimic: Learning natural lo-
+       Graphics (TOG), vol. 40, no. 6, pp. 1–13, 2021.                  comotion and transitions for humanoid robot via
+[31]   X. B. Peng, Z. Ma, P. Abbeel, S. Levine, and A.                  wasserstein adversarial imitation,” arXiv preprint
+       Kanazawa, “Amp: Adversarial motion priors for styl-              arXiv:2309.14225, 2023.
+       ized physics-based character control,” ACM Transac-       [45]   M. Seo et al., “Deep imitation learning for humanoid
+       tions on Graphics (ToG), vol. 40, no. 4, pp. 1–20,               loco-manipulation through human teleoperation,” in
+       2021.                                                            2023 IEEE-RAS 22nd International Conference on
+[32]   Z. Luo et al., “Universal humanoid motion represen-              Humanoid Robots (Humanoids), IEEE, 2023, pp. 1–8.
+       tations for physics-based control,” in The Twelfth In-    [46]   S. Dafarra et al., “Icub3 avatar system: Enabling
+       ternational Conference on Learning Representations,              remote fully immersive embodiment of humanoid
+       2024.                                                            robots,” Science Robotics, vol. 9, no. 86, eadh3834,
+[33]   A. Winkler, J. Won, and Y. Ye, “Questsim: Human                  2024.
+       motion tracking from sparse sensors with simulated        [47]   J. Chagas Vaz, D. Wallace, and P. Y. Oh, “Humanoid
+       avatars,” in SIGGRAPH Asia 2022 Conference Papers,               loco-manipulation of pushed carts utilizing virtual
+       2022, pp. 1–8.                                                   reality teleoperation,” in ASME International Mechan-
+[34]   Z. Luo, R. Hachiuma, Y. Yuan, and K. Kitani,                     ical Engineering Congress and Exposition, American
+       “Dynamics-regulated kinematic policy for egocentric              Society of Mechanical Engineers, vol. 85628, 2021,
+       pose estimation,” Advances in Neural Information                 V07BT07A027.
+       Processing Systems, vol. 34, pp. 25 019–25 032, 2021.     [48]   M. Elobaid, Y. Hu, G. Romualdi, S. Dafarra, J.
+[35]   Bullet Physics, Humanoid urdf in bullet3, Accessed:              Babic, and D. Pucci, “Telexistence and teleoperation
+       2024-03-01, 2023.                                                for walking humanoid robots,” in Intelligent Systems
+[36]   Y. Yuan and K. Kitani, “Residual force control for               and Applications: Proceedings of the 2019 Intelligent
+       agile human behavior imitation and extended motion               Systems Conference (IntelliSys) Volume 2, Springer,
+       synthesis,” Advances in Neural Information Process-              2020, pp. 1106–1121.
+       ing Systems, vol. 33, pp. 21 763–21 774, 2020.
+[49]   S. Tachi, Y. Inoue, and F. Kato, “Telesar vi: Telex-
+       istence surrogate anthropomorphic robot vi,” Interna-
+       tional Journal of Humanoid Robotics, vol. 17, no. 05,
+       p. 2 050 019, 2020.
+[50]   C. D. Bellicoso et al., “Alma-articulated locomotion
+       and manipulation for a torque-controllable robot,” in
+       2019 International conference on robotics and au-
+       tomation (ICRA), IEEE, 2019, pp. 8477–8483.
+[51]   C. Lenz et al., “Nimbro wins ana avatar xprize
+       immersive telepresence competition: Human-centric
+       evaluation and lessons learned,” International Journal
+       of Social Robotics, pp. 1–25, 2023.
+[52]   J. Schulman, F. Wolski, P. Dhariwal, A. Radford,
+       and O. Klimov, “Proximal policy optimization al-
+       gorithms,” CoRR, vol. abs/1707.06347, 2017. arXiv:
+       1707.06347.
+[53]   M. Loper, N. Mahmood, J. Romero, G. Pons-Moll,
+       and M. J. Black, “SMPL: A skinned multi-person lin-
+       ear model,” ACM Trans. Graphics (Proc. SIGGRAPH
+       Asia), vol. 34, no. 6, 248:1–248:16, Oct. 2015.
+[54]   D. P. Kingma and J. Ba, “Adam: A method
+       for stochastic optimization,” arXiv preprint
+       arXiv:1412.6980, 2014.
+[55]   N. Rudin, D. Hoeller, P. Reist, and M. Hutter, Learn-
+       ing to walk in minutes using massively parallel deep
+       reinforcement learning, 2022. arXiv: 2109.11978
+       [cs.RO].
+[56]   L. Campanaro, S. Gangapurwala, W. Merkt, and I.
+       Havoutis, Learning and deploying robust locomotion
+       policies with minimal dynamics randomization, 2023.
+       arXiv: 2209.12878 [cs.RO].
+[57]   T. He, C. Zhang, W. Xiao, G. He, C. Liu, and
+       G. Shi, Agile but safe: Learning collision-free high-
+       speed legged locomotion, 2024. arXiv: 2401.17583
+       [cs.RO].
+[58]   X. B. Peng, M. Andrychowicz, W. Zaremba, and P.
+       Abbeel, “Sim-to-real transfer of robotic control with
+       dynamics randomization,” in 2018 IEEE international
+       conference on robotics and automation (ICRA), IEEE,
+       2018, pp. 3803–3810.
+[59]   F. Yang, C. Ma, J. Zhang, J. Zhu, W. Yuan,
+       and A. Owens, “Touch and go: Learning from
+       human-collected vision and touch,” arXiv preprint
+       arXiv:2211.12498, 2022.
+[60]   J. Y. Chai, Q. Gao, L. She, S. Yang, S. Saba-Sadiya,
+       and G. Xu, “Language to action: Towards interactive
+       task learning with physical agents.,” in IJCAI, 2018,
+       pp. 2–9.
+

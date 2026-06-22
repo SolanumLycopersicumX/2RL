@@ -1,0 +1,511 @@
+                                        CMoE: Contrastive Mixture of Experts for Motion Control and Terrain
+                                                         Adaptation of Humanoid Robots
+                                                           Shihao Ma1,∗ , Hongjin Chen1,∗ , Zijun Xu1,∗ , Yi Zhao1 , Ke Wu1 , Ruichen Yang1 ,
+                                                                       Leyao Zou1 , Zhongxue Gan1,† , and Wenchao Ding1,†
+
+
+
+
+arXiv:2603.03067v1 [cs.RO] 3 Mar 2026   Fig. 1: We propose a mixture-of-experts model-based architecture that enables humanoid robots to simultaneously navigate a variety of
+                                        challenging terrains. We validate our strategy on complex mixed terrains and non-training environments.
+
+                                           Abstract— For effective deployment in real-world environ-            different terrains, thereby encouraging experts to specialize in
+                                        ments, humanoid robots must autonomously navigate a diverse             distinct terrain types. We validated our approach on the Unitree
+                                        range of complex terrains with abrupt transitions. While the            G1 humanoid robot through a series of challenging experiments.
+                                        Vanilla mixture of experts (MoE) framework is theoretically ca-         Results demonstrate that CMoE enables the robot to traverse
+                                        pable of modeling diverse terrain features, in practice, the gat-       continuous steps up to 20 cm high and gaps up to 80 cm wide,
+                                        ing network exhibits nearly uniform expert activations across           while achieving robust and natural gait across diverse mixed
+                                        different terrains, weakening the expert specialization and             terrains, surpassing the limits of existing methods. To support
+                                        limiting the model’s expressive power. To address this limitation,      further research and foster community development, we release
+                                        we introduce CMoE, a novel single-stage reinforcement learning          our code publicly.
+                                        framework that integrates contrastive learning to refine expert
+                                        activation distributions. By imposing contrastive constraints,                               I. I NTRODUCTION
+                                        CMoE maximizes the consistency of expert activations within
+                                        the same terrain while minimizing their similarity across                  Humanoid robots are expected to operate in abrupt tran-
+                                                                                                                sition real-world environments, where they frequently en-
+                                          1 College of Intelligent Robotics and Advanced Manufacturing, Fudan
+                                                                                                                counter dynamically changing terrains, such as gravel paths
+                                        University, Shanghai, China, 200433                                     that transition into slopes or stepping stones interspersed with
+                                          This work was supported in part by the National Natural Science
+                                        Foundation of China (NSFC) under Grant 62403142, in part by the         deformable surfaces[1][2]. Walking in such environments
+                                        Science and Technology Commission of Shanghai Municipality under        requires not only the ability to maintain stability on a
+                                        Grant 24511103100, and in part by the Shanghai Municipal Science and    single type of terrain but also the agility to rapidly adapt to
+                                        Technology Major Project (No. 2021SHZDZX0103).
+                                          ∗ Equal contribution. † Corresponding authors.                        heterogeneous terrains while preserving continuous motion.
+                                          Project Page: https://hoshi-no-ai.github.io/CMoE                         To enable robots to adapt to various terrains, previous
+                                                                       network is guided to output activations that reflect more
+                                                                       terrain-specific differences, thereby encouraging the expert
+                                                                       networks to specialize in certain types of terrain. Finally, a
+                                                                       perceptual gating network dynamically adjusts the activation
+                                                                       of experts based on environmental perception. The outputs
+                                                                       of each expert are fused according to their activation levels,
+                                                                       resulting in an action distribution.
+                                                                          To validate the effectiveness of CMoE, we conducted
+                                                                       simulation and field experiments on a Unitree robot. Results
+                                                                       show that even when trained simultaneously on eight differ-
+                                                                       ent environments, CMoE achieves a higher learning ceiling
+                                                                       on each terrain. Our robot can use a single policy to traverse
+Fig. 2: t-SNE visualization of the experts activation of Vanilla MoE
+and our method across different terrains. ("*" indicates a simple      obstacles up to 30 cm high, continuous steps up to 20 cm
+version of this terrain)                                               high, and gaps up to 80 cm wide, as shown in the Fig. 1.
+                                                                       Surpassing the most challenging terrains studied in existing
+                                                                       research. Furthermore, CMoE effectively activates specific
+works[3][4] have proposed a two-phase training approach,               skills based on environmental characteristics, more efficiently
+where the model is first trained on a single terrain and               allocating expert activations during terrain transitions. This
+then distilled in a second phase. This method allows the               enables CMoE to excel on mixed terrains.
+model to focus on the details of each terrain while avoid-                Summary of our contributions:
+ing catastrophic forgetting that may occur when training
+                                                                          • We propose a single-stage, end-to-end framework that
+on multiple terrains simultaneously. However, although this
+two-phase training approach enhances multi-terrain learning,                 directly maps multimodal sensory inputs to robot ac-
+it increases the training time and introduces the risk of                    tions, integrating estimators to process both historical
+overfitting.                                                                 information and terrain-specific data.
+                                                                          • We introduce a novel MoE actor-critic model, aug-
+   To address these issues, some studies[5][6] have em-
+                                                                             mented with a contrastive learning objective to enhance
+ployed the MoE (Mixture of Experts) method, which can
+                                                                             the robot’s ability to adapt its terrain response strategy
+simultaneously consider features from multiple terrains. By
+                                                                             across complex, heterogeneous surfaces.
+dynamically activating experts, the MoE network adapts
+                                                                          • Extensive experiments conducted on the Unitree-G1
+to various terrains and demonstrates good generalization
+                                                                             robot demonstrate our approach’s state-of-the-art per-
+capability. However, we found that it is not effective at
+                                                                             formance, and we release our code to further contribute
+activating skills based on environmental features. As shown
+                                                                             to the research community.
+in Fig. 2, the network using the Vanilla MoE strategy exhibits
+dispersed expert activation across both similar and different
+                                                                                           II. R ELATED W ORK
+terrains, without forming any distinct clusters. This lack
+of clear clustering prevents the network from effectively              A. Learning-based Humanoid Locomotion
+adapting to specific terrain features, leading to less efficient          With the development of legged robots, especially
+skill activation and terrain handling.                                 quadruped robots, motion control methods have
+   To provide terrain adaptability for the robot, enabling it          matured[7][8][9]. Humanoid robots, in particular, have
+to effectively activate skills based on environmental fea-             attracted considerable attention due to their ability to better
+tures, we propose CMoE, a novel single-stage reinforcement             adapt to human-designed environments[10][11]. However,
+learning framework that integrates the Mixture of Experts              walking on two legs requires precise center of gravity
+(MoE) architecture with contrastive learning. Unlike Vanilla           control and coordination, especially on complex terrain. To
+MoE, CMoE maximizes the diversity of expert activation                 better enable robots to perceive their environment and their
+distributions within different terrains. Our method effectively        own state, some work[12] uses AE or VAE estimators to
+activates skills based on environmental features and allocates         encode historical proprioceptive information and employs
+experts with terrain-specific expertise when transitioning             contrastive loss for state prediction, providing more
+between terrains.                                                      information. However, due to the lack of environmental
+   To achieve this, our framework first encodes the perceptual         sensors, these methods have yet to fully realize the potential
+data using an autoencoder (AE), capturing the latent repre-            of robots.
+sentation of the state of the environment. Next, contrastive              In response to these limitations, models incorporating
+learning is applied to improve the terrain perception gating           external perception have shown promise in enhancing mo-
+network. This method maximizes the consistency of expert               bility performance. Research has begun using depth cameras
+activation distributions within the same terrain while mini-           or lidar to provide terrain perception information for rein-
+mizing the similarity of expert activation distributions across        forcement learning models. However, depth camera-based
+different terrains. By minimizing the contrastive loss between         perception strategies are limited by the camera’s narrow
+expert activation levels and terrain information, the gating           field of view, resulting in robots being limited to forward
+Fig. 3: Overview of our framework. We encode historical information and the elevation map into explicit and implicit representations,
+which are fused with the current observation to form the system observation. These are then fed into the MoE structure, consisting of
+multiple experts and a gating network, which outputs expert activations and performs contrastive learning with the encoded environmental
+data.
+
+movement[13][14][15][16]. LiDAR is widely used due to its            CMoE framework, which synergistically integrates three key
+wide field of view and higher accuracy. Compared to blind            components: a VAE to infer the robot’s true state from in-
+strategies, robots using elevation maps as external perception       complete sensory data, an unsupervised contrastive learning
+can better acquire environmental information and make more           mechanism that learns a latent representation to effectively
+adaptive actions[17][18].                                            distinguish between terrains, and a MoE architecture that
+                                                                     decomposes the complex control task for specialized action
+B. Mixture of Experts in Locomotion                                  generation. By unifying state estimation, terrain perception,
+   Since the introduction of MoE[19][20], it has been                and action selection, our framework enables the development
+regarded as an effective mechanism for addressing gra-               of a highly generalized policy, thereby markedly improving
+dient conflicts and task interference in multi-task re-              the robot’s capabilities in multi-terrain locomotion.
+inforcement learning[21] due to its modularity and
+                                                                     B. Problem Description
+interpretability[22][23]. It has been widely applied in
+the fields of autonomous driving[24], natural language                  We define multi-terrain locomotion as a Markov Decision
+processing[25], and computer vision[26].                             Process (MDP) with a tuple ⟨S, A, T, R, γ⟩, where S is the
+   In recent years, MoE strategies have also been applied in         state space, A is the action space, and st ⊆ S represents
+the robotics field, with the introduction of a mixed expert          the robot’s state. The system’s dynamics are governed by the
+model for quadruped reinforcement learning[27]. The MoE-             transition probability T , and the agent receives a reward from
+Loco method[5] uses MoE to alleviate gradient conflicts              R(s, a). The discount factor γ ∈ [0, 1] balances immediate
+in quadruped and bipedal locomotion tasks, but it lacks              and future rewards. We use Proximal Policy Optimization
+an environmental perception system to regulate the MoE.              (PPO) to learn the optimal policy π ∗ that maximizes the
+MoRE[6] focuses on training a variety of humanoid gaits              expected discounted return:
+through MoE, improving the gait learning ability. However,
+                                                                                                     "∞                #
+                                                                                                      X
+                                                                                    ∗                      t
+the gait selection is essentially a behavior under human                          π = arg max E           γ R(st , at ) .         (1)
+intervention, which does not reflect the robot’s autonomy.                                                 t=0
+Moreover, since the expert activation is almost unrelated to         C. Information Encoding
+the terrain, this does not enhance the robot’s terrain traversal        The proprioception observation ot from sensors is:
+capability. In addition, the current MoE still suffers from the
+lazy gating problem[28][29][30].                                                       ot = [ωt , gt , ctv , θt , θ̇t , at−1 ],     (2)
+
+                         III. M ETHOD                                including robot angular velocity ωt , gravity direction gt ,
+                                                                     velocity command ctv , joint angle θt , velocity θ̇t , and the
+A. System Overview                                                   last action at−1 .
+   As shown in Fig. 3, CMoE aims to improve the multi-                  We propose a context-state distillation model to capture
+terrain adaptability of humanoid robots by combining con-            the robot’s proprioception. The model contains two separate
+trastive learning and MoE. Specifically, we introduce the            estimators: the first is a VAE-based estimator that predicts
+                                                                                           TABLE I: Terrain description
+the robot’s body state, and the second is used for extracting
+features from the elevation map.                                     Terrain     Description                                                Range
+   The encoder maps the input observation ot H to robot              Slope       Slope angle                                                0-20◦
+body velocity vt and latent representation ztH , which is then       Stairs      Step height                                                0.05-0.23m
+decoded to õt + 1. Specifically, we employ a β-variational          Gap         Ditch width                                                0.1-0.8m
+                                                                                 Hurdle height                                              0.2-0.4m
+autoencoder (β-VAE) for the autoencoder setup. According             Hurdle
+                                                                                 Hurdle width                                               0.1-0.3m
+to [31], estimating body velocity is crucial for terrain traver-
+                                                                     Discrete    Irregular protrusion height                                0.1-0.2m
+sal. The context-state distillation model involves a hybrid                      Mixed terrain of gaps and steps,gaps width                 0.1-0.8m
+loss function:                                                       Mix1
+                                                                                 Mixed terrain of gaps and steps,steps height               0.1-0.15m
+                 LCS = MSE(ṽt , vt ) + LVAE ,               (3)                 Mixed terrain of single-log bridge and steps,
+                                                                                                                                            0.5-1.0m
+                                                                                 bridge width
+                                                                     Mix2
+where MSE(ṽt , vt ) and LVAE represent body velocity loss                       Mixed terrain of single-log bridge and steps,
+                                                                                                                                            0.1-0.25m
+and VAE reconstruction loss, respectively. vt is the ground                      step height on the bridge
+truth given by simulator. The VAE reconstruction loss, LVAE
+is formulated as:                                                   transform the gate output and elevation map into the same
+ LVAE = MSE(õt+1 , ot+1 ) + βDKL (q(zH    H        H               dimension gtz and ezt , respectively. Then, in the contrastive
+                                      t | ot ) ∥ p(zt )),
+                                                              (4)   learning process, if a pair of ⟨g z , ez ⟩ belong to the same tra-
+here, õt+1 is the reconstructed observation at the next time       jectory, they are considered the positive samples. Otherwise,
+step, q(zH     H                                     H        H     they are negative. The optimization is inspired by SwAV[35].
+          t | ot ) is the posterior distribution of zt given ot ,
+         H
+and p(zt ) is the prior, assumed to be a standard Gaussian          To predict the cluster assignment probability pgt and pet from
+distribution.                                                       gtz and ezt . we apply a L2 -normalization on the prototype to
+   The other estimator uses an autoencoder to extract features      obtain normalized matrix E = {ē1 , ..., ēK }, and then take
+from the elevation map [32] [33] for self-prediction, with the      a softmax over the dot products of source vectors or target
+loss function given by:                                             vectors with all the prototypes:
+
+                     LAE = MSE(ẽt , et ),                   (5)                exp( τ1 gtz ⊤ ek )                         exp( τ1 ezt ⊤ ek )
+                                                                     pgt = P            1 z⊤ ′
+                                                                                                        ,    pet = P               1 z⊤ ′
+                                                                                                                                                    , (7)
+where et is the ground truth elevation map from the simula-                     k′ exp( τ gt ek )                          k′ exp( τ et ek )
+
+tor.                                                                where pgt and pet are the predicted probability that terrain
+                                                                    map to individual cluster with index k, while τ is a temper-
+D. Mixture of Experts Policy
+                                                                    ature parameter.
+    Gradient conflicts typically arise in multitask reinforce-         To obtain (qg1 , ..., qgK ) and (qe1 , ..., qeK ) for the aforemen-
+ment learning [34]. To tackle these challenges, we incor-           tioned predicted probabilities, while avoiding trivial solu-
+porate a MoE architecture into both the actor and critic            tions, the Sinkhorn-Knopp algorithm[36] is applied to both
+networks within the PPO framework.
+    Specifically, each expert module comprises a dedicated                                 TABLE II: Reward Functions
+actor-critic pair, where each critic evaluates only its corre-
+                                                                     Term                     Equation                                      Weight
+sponding actor using privileged observation. Every expert
+                                                                                                                        c ∥2 /σ
+                                                                                                   
+receives the estimated body velocity vpt , along with implicit       velocity tracking        exp −∥vxy − vxy                2              2.0
+                                                                     yaw tracking             Ryaw = exp (− |ψcmd − ψ|)                     2.0
+contextual state variables zE          H
+                              t and zt , current observation         z velocity                2
+                                                                                              vz                                            −1.0
+  c
+ot and the elevation map et , and produces either an action          roll-pitch velocity      ∥ωxy ∥22                                      −0.05
+or a value estimate. To ensure consistency between policy            orientation              ∥gx ∥22 + ∥gy ∥22                             −2.0
+evaluation and action generation, the same gating network            base height              (h − htarget )2
+                                                                                              W                                             −15.0
+is shared across both the actor and critic MoE components.           feet stumble             Pi∈feet {∥Fi,xy ∥2 > 3 · |Fi,z |}             −1.0
+                                                                     collision                   i∈Ipenalty I(∥Fi ∥2 > 0.1)                 −15.0
+The final output is obtained as a weighted sum of the expert
+                                                                                              min(|py,0 − py,1 | − dmin ,
+responses after softmax normalization:                               feet distance                                                          0.8
+                                                                                                    dmax − dmin ) 
+                                                                                              P2                     target
+                             N                                       feet air time               i=1 tair,i − tair             · Fi         1.0
+                             X                                                                P2
+               µweighted =         softmax(gi ) · µi ,       (6)     feet ground parallel        i=1 Var(pz,i )                             −0.02
+                                                                                                                                    2
+                                                                                                                 θi − θidefault
+                                                                                              P
+                             i=1                                     hip dof error                                                          −0.5
+                                                                                              Pi∈hip joints 2
+                                                                     dof acc                                  θ̈                            −2.5e − 7
+where µi means the i-th expert outputs and gi is the expert                                   Pi∈all joints i2
+                                                                     dof vel                                  θ̇                            −5.0e − 4
+activation.                                                                                   Pi∈all joints i2
+                                                                     torques                     i∈all joints τi                            −1.0e − 5
+                                                                     action rate              ∥at − at−1 ∥22                                −0.3
+E. Terrains Contrastive Learning
+                                                                                              ReLU(θ − θmax )+
+                                                                     dof pos limits                                                         −2.0
+   We introduce a novel method, terrains contrastive learning,                                          ReLU(θmin − θ)
+in humanoid locomotion. Through this approach, terrains are          dof vel limits           ReLU(|θ̇| − |θ̇max |)                         −1.0
+                                                                                                                                    max
+                                                                                              P                                         
+encoded into latent features and enhance the relation with           torque limits               i∈all joints RELU τ̂i − τ̂i                −1.0
+                                                                     feet edge                1foot at edge of the terrain                  −1.0
+MoE gate network. Specially, we first adopt two MLP to
+            TABLE III: Quantitative Comparison in Simulation. Metrics Include Success Rate and Average Travel Distance.
+                                                                     Success Rate
+                     Method
+                                  slope    stair up   stair down     discrete     gap       hurdle   mix1     mix2
+                     CMoE         0.991     0.886         0.905        0.991      0.974     0.987    0.767    0.747
+                   Vanilla MoE    0.957     0.798         0.908        0.987      0.818     0.970    0.605    0.662
+                      Base        0.966     0.481         0.483        1.000      0.221     0.779    0.276    0.388
+                                                              Average Travel Distance (m)
+                     CMoE         14.870   10.802         10.824      13.440     14.876     13.470   12.055   9.750
+                   Vanilla MoE    11.675    8.898          9.250      14.870     11.980     14.780    9.960   8.703
+                      Base        12.917    8.210          8.726      15.280      7.385     10.124    8.209   8.848
+
+
+
+encoders. Now that we have the cluster assignment gate               from a uniform distribution with the range from a to b. In
+outputs and elevations, the contrastive learning objective is        more complex terrain, the salt-and-pepper noise intensity
+simply to maximize the match accuracy:                               is higher. Furthermore, real-world elevation data is often
+                                                                     limited by sensor resolution, exhibiting smooth curved edges
+                              H
+                       1 X g                                         rather than sharp corner transitions. To address this issue, we
+        J   SwAV
+                   =−       (q log pet + qet log pgt ).        (8)
+                      2H t=1 t                                       used another domain randomization technique to chamfer the
+                                                                     right-angled edges in the elevation map used in the simulator,
+              IV. I MPLEMENTATION D ETAILS                           thereby more realistically simulating the real world. Real
+A. Training Parameters                                               world experiments have verified that this method is effective
+   We trained 4096 environments in parallel on IsaacGym              in addressing noise issues in elevation maps.
+using an NVIDIA RTX 4090 computer for 20,000 epochs.                 C. Reward Function
+We selected 5 experts and used an elevation map covering                In addition to referencing existing work and making some
+a 0.7m x 1.1m rectangle around the robot. The parameters             minor adjustments, we redefined the foot distance function
+used for contrastive learning were as follows: num prototype         and implemented penalties for distances that were either
+= 32 and temperature = 0.2, which were chosen to optimize            too small. We also designed a discontinuous reward that is
+model performance. The terrains used for training in the             enabled only under specific terrain conditions. For example,
+simulation included eight types of terrain: stairs, gaps, and        the foot edge reward is activated only when the robot is
+flat ground, as shown in the table. To reduce the learning           trained in a hurdle or gap environment. This is because
+difficulty, we employed a curriculum learning mechanism              touching the edge of a step or irregular terrain should not be
+[37]. Furthermore, since all terrains were trained in the same       penalized. For a detailed description of the reward function,
+phase, to balance the difficulty of each terrain, we divided         see TABLE II.
+them into simple and complex categories. We then performed
+velocity command curriculum learning on complex terrains,                                   V. E XPERIMENTS
+gradually increasing the magnitude and direction of the              A. Motion Control Performance
+velocity commands.                                                      We compare the proposed framework CMoE with the fol-
+B. Domain Randomization                                              lowing baselines: (1) Base strategy: The actor-critic network
+                                                                     without the MoE structure, but with the same number of
+   To enhance the robot’s real-world motion capabilities, we         parameters as our strategy. (2) Vanilla MoE strategy: Uses
+pre-randomized the following parameters during simulation:           the most basic Vanilla MoE structure, but do not include the
+joint mass and moment of inertia, friction, restitution, motor       terrain encoder and contrastive learning.
+strength, and motor kp and kd . We also applied a perturbation          We established a benchmark for the robot’s motion perfor-
+of up to 30 N to the robot every 16 seconds. For the elevation       mance across different tasks. Our benchmark consists of a 3
+map, we introduced both delay noise and Gaussian noise, and          m × 18 m runway with different terrains. The terrain details
+pre-randomized the offset and rotation of the elevation map.         are shown in Table I. Experimental environment: Each robot
+Specifically, we designed nonlinear salt-and-pepper noise to         was instructed to walk at a speed of 0.8 m/s on a continuous
+address the unstable extremes that may occur in the elevation        terrain with obstacles for 20 seconds. If the termination
+map. The update formula for the height points h(i) is as             conditions are met, the trial is recorded as a failure, and
+follows.                                                             the environment is reset. Termination conditions include:
+           
+           U(M, 2M − m) with probability p,
+                                                                    (1) collision with parts other than the feet, and (2) torso
+   h(i) = U(2m − M, m) with probability p,                 (9)       roll or pitch deviation exceeds 1 degree. If the termination
+                                                                    conditions are not met and the maximum running time is
+             h(i)               with probability 1 − 2p,
+           
+                                                                     reached, the trial is recorded as a success.
+where M and m are the maximum and minimum values at                     Record the following indicators: (1) Success Rate: the
+the corresponding height points, U (a, b) represents drawing         proportion of robots that complete the entire journey to
+the total number of robots in the experiment. (2) Average
+Travel Distance: the movement distance in the direction of
+movement under the travel time limit.
+   The experimental results shown in Table III indicate
+                                                                           Vanilla MoE
+that CMoE outperforms other methods in both success rate
+and average travel distance, demonstrating strong terrain
+adaptability. It excels in complex terrains, such as stairs
+and gaps, achieving higher success rates and longer travel
+distances. This highlights CMoE’s advantage in overcoming
+gradient conflicts and optimizing motion control. By inte-
+grating MoE and contrastive learning, CMoE dynamically
+adjusts its expert network, enhancing performance in diverse               CMoE(Ours)
+environments, particularly in mixed terrains like mix1 and
+mix2.
+   In contrast, Vanilla MoE performs well in some terrains
+but underperforms in complex ones like gap and mix2, due
+to the lack of contrastive learning, limiting its adaptability
+and performance in challenging environments.
+                                                                      Fig. 5: The robot passes through four types of terrain: hurdles,
+                                                                      uphill, downstairs, and gaps. The Vanilla MoE method and our
+B. Effect of Contrastive Learning                                     method show the changes in the expert activation level over time.
+
+   To explore how MoE allocates experts according to terrain          C. Expert Behavior Analysis
+and to control for variables, we compared our method
+(CMoE) with the Vanilla MoE model that does not use                      To visually demonstrate the contribution of MoE to the
+contrastive learning, as shown in the t-SNE plot in Fig. 2.           expert activation levels across different terrains, as shown in
+   The t-SNE plot of our method shows that similar terrains           Fig. 5, we designed four different terrains, including three
+are clearly clustered based on their degree of similarity,            consecutive 30cm hurdles, a 15-degree uphill slope, 10 steps
+while dissimilar terrains exhibit distinct boundaries. Similar        downhill, and three 60cm gaps. We then had robots using
+terrains can be grouped and stratified according to their             the Vanilla MoE and CMoE methods walk across this mixed
+similarity. For example, ascending steps, simple steps, and           terrain, recording the changes in expert activation levels as
+uphill terrain are clustered together, but also stratified based      the terrain varied.
+on terrain difficulty. Furthermore, we observe that in the t-            It can be observed that in Vanilla MoE, the activation
+SNE plot of our method, ascending steps are significantly             level of each expert remains within a small fixed range with
+farther away from descending steps. This suggests that the            minimal fluctuations, and there is no noticeable change as
+model does not simply categorize “steps” as one terrain               the terrain changes. In contrast, in CMoE, each expert’s ac-
+type, but instead differentiates between “ascending steps”            tivation level exhibits jumps and a wider range of variations,
+and “descending steps,” which aligns with human cognition             with clear changes occurring as the terrain switches.
+of walking.                                                              Additionally, in the CMoE plot, we can see that Expert
+   In contrast, the expert weights in the Vanilla MoE model           1 only appears in locations where the terrain ascends, such
+do not show significant changes with different terrains. This         as uphill slopes and hurdles, which require foot lifting. On
+indicates that the Vanilla MoE is unable to understand                the other hand, Expert 2 performs oppositely, with a higher
+the specialization differences between terrains, limiting the         weight in areas where the terrain descends.
+experts’ ability to specialize in different environments. In             We hypothesize that Expert 1 specializes in terrains such
+contrast, CMoE effectively allocates experts according to             as ascending steps. To verify this hypothesis, we removed
+terrain, as demonstrated by the distinct clustering of expert         Expert 1’s output from the evaluation environment, while
+weights in the t-SNE plot.                                            keeping the outputs of other experts unchanged. The exper-
+                                                                      imental results showed that the robot attempted to lift its
+                                                                      leg before stepping up the stairs but failed, causing it to
+                                                                      stumble and fall. However, in the downhill scenario, the robot
+                                                                      successfully navigated the stairs. This indicates that while
+                                                                      the robot failed to lift its legs properly, its other movements
+                                                                      were unaffected, allowing it to navigate terrains that do not
+                                                                      require leg lifting, such as downhill slopes and descending
+Fig. 4: The training curve during the multi-terrain training phase,   stairs. This indicates that Expert 1’s specialization is indeed
+depicting the reward curve and terrain level change with training     in ascending step terrains, making it the expert for handling
+iterations.                                                           such terrains.
+D. Training Performance
+   To test our method’s improvements in training speed and
+efficiency, we trained using both the Base method and our
+own method with curriculum learning, recording changes in
+terrain level and reward. As shown in Fig. 4, the CMoE
+method’s terrain level increased first and reached its maxi-
+mum value, indicating that it learned to navigate the most
+difficult terrain first. The CMoE method outperformed the
+Base method in both reward growth rate and maximum value,
+suggesting that the gating network’s terrain classification
+reduces learning difficulty and improves efficiency.
+
+E. Real-world Experiment
+   To validate the effectiveness of our approach, we de-
+ployed the trained CMoE policy on a Unitree G1 humanoid            Fig. 6: In mixed terrain, the robot climbed 15 cm steps, a 60 cm
+robot. We used radar to collect point cloud information and        gap, a 30 cm hurdle, and an uphill slope. In single terrain testing,
+combined it with the robot’s positioning system to obtain          the robot was able to ascend three steps of 20 cm in height with a
+elevation map observations. This data was then packaged            steady pace, as well as descend stairs.
+and sent to our network, allowing the policy to be directly
+transferred from the simulated environment to the robot.            a
+
+   We then conducted experiments on various terrains to
+test the robot’s real-world performance. For gap terrain,
+we tested the robot’s maximum traversable width of 80
+cm, which, to our knowledge, is the largest among existing
+methods. For step terrain, we prepared three different step
+heights: 12, 15, and 20 cm. Our strategy enabled the robot to
+                                                                    b
+successfully traverse the most challenging steps, surpassing
+existing methods in the literature [38] (which only support
+a maximum height of 15 cm). For hurdle terrain, the robot
+was able to cross thresholds of 30 cm in height. Finally, the
+robot can easily go up and down a 17-degree slope.
+   In addition to these basic terrains, we also tested the
+robot’s performance on a mixed terrain, which consisted of         Fig. 7: (a) In an outdoor environment, the robot can navigate
+steps, gaps, slopes, and hurdles. This more complex terrain        four continuous sections of untrained terrain with step edges while
+significantly challenged the robot’s ability to adapt to rapidly   maintaining continuous movement. (b) Even when encountering
+changing environments. As shown in Fig. 6 and Fig. 1, the          human intervention while crossing a 30 cm high obstacle, it can
+Unitree G1 robot successfully completed a series of terrain        maintain a stable posture and successfully pass the obstacle.
+crossings, including combinations of the aforementioned
+                                                                                         VI. C ONCLUSIONS
+single terrains, demonstrating the effectiveness of our method
+in perceiving various terrains and executing extreme parkour
+maneuvers.                                                            We propose the CMoE, which integrates MoE and con-
+   Finally, we conducted robustness experiments to further         trastive learning to enhance the robot’s adaptability across
+evaluate the robot’s performance, as shown in Fig. 7(a).           diverse terrains. Through a series of experiments, we have
+The step structure in this environment differs in width and        demonstrated the superior performance of CMoE in various
+height from the stairs in the training environment. Some steps     terrains, including improvements in success rate, travel dis-
+even have protruding edges, which impose higher demands            tance, and robustness in complex environments. Compared to
+on the robot’s stair-climbing gait. Despite these challenges,      the traditional Vanilla MoE method, CMoE more effectively
+the robot still demonstrated excellent stability during long-      allocates the expert network, particularly in handling com-
+distance walking and stair navigation. Additionally, we tested     plex terrains, and shows greater stability and generalization
+the robustness of our method against disturbances, such as         ability. The experimental results highlight CMoE’s signifi-
+rope dragging and object collisions. As shown in Fig. 7(b),        cant advantages in enhancing the robot’s control and adapt-
+when the robot was crossing a 30 cm obstacle and was               ability, enabling it to handle rapidly changing environments
+struck by an object during interference, it remained stable        and perform challenging tasks. Future work will extend this
+and successfully passed through. These results showcase the        approach to whole body control, enabling coordinated full-
+strong robustness of our method.                                   body parkour.
+                             R EFERENCES                                       [21] Qing Wang, Xue Han, Jiahui Wang, Lehao Xing, Qian Hu, Lian-
+                                                                                    lian Zhang, Chao Deng, and Junlan Feng. Multipl-moe: Multi-
+ [1] Hang Lai, Jiahang Cao, Jiafeng Xu, Hongtao Wu, Yunfeng Lin, Tao                programming-lingual extension of large language models through
+     Kong, Yong Yu, and Weinan Zhang. World model-based perception                  hybrid mixture-of-experts. 2025.
+     for visual legged locomotion. 2025 IEEE International Conference on       [22] Noam Shazeer, Azalia Mirhoseini, Krzysztof Maziarz, Andy Davis,
+     Robotics and Automation (ICRA), pages 11531–11537, 2024.                       QuocV. Le, GeoffreyE. Hinton, and Jeff Dean. Outrageously large
+ [2] Alberto Romay, Stefan Kohlbrecher, David C Conner, Alexander                   neural networks: The sparsely-gated mixture-of-experts layer. arXiv:
+     Stumpf, and Oskar von Stryk. Template-based manipulation in                    Learning, Jan 2017.
+     unstructured environments for supervised semi-autonomous humanoid         [23] Dmitry Lepikhin, HyoukJoong Lee, Yuanzhong Xu, Dehao Chen,
+     robots. In 2014 IEEE-RAS International Conference on Humanoid                  Orhan Firat, Yanping Huang, Maxim Krikun, Noam Shazeer, and
+     Robots, pages 979–986. IEEE, 2014.                                             Zhifeng Chen. Gshard: Scaling giant models with conditional compu-
+ [3] Ziwen Zhuang, Zipeng Fu, Jianren Wang, Christopher G Atkeson,                  tation and automatic sharding. Cornell University - arXiv, Jun 2020.
+     Soeren Schwertfeger, Chelsea Finn, and Hang Zhao. Robot parkour           [24] Lu Xu, Jiaqian Yu, Xiongfeng Peng, Yiwei Chen, Weiming Li,
+     learning. In Conference on Robot Learning, 2023.                               Jaewook Yoo, Sunghyun Chunag, Dongwook Lee, Daehyun Ji, and
+ [4] Ziwen Zhuang, Shenzhe Yao, and Hang Zhao. Humanoid parkour                     Chao Zhang. Mose: Skill-by-skill mixture-of-experts learning for
+     learning. ArXiv, abs/2406.10759, 2024.                                         embodied autonomous machines. 2025.
+ [5] Runhan Huang, Shaoting Zhu, Yilun Du, and Hang Zhao. Moe-loco:            [25] Nan Du, Yanping Huang, Andrew M. Dai, Simon Tong, Dmitry
+     Mixture of experts for multitask locomotion. ArXiv, abs/2503.08564,            Lepikhin, Yuanzhong Xu, Maxim Krikun, Yanqi Zhou, Adams Wei
+     2025.                                                                          Yu, Orhan Firat, Barret Zoph, Liam Fedus, Maarten Bosma, Zongwei
+ [6] Dewei Wang, Xinmiao Wang, Xinzhe Liu, Jiyuan Shi, Yingnan Zhao,                Zhou, Tao Wang, Yu Emma Wang, Kellie Webster, Marie Pellat, Kevin
+     Chenjia Bai, and Xuelong Li. More: Mixture of residual experts                 Robinson, Kathleen S. Meier-Hellstern, Toju Duke, Lucas Dixon, Kun
+     for humanoid lifelike gaits learning on complex terrains. ArXiv,               Zhang, Quoc V. Le, Yonghui Wu, Z. Chen, and Claire Cui. Glam:
+     abs/2506.08840, 2025.                                                          Efficient scaling of language models with mixture-of-experts. In
+ [7] Jinhan Li, Yifeng Zhu, Yuqi Xie, Zhenyu Jiang, Mingyo Seo, Georgios            International Conference on Machine Learning, 2021.
+     Pavlakos, and Yuke Zhu. Okami: Teaching humanoid robots manip-            [26] Suning Huang, Zheyu Zhang, Tianhai Liang, Yihan Xu, Zhehao Kou,
+     ulation skills through single video imitation. ArXiv, abs/2410.11792,          Chenhao Lu, Guowei Xu, Zhengrong Xue, and Huazhe Xu. Mentor:
+     2024.                                                                          Mixture-of-experts network with task-oriented perturbation for visual
+ [8] Bart Jaap van Marum, Aayam Shrestha, Helei Duan, Pranay Dugar,                 reinforcement learning. ArXiv, abs/2410.14972, 2024.
+     Jeremy Dao, and Alan Fern. Revisiting reward design and evaluation        [27] Wenxuan Song, Han Zhao, Pengxiang Ding, Can Cui, Shangke Lyu,
+     for robust humanoid standing and walking. 2024 IEEE/RSJ Interna-               Yaning Fan, and Donglin Wang. Germ: A generalist robotic model
+     tional Conference on Intelligent Robots and Systems (IROS), pages              with mixture-of-experts for quadruped robot. 2024 IEEE/RSJ Inter-
+     11256–11263, 2024.                                                             national Conference on Intelligent Robots and Systems (IROS), pages
+ [9] Yueqi Zhang, Quancheng Qian, Tai-Wei Hou, Peng Zhai, Xiaoyi Wei,               11879–11886, 2024.
+     Kangmai Hu, Jiafu Yi, and Lihua Zhang. Renet: Fault-tolerant motion       [28] Liangwei Nathan Zheng, Wei Emma Zhang, Mingyu Guo, Miao Xu,
+     control for quadruped robots via redundant estimator networks under            Olaf Maennel, and Weitong Chen. Rethinking gating mechanism
+     visual collapse. IEEE Robotics and Automation Letters, 2025.                   in sparse moe: Handling arbitrary modality inputs with confidence-
+[10] Zhaoyuan Gu, Junheng Li, Wenlan Shen, Wenhao Yu, Zhaoming Xie,                 guided gate. ArXiv, abs/2505.19525, 2025.
+     Stephen McCrory, Xianyi Cheng, Abdulaziz Shamsah, Robert J. Grif-         [29] Jiamin Li, Qiang Su, Yitao Yang, Yimin Jiang, Cong Wang, and Hong-
+     fin, C. Karen Liu, Abderrahmane Kheddar, Xue Bin Peng, Yuke Zhu,               Yu Xu. Adaptive gating in mixture-of-experts based language models.
+     Guanya Shi, Quan Nguyen, Gordon Cheng, Huijun Gao, and Ye Zhao.                In Conference on Empirical Methods in Natural Language Processing,
+     Humanoid locomotion and manipulation: Current progress and chal-               2023.
+     lenges in control, planning, and learning. ArXiv, abs/2501.02116,         [30] R. Liu, Young Jin Kim, Alexandre Muzio, Barzan Mozafari, and
+     2025.                                                                          Hany Hassan Awadalla. Gating dropout: Communication-efficient
+[11] Xinyang Gu, Yen-Jen Wang, and Jianyu Chen. Humanoid-gym:                       regularization for sparsely activated transformers. In International
+     Reinforcement learning for humanoid robot with zero-shot sim2real              Conference on Machine Learning, 2022.
+     transfer. ArXiv, abs/2404.05695, 2024.                                    [31] Gwanghyeon Ji, Juhyeok Mun, Hyeongjun Kim, and Jemin Hwangbo.
+[12] Miguel ’Angel de Miguel, Jorge Beltr’an, Juan S. Cely, Francisco               Concurrent training of a control policy and a state estimator for dy-
+     Mart’in, Juan Carlos Manzanares, and Alberto Garc’ia. I move                   namic and robust legged locomotion. IEEE Robotics and Automation
+     therefore i learn: Experience-based traversability in outdoor robotics.        Letters, 7(2):4630–4637, April 2022.
+     ArXiv, abs/2507.00882, 2025.                                              [32] Péter Fankhauser, Michael Bloesch, and Marco Hutter. Probabilistic
+[13] Ruihan Yang, Ge Yang, and Xiaolong Wang. Neural volumetric                     terrain mapping for mobile robots with uncertain localization. IEEE
+     memory for visual locomotion control. 2023 IEEE/CVF Conference on              Robotics and Automation Letters (RA-L), 3(4):3019–3026, 2018.
+     Computer Vision and Pattern Recognition (CVPR), pages 1430–1440,          [33] Péter Fankhauser, Michael Bloesch, Christian Gehring, Marco Hutter,
+     2023.                                                                          and Roland Siegwart. Robot-centric elevation mapping with uncer-
+                                                                                    tainty estimates. In International Conference on Climbing and Walking
+[14] Ananye Agarwal, Ashish Kumar, Jitendra Malik, and Deepak Pathak.
+                                                                                    Robots (CLAWAR), 2014.
+     Legged locomotion in challenging terrains using egocentric vision. In
+                                                                               [34] Tianhe Yu, Saurabh Kumar, Abhishek Gupta, Sergey Levine, Karol
+     Conference on Robot Learning, 2022.
+                                                                                    Hausman, and Chelsea Finn. Multi-task reinforcement learning
+[15] Ruiqi Yu, Qianshi Wang, Yizhen Wang, Zhicheng Wang, Jun Wu, and
+                                                                                    without interference. In Proc. Optim. Found. Reinforcement Learn.
+     Qiuguo Zhu. Walking with terrain reconstruction: Learning to traverse
+                                                                                    Workshop NeurIPS, 2019.
+     risky sparse footholds. ArXiv, abs/2409.15692, 2024.
+                                                                               [35] Mathilde Caron, Ishan Misra, Julien Mairal, Priya Goyal, Piotr Bo-
+[16] Xuxin Cheng, Kexin Shi, Ananye Agarwal, and Deepak Pathak.
+                                                                                    janowski, and Armand Joulin. Unsupervised learning of visual features
+     Extreme parkour with legged robots. 2024 IEEE International Confer-
+                                                                                    by contrasting cluster assignments, 2021.
+     ence on Robotics and Automation (ICRA), pages 11443–11450, 2023.
+                                                                               [36] Philip A Knight. The sinkhorn–knopp algorithm: convergence and
+[17] Junfeng Long, Junli Ren, Moji Shi, Zirui Wang, Tao Huang, Ping Luo,            applications. SIAM Journal on Matrix Analysis and Applications,
+     and Jiangmiao Pang. Learning humanoid locomotion with perceptive               30(1):261–275, 2008.
+     internal model. ArXiv, abs/2411.14386, 2024.                              [37] N. Rudin, David Hoeller, Philipp Reist, and Marco Hutter. Learning to
+[18] Huayi Wang, Zirui Wang, Junli Ren, Qingwei Ben, Tao Huang, Weinan              walk in minutes using massively parallel deep reinforcement learning.
+     Zhang, and Jiangmiao Pang. Beamdojo: Learning agile humanoid                   ArXiv, abs/2109.11978, 2021.
+     locomotion on sparse footholds. ArXiv, abs/2502.10363, 2025.              [38] Junfeng Long, Zirui Wang, Quanyi Li, Jiawei Gao, Liu Cao, and
+[19] Robert A. Jacobs, Michael I. Jordan, Steven J. Nowlan, and Ge-                 Jiangmiao Pang. Hybrid internal model: Learning agile legged
+     offrey E. Hinton. Adaptive mixtures of local experts. Neural                   locomotion with simulated robot response. ArXiv, abs/2312.11460,
+     Computation, page 79–87, Feb 1991.                                             2023.
+[20] M. I. Jordan. Hierarchical mixtures of experts and the em algorithm.
+     In IEE Colloquium on Advances in Neural Networks for Control and
+     Systems, 1994.
+
