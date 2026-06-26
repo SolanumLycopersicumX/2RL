@@ -54,16 +54,18 @@ where available. Use `docs/paper_notes/README.md` for note templates.
 |---:|---|---|---|
 | 2 | Quadruped Parkour Learning: Sparsely Gated Mixture of Experts with Visual Input | https://arxiv.org/abs/2604.19344 | Recent 2026 visual MoE parkour reference; useful after baseline MoE is working. |
 
-## VLA, Action Sequence Modeling, and Diffusion Policy
+## VLA, Diffusion Foundations, Action Sequence Modeling, and Diffusion Policy
 
 These papers are an adjacent expansion beyond locomotion. They should be read
 after the main RL/MoE route is clear, and are useful for understanding
-vision-language-action policies, action sequence decoders, and imitation-heavy
-robot manipulation systems.
+vision-language-action policies, diffusion/flow action decoders, and
+imitation-heavy robot manipulation systems.
 
 | Priority | Paper | Link | Use in 2RL |
 |---:|---|---|---|
 | 3 | Learning Fine-Grained Bimanual Manipulation with Low-Cost Hardware | https://arxiv.org/abs/2304.13705 | ACT / action chunking, transformer imitation learning, low-cost bimanual manipulation. |
+| 3 | Denoising Diffusion Probabilistic Models | https://arxiv.org/abs/2006.11239 | DDPM foundation for diffusion action heads and denoising sequence models. |
+| 3 | Denoising Diffusion Implicit Models | https://arxiv.org/abs/2010.02502 | DDIM fast sampling trade-offs for latency-sensitive action generation. |
 | 3 | Diffusion Policy: Visuomotor Policy Learning via Action Diffusion | https://arxiv.org/abs/2303.04137 | Diffusion-based continuous action sequence generation and receding-horizon visuomotor control. |
 | 3 | pi0: A Vision-Language-Action Flow Model for General Robot Control | https://arxiv.org/abs/2410.24164 | Generalist VLA policy, VLM backbone plus flow-matching action generation. |
 

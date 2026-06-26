@@ -1,6 +1,6 @@
 # 推荐论文阅读顺序
 
-本文档给出 2RL 项目的完整论文阅读顺序，覆盖当前已下载和已做笔记的 **26 篇论文**。
+本文档给出 2RL 项目的完整论文阅读顺序，覆盖当前已下载和已做笔记的 **28 篇论文**。
 
 目标不是按年份读完所有论文，而是按项目开发依赖关系阅读：
 
@@ -272,7 +272,7 @@ baseline locomotion
 
 ## Phase 5：VLA 拓展阅读
 
-这一阶段用于拓展 vision-language-action、动作序列建模和 imitation-heavy manipulation 的视野。它不是当前 2RL 第一复现目标，但能帮助你理解 ACT、Diffusion Policy、pi0 之间的技术关系。
+这一阶段用于拓展 diffusion foundation、vision-language-action、动作序列建模和 imitation-heavy manipulation 的视野。它不是当前 2RL 第一复现目标，但能帮助你理解 DDPM、DDIM、ACT、Diffusion Policy、pi0 之间的技术关系。
 
 ### 24. Learning Fine-Grained Bimanual Manipulation with Low-Cost Hardware
 
@@ -281,14 +281,28 @@ baseline locomotion
 - 重点：ACT、action chunking、transformer imitation learning。
 - 读完应能回答：为什么预测一段未来动作可以缓解单步 behavioral cloning 的误差累积？
 
-### 25. Diffusion Policy: Visuomotor Policy Learning via Action Diffusion
+### 25. Denoising Diffusion Probabilistic Models
+
+- 笔记：[中文笔记](../paper_notes/individual/2006.11239_denoising_diffusion_probabilistic_models_zh.md)
+- PDF: [local PDF](papers/2006.11239_denoising_diffusion_probabilistic_models.pdf)
+- 重点：DDPM、逐步加噪/去噪、噪声预测目标、U-Net 反向过程。
+- 读完应能回答：为什么 diffusion action head 可以被看成对未来动作序列的逐步去噪？
+
+### 26. Denoising Diffusion Implicit Models
+
+- 笔记：[中文笔记](../paper_notes/individual/2010.02502_denoising_diffusion_implicit_models_zh.md)
+- PDF: [local PDF](papers/2010.02502_denoising_diffusion_implicit_models.pdf)
+- 重点：DDIM、非 Markovian forward process、确定性采样、快速采样步数。
+- 读完应能回答：为什么实时机器人动作生成必须关心 denoising steps 和 latency？
+
+### 27. Diffusion Policy: Visuomotor Policy Learning via Action Diffusion
 
 - 笔记：[中文笔记](../paper_notes/individual/2303.04137_diffusion_policy_visuomotor_policy_learning_via_action_diffusion_zh.md)
 - PDF: [local PDF](papers/2303.04137_diffusion_policy_visuomotor_policy_learning_via_action_diffusion.pdf)
 - 重点：条件扩散模型、连续动作序列、receding horizon control。
 - 读完应能回答：diffusion action head 为什么比单峰回归更适合多模态示范动作？
 
-### 26. pi0: A Vision-Language-Action Flow Model for General Robot Control
+### 28. pi0: A Vision-Language-Action Flow Model for General Robot Control
 
 - 笔记：[中文笔记](../paper_notes/individual/2410.24164_pi0_a_vision_language_action_flow_model_for_general_robot_control_zh.md)
 - PDF: [local PDF](papers/2410.24164_pi0_a_vision_language_action_flow_model_for_general_robot_control.pdf)
@@ -297,8 +311,8 @@ baseline locomotion
 
 **Phase 5 读完后的动作：**
 
-- 把 ACT / Diffusion Policy / pi0 作为 VLA 拓展笔记，不要混入第一阶段 PPO locomotion 实验。
-- 记录它们对 action representation 的启发：action chunk、diffusion sequence、flow-matching continuous action。
+- 把 DDPM / DDIM / ACT / Diffusion Policy / pi0 作为 VLA/diffusion 拓展笔记，不要混入第一阶段 PPO locomotion 实验。
+- 记录它们对 action representation 的启发：denoising objective、fast sampling、action chunk、diffusion sequence、flow-matching continuous action。
 - 如果未来做 mobile manipulation 或语言条件导航，再考虑把 VLA 作为高层任务接口。
 
 ---
@@ -331,13 +345,15 @@ baseline locomotion
 22. WoCoCo
 23. BeamDojo
 24. ACT / Learning Fine-Grained Bimanual Manipulation
-25. Diffusion Policy
-26. pi0
+25. DDPM
+26. DDIM
+27. Diffusion Policy
+28. pi0
 ```
 
 ## 最短可执行路线
 
-如果你现在想尽快开始复现，不需要等 26 篇全读完。最短路线是：
+如果你现在想尽快开始复现，不需要等 28 篇全读完。最短路线是：
 
 ```text
 整合综述
