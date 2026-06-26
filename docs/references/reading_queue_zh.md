@@ -35,10 +35,12 @@
 22. WoCoCo
 23. BeamDojo
 
-## 第五批：VLA 拓展阅读
+## 第五批：VLA / Diffusion 拓展阅读
 
 24. Learning Fine-Grained Bimanual Manipulation with Low-Cost Hardware
-25. Diffusion Policy: Visuomotor Policy Learning via Action Diffusion
-26. pi0: A Vision-Language-Action Flow Model for General Robot Control
+25. Denoising Diffusion Probabilistic Models
+26. Denoising Diffusion Implicit Models
+27. Diffusion Policy: Visuomotor Policy Learning via Action Diffusion
+28. pi0: A Vision-Language-Action Flow Model for General Robot Control
 
-建议：不要等所有论文都读完再动手。读完 1、2、3 后就可以同步准备 baseline 复现环境；VLA 三篇作为拓展，不阻塞 2RL 主线复现。
+建议：不要等所有论文都读完再动手。读完 1、2、3 后就可以同步准备 baseline 复现环境；VLA/diffusion 拓展论文不阻塞 2RL 主线复现。

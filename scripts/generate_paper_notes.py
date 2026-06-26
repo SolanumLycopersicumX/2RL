@@ -239,6 +239,26 @@ NOTES: dict[str, dict[str, object]] = {
         "reuse": "2RL 在 vanilla MoE 稳定后可以尝试 top-k routing 和 terrain/depth encoder。它也支持本项目把 perception 放到后期，而非第一阶段。",
         "cautions": "视觉 MoE 是高复杂度组合，不应在 baseline 未稳定时引入。",
     },
+    "2006.11239": {
+        "category": "Diffusion foundation / generative modeling",
+        "priority": "拓展阅读，diffusion 基础第一篇",
+        "summary": "DDPM 是现代扩散生成模型的基础论文。它把生成过程建模为从高斯噪声逐步去噪的反向 Markov chain，并用预测噪声的简化目标获得高质量图像生成。",
+        "problem": "GAN 训练不稳定且可能 mode collapse；传统 likelihood-based 模型样本质量有限。论文希望证明不依赖对抗训练的 diffusion probabilistic model 也能生成高质量样本。",
+        "method": "定义固定的前向加噪过程 q(xt|xt-1)，训练神经网络反向预测噪声或均值，用简化的加权变分界目标 Lsimple 优化。采样时从 xT 高斯噪声开始，按时间步逐步去噪得到 x0。",
+        "robot_env": "非机器人论文；图像生成实验，主要包括 CIFAR-10、CelebA-HQ、LSUN Bedroom/Church/Cat。",
+        "reuse": "2RL 主要把它作为理解 Diffusion Policy 和 pi0 action head 的基础：连续动作扩散可以类比图像扩散中的多步去噪，只是生成对象从像素变成动作序列或短时控制 horizon。",
+        "cautions": "DDPM 的原始任务是图像生成，不包含机器人闭环控制、动力学约束或安全约束。不要把像素生成指标直接迁移成 locomotion 评价指标。",
+    },
+    "2010.02502": {
+        "category": "Diffusion foundation / fast sampling",
+        "priority": "拓展阅读，diffusion 基础第二篇",
+        "summary": "DDIM 解决 DDPM 采样慢的问题：在保持同一训练目标的前提下，引入非 Markovian 前向过程和确定性/低随机性的采样轨迹，使扩散模型可以用更少步数生成高质量样本。",
+        "problem": "DDPM 通常需要上千个串行去噪步，采样延迟很高；这对机器人动作生成和在线规划这类延迟敏感任务尤其不友好。",
+        "method": "构造与 DDPM 共享边缘分布和训练目标的非 Markovian 过程，通过控制采样子序列 tau 和随机性参数 eta，在 DDPM 与确定性 DDIM 之间插值。eta=0 时采样近似确定，支持潜空间插值和重构。",
+        "robot_env": "非机器人论文；图像生成实验，使用 CIFAR-10、CelebA、LSUN Bedroom/Church，并复用或训练 DDPM 风格 U-Net。",
+        "reuse": "2RL 后续若研究 diffusion action head，应优先关注 DDIM 类快速采样：低层控制不能承受大量串行 denoising steps，必须显式评估采样步数、延迟和动作质量的权衡。",
+        "cautions": "DDIM 提升采样效率不等于自动满足实时控制。机器人策略还需要闭环重规划、动作平滑、动力学可执行性和 safety supervisor。",
+    },
     "2304.13705": {
         "category": "VLA / imitation learning / action chunking",
         "priority": "拓展阅读，VLA 第一篇",
@@ -365,7 +385,7 @@ def write_integrated_review(root: Path) -> None:
 
 ## Scope
 
-This synthesis covers the 26 papers downloaded under `docs/references/papers/`.
+This synthesis covers the 28 papers downloaded under `docs/references/papers/`.
 The goal is not to summarize every result equally, but to convert the literature
 into a concrete development path for **Safety-Aware MoE-Gated Locomotion for
 Legged Local Navigation**.
@@ -504,19 +524,21 @@ For now, keep humanoid support as config/interface readiness:
 - later Humanoid-Gym external path;
 - claim boundary that humanoid results are future work.
 
-## 8. VLA Papers Broaden The Action-Generation View
+## 8. VLA And Diffusion Papers Broaden The Action-Generation View
 
-ACT, Diffusion Policy, and pi0 extend the reading set beyond locomotion into
-vision-language-action and visuomotor manipulation. Their direct training
-pipelines are not the first 2RL implementation target, but they are useful for
-understanding how modern robot policies generate action sequences instead of
-single-step commands.
+DDPM, DDIM, ACT, Diffusion Policy, and pi0 extend the reading set beyond
+locomotion into diffusion foundations, vision-language-action, and visuomotor
+manipulation. Their direct training pipelines are not the first 2RL
+implementation target, but they are useful for understanding how modern robot
+policies generate action sequences instead of single-step commands.
 
 The useful progression is:
 
-1. ACT: transformer-based action chunking for imitation learning;
-2. Diffusion Policy: conditional diffusion over continuous action sequences;
-3. pi0: VLM-conditioned flow matching for general robot control.
+1. DDPM: denoising objective and Markov-chain diffusion foundation;
+2. DDIM: fast deterministic or low-stochasticity diffusion sampling;
+3. ACT: transformer-based action chunking for imitation learning;
+4. Diffusion Policy: conditional diffusion over continuous action sequences;
+5. pi0: VLM-conditioned flow matching for general robot control.
 
 For 2RL, the near-term takeaway is architectural rather than implementation
 heavy: a high-level language or vision-conditioned policy can eventually
@@ -534,7 +556,7 @@ locomotion controller remains the low-level execution layer.
 7. `2603.03067` CMoE.
 8. Parkour and risky-terrain papers.
 9. Humanoid papers.
-10. VLA expansion: ACT, Diffusion Policy, pi0.
+10. VLA/diffusion expansion: DDPM, DDIM, ACT, Diffusion Policy, pi0.
 
 ## Direct Implementation Plan Derived From The Literature
 
@@ -573,6 +595,8 @@ locomotion controller remains the low-level execution layer.
 
 ### Stage F: Optional VLA Expansion
 
+- Read DDPM to understand the denoising training objective.
+- Read DDIM to understand fast sampling and latency trade-offs.
 - Read ACT to understand action chunking.
 - Read Diffusion Policy to understand generative continuous action heads.
 - Read pi0 to connect VLM conditioning, flow matching, and robot foundation
